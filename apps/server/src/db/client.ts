@@ -8,10 +8,12 @@ import * as schema from './schema.js';
 
 export type Db = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
 
-const migrationsFolder = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../drizzle',
-);
+// This file runs from src/db/ in dev and is bundled into dist/ in production.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const migrationsFolder = [
+  path.resolve(here, '../../drizzle'),
+  path.resolve(here, '../drizzle'),
+].find((p) => fs.existsSync(path.join(p, 'meta')))!;
 
 /** Opens (or creates) the SQLite database and applies pending migrations. */
 export function openDb(dbPath: string): Db {

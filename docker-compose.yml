@@ -1,0 +1,40 @@
+name: pdfclaudeassistant
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+    container_name: pdfclaudeassistant-server
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # PDFs, SQLite, thumbnails and (in ./data/claude-home) the Claude Code session.
+      - ./data:/data
+    networks: [pdfclaudeassistant-net]
+
+  caddy:
+    build:
+      context: .
+      dockerfile: docker/caddy.Dockerfile
+    container_name: pdfclaudeassistant-caddy
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [server]
+    networks: [pdfclaudeassistant-net]
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  pdfclaudeassistant-net:
+    name: pdfclaudeassistant-net
