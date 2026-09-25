@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/source-serif-4';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Minimalist, typographic palette (resolved open decision #1). */
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --surface-muted: #f3f1ed;
+  --border: #e6e2dc;
+  --text: #1f1d1a;
+  --text-muted: #6b665e;
+  --accent: #1f1d1a;
+  --accent-contrast: #fbfaf8;
+  --danger: #b3261e;
+  --ok: #2e7d32;
+  --warn: #a15c00;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #141414;
+  --surface: #1c1c1b;
+  --surface-muted: #242422;
+  --border: #33322f;
+  --text: #ecebe8;
+  --text-muted: #a19d95;
+  --accent: #ecebe8;
+  --accent-contrast: #141414;
+  --danger: #f2b8b5;
+  --ok: #8fcf91;
+  --warn: #f0b35a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-text font-sans antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
