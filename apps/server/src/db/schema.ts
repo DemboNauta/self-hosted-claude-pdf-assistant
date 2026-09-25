@@ -134,3 +134,31 @@ export const messages = sqliteTable(
   },
   (t) => [index('messages_thread_idx').on(t.threadId, t.createdAt)],
 );
+
+/**
+ * Permanent annotations (F-ANN-*): highlights, notes, freehand drawings and saved
+ * Claude marks. Anchors live in normalised page space (0–1, top-left origin).
+ */
+export const annotations = sqliteTable(
+  'annotations',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    page: integer('page').notNull(),
+    type: text('type', { enum: ['highlight', 'note', 'drawing', 'shape'] }).notNull(),
+    author: text('author', { enum: ['user', 'claude'] }).notNull(),
+    status: text('status', { enum: ['active', 'proposed', 'rejected'] })
+      .notNull()
+      .default('active'),
+    /** Palette key (yellow, green, blue, red, purple, claude) or a hex colour. */
+    color: text('color').notNull(),
+    anchorJson: text('anchor_json').notNull(),
+    /** Note text, Claude's reason for a proposed highlight or a mark's label. */
+    content: text('content'),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('annotations_document_idx').on(t.documentId, t.page)],
+);

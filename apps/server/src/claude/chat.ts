@@ -196,6 +196,9 @@ export class ChatService {
       prompt: t.prompt,
       options: {
         ...baseAgentOptions(this.config),
+        ...(this.toolDeps.settings.claudeModel()
+          ? { model: this.toolDeps.settings.claudeModel()! }
+          : {}),
         systemPrompt: SYSTEM_PROMPT,
         mcpServers: { [server.name]: server },
         allowedTools,

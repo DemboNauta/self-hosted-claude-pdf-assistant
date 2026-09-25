@@ -240,7 +240,18 @@ describe('reading tools', () => {
       emit: (e) => seen.push(e),
       record: () => {},
     };
-    const tools = readingTools({ db, library, search: new SearchService(db) }, ctx);
+    const { AnnotationService } = await import('../src/services/annotations.js');
+    const { SettingsService } = await import('../src/services/settings.js');
+    const tools = readingTools(
+      {
+        db,
+        library,
+        search: new SearchService(db),
+        annotations: new AnnotationService(db),
+        settings: new SettingsService(db),
+      },
+      ctx,
+    );
     const t = tools.find((x) => x.name === name)!;
     const result = await t.handler(args as never, {});
     return { result, seen };

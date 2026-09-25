@@ -19,6 +19,9 @@ import { HttpError } from './services/errors.js';
 import { LibraryService } from './services/library.js';
 import { SearchService } from './services/search.js';
 import { ThreadService } from './services/threads.js';
+import { AnnotationService } from './services/annotations.js';
+import { SettingsService } from './services/settings.js';
+import { registerAnnotationRoutes } from './routes/annotations.js';
 import { UploadService } from './services/uploads.js';
 
 export interface AppDeps {
@@ -82,11 +85,14 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   const uploadsTimer = setInterval(purgeUploads, 6 * 60 * 60 * 1000).unref();
 
   const threads = new ThreadService(db);
+  const annotations = new AnnotationService(db);
+  const settings = new SettingsService(db);
+  await registerAnnotationRoutes(app, annotations, library, settings);
   const chat = new ChatService(
     config,
     threads,
     library,
-    { db, library, search },
+    { db, library, search, annotations, settings },
     claudeStatus,
     app.log,
     deps.claudeQuery ?? query,

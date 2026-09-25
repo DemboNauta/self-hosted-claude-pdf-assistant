@@ -13,8 +13,10 @@ import type { Db } from '../db/client.js';
 import { pages } from '../db/schema.js';
 import { renderPageImage } from '../ingest/extract.js';
 import { newId } from '../services/ids.js';
+import type { AnnotationService } from '../services/annotations.js';
 import type { LibraryService } from '../services/library.js';
 import type { SearchService } from '../services/search.js';
+import type { SettingsService } from '../services/settings.js';
 
 export const MCP_SERVER_NAME = 'pca';
 /** Max pages returned by one `get_pages` call (SPEC §7). */
@@ -37,6 +39,8 @@ export interface ToolDeps {
   db: Db;
   library: LibraryService;
   search: SearchService;
+  annotations: AnnotationService;
+  settings: SettingsService;
 }
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -308,9 +312,149 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/** Annotations: read the student's marks, propose key-idea highlights, add notes (F-ANN-04). */
+export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
+  const changed = () =>
+    ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'annotations' });
+  return [
+    tool(
+      'get_annotations',
+      "The student's highlights (with the meaning of each colour) and notes on a document, plus your saved marks. Red highlights usually mean the student does not understand that passage.",
+      {
+        docId: z.string().optional(),
+        fromPage: z.number().int().min(1).optional(),
+        toPage: z.number().int().min(1).optional(),
+      },
+      tracked(
+        ctx,
+        'get_annotations',
+        () => '',
+        async ({ docId, fromPage, toPage }) => {
+          const id = docId ?? ctx.docId;
+          const meanings = new Map<string, string>(
+            deps.settings.palette().map((p) => [p.key, p.meaning]),
+          );
+          meanings.set('claude', 'Claude');
+          const items = deps.annotations
+            .list(id)
+            .filter((a) => (!fromPage || a.page >= fromPage) && (!toPage || a.page <= toPage))
+            .filter((a) => a.type === 'highlight' || a.type === 'note');
+          if (!items.length) return text('No highlights or notes.');
+          return text(
+            items
+              .slice(0, 300)
+              .map((a) => {
+                const quote = (a.anchor as { quote?: string }).quote;
+                const who =
+                  a.author === 'claude'
+                    ? `Claude${a.status === 'proposed' ? ' (proposed)' : ''}`
+                    : 'student';
+                const kind =
+                  a.type === 'note' ? 'note' : `highlight "${meanings.get(a.color) ?? a.color}"`;
+                const q = quote ? `: "${quote.slice(0, 300)}"` : '';
+                const c = a.content ? ` — ${a.content.slice(0, 500)}` : '';
+                return `- p. ${a.page} ${kind} by ${who}${q}${c}`;
+              })
+              .join('\n'),
+          );
+        },
+      ),
+    ),
+    tool(
+      'highlight_key_ideas',
+      'Propose highlights of the key ideas (of a page, chapter or the document). They appear in your colour as proposals the student accepts or discards. Quote each idea verbatim (3 to 40 consecutive words from the page) and give a short reason.',
+      {
+        docId: z.string().optional(),
+        highlights: z
+          .array(
+            z.object({
+              page: z.number().int().min(1),
+              quote: z.string().min(3).max(1000),
+              reason: z.string().max(300).optional(),
+            }),
+          )
+          .min(1)
+          .max(60),
+      },
+      tracked(
+        ctx,
+        'highlight_key_ideas',
+        ({ highlights }) => `(${highlights.length})`,
+        async ({ docId, highlights }) => {
+          const id = docId ?? ctx.docId;
+          deps.library.getLive(id);
+          const created = deps.annotations.create(
+            id,
+            highlights.map((h) => ({
+              type: 'highlight' as const,
+              page: h.page,
+              color: 'claude',
+              content: h.reason ?? null,
+              anchor: { quote: h.quote },
+            })),
+            { author: 'claude', status: 'proposed' },
+          );
+          changed();
+          const missing = created.filter((a) => !(a.anchor as { rects?: unknown[] }).rects?.length);
+          const warn = missing.length
+            ? ` ${missing.length} quote(s) were not found verbatim on their page (pages ${missing
+                .map((m) => m.page)
+                .join(', ')}): check the exact wording and propose them again.`
+            : '';
+          return text(
+            `Proposed ${created.length} highlight(s); the student can accept or discard them.${warn}`,
+          );
+        },
+      ),
+    ),
+    tool(
+      'add_note',
+      'Add a sticky note on a page, anchored to a point (x, y page fractions) or to an exact quote.',
+      {
+        docId: z.string().optional(),
+        page: z.number().int().min(1),
+        text: z.string().min(1).max(4000),
+        quote: z.string().max(1000).optional(),
+        x: z.number().min(0).max(1).optional(),
+        y: z.number().min(0).max(1).optional(),
+      },
+      tracked(
+        ctx,
+        'add_note',
+        ({ page }) => `p. ${page}`,
+        async ({ docId, page, text: body, quote, x, y }) => {
+          const id = docId ?? ctx.docId;
+          deps.library.getLive(id);
+          deps.annotations.create(
+            id,
+            [
+              {
+                type: 'note',
+                page,
+                color: 'claude',
+                content: body,
+                anchor: quote
+                  ? { kind: 'text', quote }
+                  : { kind: 'point', x: x ?? 0.92, y: y ?? 0.08 },
+              },
+            ],
+            { author: 'claude' },
+          );
+          changed();
+          return text('Note added.');
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
-  const tools = [...readingTools(deps, ctx), ...pointerTools(deps, ctx)];
+  const tools = [
+    ...readingTools(deps, ctx),
+    ...pointerTools(deps, ctx),
+    ...annotationTools(deps, ctx),
+  ];
   return {
     server: createSdkMcpServer({ name: MCP_SERVER_NAME, version: '1.0.0', tools }),
     allowedTools: tools.map((t) => `mcp__${MCP_SERVER_NAME}__${t.name}`),
