@@ -75,14 +75,16 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 - **Phase 1 — read and ask: in progress** (owner chose to start before
   accepting Phase 0).
   - Done: library API (subjects/topics/documents, reorder, move, trash,
-    reading position) and ingestion (streamed upload, worker-thread PDF.js
-    extraction with normalised text coordinates, page sizes, outline, cover,
-    FTS5).
-  - Remaining, in order: library UI (F-LIB-01..03), PDF viewer (F-VIS-01/02,
-    F-LIB-04), annotations (F-ANN-01/02/05/07), Claude chat backend (WS
-    `/ws/chat`, MCP tools `get_document_info`, `get_pages`, `search_library`,
-    citations `[[cite:docId:page|"quote"]]`), chat UI with selection menu and
-    citation jumps (F-CHAT-01/02/04/05/07, F-VIS-03), Phase 1 e2e test.
+    reading position), ingestion (worker-thread PDF.js extraction with
+    normalised text coordinates, page sizes, outline, cover, FTS5),
+    resumable chunked uploads (`/api/uploads`, 32 MiB chunks) and the library
+    UI (F-LIB-01..03: tree + card grid, drag & drop, upload progress, minimal
+    trash). The reader route `/read/:id` is still a placeholder.
+  - Remaining, in order: PDF viewer (F-VIS-01/02, F-LIB-04), annotations
+    (F-ANN-01/02/05/07), Claude chat backend (WS `/ws/chat`, MCP tools
+    `get_document_info`, `get_pages`, `search_library`, citations
+    `[[cite:docId:page|"quote"]]`), chat UI with selection menu and citation
+    jumps (F-CHAT-01/02/04/05/07, F-VIS-03), rest of the Phase 1 e2e test.
 
 ## Deployment (pending, owner decisions)
 
@@ -97,10 +99,8 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 - Docker is not installed on the VPS yet; the owner will install it.
 - **Never commit the domain, the VPS IP or any host detail**: they live only in
   the VPS `.env`, the host Caddyfile and local environment variables.
-- **Open question:** the domain is on Cloudflare. If proxied (orange cloud),
-  the free plan rejects request bodies over 100 MB, which conflicts with
-  decision #6 (no upload limit). Options: chunked uploads (recommended), DNS
-  only (grey cloud), or cap at 100 MB. Ask the owner before implementing.
+- The domain is on Cloudflare (proxied). The owner chose **chunked uploads**
+  so files pass the 100 MB request limit without capping PDF size.
 
 ## Notes
 
@@ -111,6 +111,11 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
   tiny eval'd bootstrap that registers tsx (Node's native type stripping
   otherwise skips `.js` → `.ts` resolution). The bundle uses
   `dist/ingest-worker.js`. Do not add a `createRequire` banner to esbuild.
+- On the owner's Windows PC `pnpm` is only available as `corepack pnpm`
+  (nested `pnpm` calls in scripts fail). `.claude/launch.json` (uncommitted)
+  starts `server` (:3000, no watch) and `web` (:5173) for the preview pane;
+  restart `server` after server changes. For Playwright, put a `pnpm.cmd`
+  shim (`@corepack pnpm %*`) on PATH. Local `.env` uses `DATA_DIR=../../data`.
 - The previous cloud session could not build the full Docker image (apt and
   prebuilt binaries blocked there) nor reach the VPS; CI's `docker` job builds
   both images.

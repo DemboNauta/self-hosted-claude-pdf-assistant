@@ -19,9 +19,10 @@ conversation. Keep it updated at the end of each session.
 - **Never put the domain, VPS IP or any VPS detail in the repository** (files,
   commits, messages). They belong only in the VPS `.env`, the VPS Caddyfile and
   environment variables on the owner's PC. Ask him for them when needed.
-- The previous session ran in a cloud sandbox with no SSH egress, so it could
-  not deploy. The next session runs on the owner's Windows PC and can use his
-  SSH key.
+- Sessions now run on the owner's Windows PC (can use his SSH key). He runs
+  the app locally at http://localhost:5173 and already uses it with his own
+  PDFs: don't create or delete data in the local `data/` without asking; use
+  the Playwright e2e server (temp data dir) for tests.
 
 ## Decisions taken (beyond SPEC)
 
@@ -34,17 +35,13 @@ conversation. Keep it updated at the end of each session.
 | Deleting subject/topic with PDFs | PDFs go to the trash (30 days); restore asks for a destination topic. A minimal trash view ships in Phase 1.                             |
 | Phase order                      | Phase 1 started before Phase 0 was accepted on the VPS (owner's call)                                                                    |
 | Deployment                       | Owner prefers deploying over SSH from his PC with a script, like his other project's `deploy.ps1`                                        |
+| Cloudflare upload limit          | Chunked uploads (32 MiB chunks, resumable) so the proxied subdomain works with no size limit                                             |
+| Order of work                    | Keep building Phase 1 and show it locally; VPS deployment later                                                                          |
+| Library layout                   | Tree (subjects → topics) on the left + card grid of the chosen topic on the right; on mobile they are two screens                        |
 
 ## Open questions — ask before implementing
 
-1. **Cloudflare upload limit.** The domain is on Cloudflare. Proxied (orange
-   cloud) free plan rejects request bodies > 100 MB, which conflicts with
-   "no size limit". Options: chunked uploads (previous session recommended
-   this), DNS-only (grey cloud) for the subdomain, or cap at 100 MB. The owner
-   dismissed the question without answering; ask again.
-2. Whether he wants to see the app running locally before or after the VPS
-   deployment (he mentioned both).
-3. Still open from SPEC §14: #4 semantic search, #5 voice backend, #7 usage
+1. Still open from SPEC §14: #4 semantic search, #5 voice backend, #7 usage
    counter (not needed until later phases).
 
 ## Deployment facts (VPS)
@@ -101,24 +98,26 @@ conversation. Keep it updated at the end of each session.
 
 ## Next steps (Phase 1, in order)
 
-1. Library UI (F-LIB-01..03): tree, drag & drop reorder, upload dropzone with
-   progress, cards with cover/progress/last access, processing status polling,
-   minimal trash view.
-2. PDF viewer (F-VIS-01/02, F-LIB-04): PDF.js in the browser, virtualised
+Done: library UI (F-LIB-01..03) with drag & drop (pointer, touch, keyboard),
+chunked uploads with progress, processing status polling, minimal trash.
+`/read/:id` is a placeholder page.
+
+1. PDF viewer (F-VIS-01/02, F-LIB-04): PDF.js in the browser, virtualised
    (visible pages ± 2, layout from stored page sizes), text layer, zoom/fit,
    thumbnails, outline, in-document search, resume position.
-3. Annotations (F-ANN-01/02/05/07): highlights with the colour palette, notes,
+2. Annotations (F-ANN-01/02/05/07): highlights with the colour palette, notes,
    layer toggle and filters, side panel. Anchors in normalised page space.
-4. Claude chat backend (F-CHAT-01/04/07): WS `/ws/chat`, threads/messages
+3. Claude chat backend (F-CHAT-01/04/07): WS `/ws/chat`, threads/messages
    tables, one Claude session per thread resumed via `resume`, in-process MCP
    server with `get_document_info`, `get_pages` (≤ 10 pages), `search_library`
    (doc scope), citations `[[cite:docId:page|"quote"]]`, errors mapped to
    `rate_limited` / `auth_expired` / `internal`.
-5. Chat UI (F-CHAT-01/02/05, F-VIS-03): side panel / mobile bottom sheet,
+4. Chat UI (F-CHAT-01/02/05, F-VIS-03): side panel / mobile bottom sheet,
    streaming Markdown + KaTeX, selection menu, citation chips that jump to the
    page and briefly highlight the quote.
-6. Phase 1 Playwright acceptance test (fake Claude) and update `CLAUDE.md` +
-   this file.
+5. Complete the Phase 1 Playwright acceptance test (fake Claude) and update
+   `CLAUDE.md` + this file.
+6. Deployment work (see above) when the owner asks for it.
 
 ## Gotchas learned
 
@@ -136,3 +135,17 @@ conversation. Keep it updated at the end of each session.
 - Local Playwright with a preinstalled Chromium:
   `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm e2e`.
 - `.env` values containing `$` (the argon2 hash) must be single-quoted.
+- Windows PC: `pnpm` exists only as `corepack pnpm`; root scripts that call
+  `pnpm` (e.g. `pnpm test`, `pnpm dev`) fail. Run per package with
+  `corepack pnpm --filter …`, and for Playwright prepend a directory with a
+  `pnpm.cmd` shim (`@corepack pnpm %*`) to PATH. `tsx watch` hung when started
+  from the preview pane, so `.claude/launch.json` runs the server without
+  watch: restart it after server changes. `git config core.autocrlf false`
+  is set locally (files are LF; Prettier enforces it).
+- Local dev `.env` (gitignored) holds a generated password in a comment; the
+  owner knows where it is. Don't print it in chat.
+- dnd-kit in a nested tree: collisions and keyboard coordinates are filtered
+  to "peers" (`features/library/dnd.ts`), otherwise arrow keys stop on the
+  topics nested inside a subject.
+- Mutations return the invalidation promise in `onSettled` so per-call
+  callbacks (navigate to a new topic) see the refreshed tree.
