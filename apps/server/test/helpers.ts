@@ -1,4 +1,5 @@
 import { hash } from '@node-rs/argon2';
+import type { AppDeps } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
 
 export const TEST_PASSWORD = 'correct horse battery staple';
@@ -27,7 +28,7 @@ export async function testConfig(overrides: Partial<AppConfig> = {}): Promise<Ap
 /** Builds an app with a fake Claude and returns it with a logged-in cookie header. */
 export async function authedApp(
   overrides: Partial<AppConfig> = {},
-  deps: Partial<import('../src/app.js').AppDeps> = {},
+  deps: Partial<AppDeps> = {},
 ) {
   const { buildApp } = await import('../src/app.js');
   const { ClaudeStatusService } = await import('../src/claude/status.js');
