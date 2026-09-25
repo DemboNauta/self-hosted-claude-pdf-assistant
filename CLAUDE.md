@@ -51,4 +51,20 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 
 ## Status
 
-- Current phase: **Phase 0 — skeleton** (in progress).
+- **Phase 0 — skeleton: implemented.** Monorepo, Fastify server with login,
+  SQLite + Drizzle migrations, API-key guard + filtered agent env,
+  `GET /api/claude/status`, React shell with Settings → Conexión con Claude,
+  Docker Compose + Caddy, CI. Acceptance on the real VPS (HTTPS + subscription
+  status) is pending the owner's deployment.
+- Deviations: API routes live under `/api` (Caddy routes `/api/*` and `/ws/*`
+  to the server); the web build is served by the `caddy` service, so there is
+  no separate `web` container.
+- Next: **Phase 1 — read and ask.**
+
+## Notes
+
+- Per-turn context (current page, selection, mode) must go in the user message,
+  not the system prompt: the SDK snapshots the system prompt on the first
+  request and reuses it on resume.
+- The Docker image cannot be fully built inside the Claude Code sandbox (apt and
+  prebuilt binaries are blocked); CI's `docker` job is the source of truth.
