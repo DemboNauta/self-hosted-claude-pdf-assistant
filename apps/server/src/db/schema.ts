@@ -93,3 +93,44 @@ export const pages = sqliteTable(
   },
   (t) => [uniqueIndex('pages_document_page_idx').on(t.documentId, t.pageNumber)],
 );
+
+/**
+ * Chat threads (F-CHAT-07). One Claude Code session per thread, resumed with
+ * `claude_session_id`. Phase 1 threads belong to a document; topic/subject threads
+ * (F-CHAT-08) come later.
+ */
+export const threads = sqliteTable(
+  'threads',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    claudeSessionId: text('claude_session_id'),
+    title: text('title'),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('threads_document_idx').on(t.documentId, t.updatedAt)],
+);
+
+/** Chat history kept for consultation; long-term memory is the distilled one (F-MEM-06). */
+export const messages = sqliteTable(
+  'messages',
+  {
+    id: text('id').primaryKey(),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+    content: text('content').notNull(),
+    /** User turns: mode, page and selection sent with the question. */
+    contextJson: text('context_json'),
+    /** Assistant turns: tools Claude used while answering. */
+    toolEventsJson: text('tool_events_json'),
+    status: text('status', { enum: ['complete', 'interrupted', 'error'] })
+      .notNull()
+      .default('complete'),
+    errorCode: text('error_code'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('messages_thread_idx').on(t.threadId, t.createdAt)],
+);

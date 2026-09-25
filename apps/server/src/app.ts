@@ -1,12 +1,15 @@
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAuth } from './auth/routes.js';
 import { SessionStore } from './auth/sessions.js';
+import { ChatService } from './claude/chat.js';
 import { ClaudeStatusService } from './claude/status.js';
 import type { AppConfig } from './config.js';
 import { openDb, type Db } from './db/client.js';
 import { loggerOptions } from './log.js';
+import { registerChatRoutes } from './routes/chat.js';
 import { registerClaudeRoutes } from './routes/claude.js';
 import { IngestService } from './ingest/service.js';
 import { registerLibraryRoutes } from './routes/library.js';
@@ -15,6 +18,7 @@ import { registerUploadRoutes } from './routes/upload.js';
 import { HttpError } from './services/errors.js';
 import { LibraryService } from './services/library.js';
 import { SearchService } from './services/search.js';
+import { ThreadService } from './services/threads.js';
 import { UploadService } from './services/uploads.js';
 
 export interface AppDeps {
@@ -23,6 +27,8 @@ export interface AppDeps {
   logger?: boolean;
   /** Only the e2e server raises this: its tests log in many times per minute. */
   loginAttemptsPerMinute?: number;
+  /** Replaces the Agent SDK `query` (tests and the e2e server use a fake Claude). */
+  claudeQuery?: typeof query;
 }
 
 export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<FastifyInstance> {
@@ -75,9 +81,22 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   purgeUploads();
   const uploadsTimer = setInterval(purgeUploads, 6 * 60 * 60 * 1000).unref();
 
+  const threads = new ThreadService(db);
+  const chat = new ChatService(
+    config,
+    threads,
+    library,
+    { db, library, search },
+    claudeStatus,
+    app.log,
+    deps.claudeQuery ?? query,
+  );
+  await registerChatRoutes(app, threads, library, chat);
+
   app.addHook('onClose', async () => {
     clearInterval(purgeTimer);
     clearInterval(uploadsTimer);
+    chat.stopAll();
     db.$client.close();
   });
   return app;

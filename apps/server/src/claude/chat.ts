@@ -1,0 +1,253 @@
+import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  ChatContext,
+  ChatErrorCode,
+  ChatMessage,
+  ServerChatEvent,
+  StudyMode,
+  ToolEvent,
+} from '@pdfclaudeassistant/shared';
+import type { FastifyBaseLogger } from 'fastify';
+import { FORBIDDEN_CLAUDE_ENV_VARS } from '../auth-guard.js';
+import type { AppConfig } from '../config.js';
+import { HttpError } from '../services/errors.js';
+import type { LibraryService } from '../services/library.js';
+import type { ThreadService } from '../services/threads.js';
+import { classifyAssistantError, classifyErrorText } from './errors.js';
+import { baseAgentOptions } from './options.js';
+import { buildTurnPrompt, SYSTEM_PROMPT } from './prompt.js';
+import type { ClaudeStatusService } from './status.js';
+import { buildStudyServer, type ToolDeps } from './tools.js';
+
+type QueryFn = typeof query;
+
+/** Upper bound on agent turns (tool round-trips) per answer. */
+const MAX_TURNS = 30;
+
+export interface TurnInput {
+  threadId: string;
+  clientId: string;
+  text: string;
+  mode: StudyMode;
+  context: ChatContext;
+}
+
+/** Extra per-turn context (memory) supplied by later features. */
+export type MemoryProvider = (docId: string) => string | undefined;
+
+class TurnError extends Error {
+  constructor(
+    readonly code: ChatErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Runs chat turns against Claude Code (SPEC §6.4): one session per thread, resumed on
+ * every turn, streaming text and tool activity to the client as it happens.
+ */
+export class ChatService {
+  private readonly running = new Map<string, AbortController>();
+
+  constructor(
+    private readonly config: AppConfig,
+    private readonly threads: ThreadService,
+    private readonly library: LibraryService,
+    private readonly toolDeps: ToolDeps,
+    private readonly status: ClaudeStatusService,
+    private readonly log: FastifyBaseLogger,
+    private readonly runQuery: QueryFn = query,
+    private readonly memory: MemoryProvider = () => undefined,
+  ) {}
+
+  isRunning(threadId: string) {
+    return this.running.has(threadId);
+  }
+
+  stop(threadId: string) {
+    this.running.get(threadId)?.abort();
+  }
+
+  stopAll() {
+    for (const ctrl of this.running.values()) ctrl.abort();
+  }
+
+  async send(input: TurnInput, emit: (event: ServerChatEvent) => void): Promise<void> {
+    const thread = this.threads.get(input.threadId);
+    if (thread.documentId !== input.context.docId) throw new HttpError(400, 'invalid_request');
+    if (this.running.has(thread.id)) {
+      emit({ type: 'error', threadId: thread.id, code: 'busy' });
+      return;
+    }
+    const doc = this.library.detail(input.context.docId);
+
+    const abort = new AbortController();
+    this.running.set(thread.id, abort);
+    const userMessage = this.threads.addUserMessage(
+      thread.id,
+      input.text,
+      input.mode,
+      input.context,
+    );
+    emit({ type: 'user_message', clientId: input.clientId, message: userMessage });
+    const assistant = this.threads.addAssistantMessage(thread.id);
+    emit({ type: 'assistant_start', threadId: thread.id, message: assistant });
+
+    const toolEvents: ToolEvent[] = [];
+    let content = '';
+    const turn = {
+      emitDelta: (text: string) => {
+        content += text;
+        emit({ type: 'assistant_delta', threadId: thread.id, messageId: assistant.id, text });
+      },
+    };
+
+    const finish = (status: 'complete' | 'interrupted' | 'error', errorCode?: ChatErrorCode) => {
+      const message: ChatMessage = this.threads.finishAssistantMessage(assistant.id, {
+        content,
+        toolEvents,
+        status,
+        errorCode,
+      });
+      emit({ type: 'assistant_done', threadId: thread.id, message });
+    };
+
+    try {
+      const prompt = (recoveredTranscript?: string) =>
+        buildTurnPrompt({
+          text: input.text,
+          mode: input.mode,
+          context: input.context,
+          document: doc,
+          memory: this.memory(doc.id),
+          recoveredTranscript,
+        });
+      const run = (resume: string | null, recovered?: string) =>
+        this.runTurn({
+          prompt: prompt(recovered),
+          resume,
+          abort,
+          threadId: thread.id,
+          messageId: assistant.id,
+          docId: doc.id,
+          emit,
+          onText: turn.emitDelta,
+          onTool: (e) => toolEvents.push(e),
+        });
+
+      try {
+        await run(thread.claudeSessionId);
+      } catch (err) {
+        // A session lost on disk (e.g. Claude's config dir was reset): start a new one
+        // seeded with the recent transcript instead of failing the question.
+        if (thread.claudeSessionId && !content && isMissingSession(err)) {
+          this.log.warn(`Claude session ${thread.claudeSessionId} not found; starting a new one`);
+          this.threads.setClaudeSession(thread.id, null);
+          await run(null, this.threads.recentTranscript(thread.id));
+        } else {
+          throw err;
+        }
+      }
+      finish('complete');
+    } catch (err) {
+      if (abort.signal.aborted) {
+        finish('interrupted');
+      } else {
+        const code = err instanceof TurnError ? err.code : 'internal';
+        if (code === 'internal') this.log.error(err);
+        if (code === 'auth_expired' || code === 'rate_limited') {
+          this.status.report({ state: code, model: null, message: (err as Error).message });
+        }
+        emit({
+          type: 'error',
+          threadId: thread.id,
+          messageId: assistant.id,
+          code,
+          message: (err as Error).message,
+        });
+        finish('error', code);
+      }
+    } finally {
+      this.running.delete(thread.id);
+    }
+  }
+
+  private async runTurn(t: {
+    prompt: string;
+    resume: string | null;
+    abort: AbortController;
+    threadId: string;
+    messageId: string;
+    docId: string;
+    emit: (event: ServerChatEvent) => void;
+    onText: (text: string) => void;
+    onTool: (event: ToolEvent) => void;
+  }) {
+    const { server, allowedTools } = buildStudyServer(this.toolDeps, {
+      threadId: t.threadId,
+      messageId: t.messageId,
+      docId: t.docId,
+      emit: t.emit,
+      record: t.onTool,
+    });
+    const q = this.runQuery({
+      prompt: t.prompt,
+      options: {
+        ...baseAgentOptions(this.config),
+        systemPrompt: SYSTEM_PROMPT,
+        mcpServers: { [server.name]: server },
+        allowedTools,
+        includePartialMessages: true,
+        maxTurns: MAX_TURNS,
+        abortController: t.abort,
+        ...(t.resume ? { resume: t.resume } : {}),
+      },
+    });
+
+    // Text arrives as stream deltas; separate text blocks (before/after tool calls)
+    // are joined with a blank line.
+    let textBlocks = 0;
+    for await (const msg of q as AsyncIterable<SDKMessage>) {
+      if (msg.type === 'system' && msg.subtype === 'init') {
+        if ((FORBIDDEN_CLAUDE_ENV_VARS as readonly string[]).includes(msg.apiKeySource)) {
+          throw new TurnError(
+            'auth_expired',
+            'Claude Code is using an API key, not the subscription.',
+          );
+        }
+        if (msg.session_id !== t.resume) this.threads.setClaudeSession(t.threadId, msg.session_id);
+      } else if (msg.type === 'stream_event' && msg.parent_tool_use_id === null) {
+        const ev = msg.event;
+        if (ev.type === 'content_block_start' && ev.content_block.type === 'text') {
+          if (textBlocks++ > 0) t.onText('\n\n');
+        } else if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
+          t.onText(ev.delta.text);
+        }
+      } else if (msg.type === 'rate_limit_event' && msg.rate_limit_info.status === 'rejected') {
+        throw new TurnError('rate_limited', 'Usage limit reached.');
+      } else if (msg.type === 'assistant' && msg.error) {
+        const state = classifyAssistantError(msg.error);
+        throw new TurnError(
+          state === 'auth_expired' || state === 'rate_limited' ? state : 'internal',
+          msg.error,
+        );
+      } else if (msg.type === 'result') {
+        if (msg.subtype === 'success' && !msg.is_error) return;
+        const detail = msg.subtype === 'success' ? msg.result : msg.errors.join('; ');
+        if (msg.subtype === 'error_max_turns') return; // keep what was written so far
+        const state = classifyErrorText(detail);
+        throw new TurnError(
+          state === 'auth_expired' || state === 'rate_limited' ? state : 'internal',
+          detail,
+        );
+      }
+    }
+  }
+}
+
+function isMissingSession(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  return /no conversation found|session.*not found/i.test(text);
+}

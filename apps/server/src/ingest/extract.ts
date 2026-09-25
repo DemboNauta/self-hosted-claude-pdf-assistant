@@ -112,6 +112,27 @@ async function renderCover(pdf: PDFDocumentProxy, coverPath: string) {
   await fs.promises.writeFile(coverPath, await canvas.encode('webp', 80));
 }
 
+/**
+ * Renders one page as PNG for Claude (`get_page_image`: figures, formulas, diagrams).
+ * The long side is capped so the image stays within what the model reads well.
+ */
+export async function renderPageImage(filePath: string, pageNumber: number, maxSide = 1400) {
+  const pdf = await openPdf(filePath);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: maxSide / Math.max(base.width, base.height) });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas: canvas as never, canvasContext: ctx as never, viewport }).promise;
+    return { png: await canvas.encode('png'), width: canvas.width, height: canvas.height };
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+}
+
 async function readOutline(pdf: PDFDocumentProxy): Promise<OutlineEntry[]> {
   const outline = await pdf.getOutline().catch(() => null);
   if (!outline) return [];

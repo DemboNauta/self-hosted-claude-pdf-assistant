@@ -25,14 +25,17 @@ export async function testConfig(overrides: Partial<AppConfig> = {}): Promise<Ap
 }
 
 /** Builds an app with a fake Claude and returns it with a logged-in cookie header. */
-export async function authedApp(overrides: Partial<AppConfig> = {}) {
+export async function authedApp(
+  overrides: Partial<AppConfig> = {},
+  deps: Partial<import('../src/app.js').AppDeps> = {},
+) {
   const { buildApp } = await import('../src/app.js');
   const { ClaudeStatusService } = await import('../src/claude/status.js');
   const config = await testConfig(overrides);
   const claudeStatus = new ClaudeStatusService(config, (() => {
     throw new Error('Claude must not be called');
   }) as never);
-  const app = await buildApp(config, { logger: false, claudeStatus });
+  const app = await buildApp(config, { logger: false, claudeStatus, ...deps });
   const res = await app.inject({
     method: 'POST',
     url: '/api/auth/login',
