@@ -14,23 +14,3 @@ export async function makePdf(
   void opts;
   return Buffer.from(await doc.save());
 }
-
-/** Minimal multipart/form-data body for app.inject. */
-export function multipartBody(files: { name: string; content: Buffer }[]) {
-  const boundary = '----pcaTestBoundary';
-  const chunks: Buffer[] = [];
-  for (const f of files) {
-    chunks.push(
-      Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${f.name}"\r\nContent-Type: application/pdf\r\n\r\n`,
-      ),
-      f.content,
-      Buffer.from('\r\n'),
-    );
-  }
-  chunks.push(Buffer.from(`--${boundary}--\r\n`));
-  return {
-    payload: Buffer.concat(chunks),
-    contentType: `multipart/form-data; boundary=${boundary}`,
-  };
-}

@@ -89,3 +89,22 @@ export type CreateTopic = z.infer<typeof createTopicSchema>;
 export type UpdateTopic = z.infer<typeof updateTopicSchema>;
 export type UpdateDocument = z.infer<typeof updateDocumentSchema>;
 export type ReadingPosition = z.infer<typeof readingPositionSchema>;
+
+/** Resumable chunked upload (F-ING-01). Chunks stay under Cloudflare's 100 MB body limit. */
+export interface UploadSession {
+  id: string;
+  size: number;
+  /** Bytes stored so far; the next chunk must start here. */
+  received: number;
+  /** Size the client should use for each chunk (the last one may be smaller). */
+  chunkSize: number;
+}
+
+export const createUploadSchema = z.object({
+  topicId: id,
+  filename: z.string().trim().min(1).max(500),
+  size: z.number().int().positive(),
+});
+export const uploadChunkQuerySchema = z.object({ offset: z.coerce.number().int().min(0) });
+
+export type CreateUpload = z.infer<typeof createUploadSchema>;

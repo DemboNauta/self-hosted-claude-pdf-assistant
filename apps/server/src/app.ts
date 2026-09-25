@@ -13,6 +13,7 @@ import { registerLibraryRoutes } from './routes/library.js';
 import { registerUploadRoutes } from './routes/upload.js';
 import { HttpError } from './services/errors.js';
 import { LibraryService } from './services/library.js';
+import { UploadService } from './services/uploads.js';
 
 export interface AppDeps {
   db?: Db;
@@ -58,11 +59,19 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   await registerLibraryRoutes(app, library);
   const ingest = new IngestService(db, library, app.log);
   app.decorate('pcaIngest', ingest);
-  await registerUploadRoutes(app, config, library, ingest);
+  const uploads = new UploadService(config, library, (docId) => ingest.enqueue(docId));
+  await registerUploadRoutes(app, uploads);
   ingest.resume();
+  const purgeUploads = () => {
+    const n = uploads.purgeStale();
+    if (n) app.log.info(`removed ${n} abandoned upload(s)`);
+  };
+  purgeUploads();
+  const uploadsTimer = setInterval(purgeUploads, 6 * 60 * 60 * 1000).unref();
 
   app.addHook('onClose', async () => {
     clearInterval(purgeTimer);
+    clearInterval(uploadsTimer);
     db.$client.close();
   });
   return app;
