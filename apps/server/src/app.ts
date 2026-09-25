@@ -8,7 +8,9 @@ import type { AppConfig } from './config.js';
 import { openDb, type Db } from './db/client.js';
 import { loggerOptions } from './log.js';
 import { registerClaudeRoutes } from './routes/claude.js';
+import { IngestService } from './ingest/service.js';
 import { registerLibraryRoutes } from './routes/library.js';
+import { registerUploadRoutes } from './routes/upload.js';
 import { HttpError } from './services/errors.js';
 import { LibraryService } from './services/library.js';
 
@@ -54,6 +56,10 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   app.get('/api/health', async () => ({ ok: true }));
   await registerClaudeRoutes(app, claudeStatus);
   await registerLibraryRoutes(app, library);
+  const ingest = new IngestService(db, library, app.log);
+  app.decorate('pcaIngest', ingest);
+  await registerUploadRoutes(app, config, library, ingest);
+  ingest.resume();
 
   app.addHook('onClose', async () => {
     clearInterval(purgeTimer);

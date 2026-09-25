@@ -8,7 +8,11 @@ const external = Object.keys(pkg.dependencies).filter((d) => !d.startsWith('@pdf
 
 fs.rmSync('dist', { recursive: true, force: true });
 await build({
-  entryPoints: { main: 'src/main.ts', 'hash-password': 'scripts/hash-password.ts' },
+  entryPoints: {
+    main: 'src/main.ts',
+    'ingest-worker': 'src/ingest/worker.ts',
+    'hash-password': 'scripts/hash-password.ts',
+  },
   outdir: 'dist',
   bundle: true,
   platform: 'node',
@@ -16,7 +20,4 @@ await build({
   format: 'esm',
   sourcemap: true,
   external,
-  banner: {
-    js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
-  },
 });
