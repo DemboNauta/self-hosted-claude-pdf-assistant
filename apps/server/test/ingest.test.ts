@@ -118,6 +118,22 @@ describe('upload and ingestion', () => {
       .all();
     expect(hits).toEqual([{ document_id: created[0]!.id, page_number: 1 }]);
 
+    const search = await app.inject({
+      url: `/api/search?q=${encodeURIComponent('CALVIN, fija!')}&scope=doc&id=${created[0]!.id}`,
+      headers,
+    });
+    expect(search.json()).toEqual([
+      {
+        docId: created[0]!.id,
+        title: 'fotosintesis',
+        page: 2,
+        snippet: 'El ciclo de Calvin fija CO2.',
+      },
+    ]);
+    const global = await app.inject({ url: '/api/search?q=respiracion', headers });
+    expect(global.json<{ docId: string }[]>().map((h) => h.docId)).toEqual([created[1]!.id]);
+    expect(detail.outline).toEqual([]);
+
     const cover = await app.inject({ url: `/api/documents/${created[0]!.id}/cover`, headers });
     expect(cover.headers['content-type']).toBe('image/webp');
     const file = await app.inject({ url: `/api/documents/${created[0]!.id}/file`, headers });

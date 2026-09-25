@@ -66,3 +66,17 @@ body {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
+
+/* Citation jump: the quoted fragment pulses, then fades (F-VIS-03). */
+@keyframes pca-flash {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.animate-flash {
+  animation: pca-flash 4s ease-out forwards;
+}

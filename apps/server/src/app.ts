@@ -10,9 +10,11 @@ import { loggerOptions } from './log.js';
 import { registerClaudeRoutes } from './routes/claude.js';
 import { IngestService } from './ingest/service.js';
 import { registerLibraryRoutes } from './routes/library.js';
+import { registerPdfjsAssets } from './routes/pdfjs-assets.js';
 import { registerUploadRoutes } from './routes/upload.js';
 import { HttpError } from './services/errors.js';
 import { LibraryService } from './services/library.js';
+import { SearchService } from './services/search.js';
 import { UploadService } from './services/uploads.js';
 
 export interface AppDeps {
@@ -58,7 +60,9 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
 
   app.get('/api/health', async () => ({ ok: true }));
   await registerClaudeRoutes(app, claudeStatus);
-  await registerLibraryRoutes(app, library);
+  const search = new SearchService(db);
+  await registerLibraryRoutes(app, library, search);
+  await registerPdfjsAssets(app);
   const ingest = new IngestService(db, library, app.log);
   app.decorate('pcaIngest', ingest);
   const uploads = new UploadService(config, library, (docId) => ingest.enqueue(docId));

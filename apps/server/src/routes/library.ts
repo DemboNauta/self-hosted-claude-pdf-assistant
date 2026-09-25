@@ -5,6 +5,7 @@ import {
   readingPositionSchema,
   reorderSchema,
   restoreDocumentSchema,
+  searchQuerySchema,
   updateDocumentSchema,
   updateSubjectSchema,
   updateTopicSchema,
@@ -13,14 +14,20 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { notFound } from '../services/errors.js';
 import type { LibraryService } from '../services/library.js';
+import type { SearchService } from '../services/search.js';
 import { parse } from './validate.js';
 
 const idParams = z.object({ id: z.string().min(1).max(64) });
 
-export async function registerLibraryRoutes(app: FastifyInstance, library: LibraryService) {
+export async function registerLibraryRoutes(
+  app: FastifyInstance,
+  library: LibraryService,
+  search: SearchService,
+) {
   const id = (params: unknown) => parse(idParams, params).id;
 
   app.get('/api/library', async () => library.tree());
+  app.get('/api/search', async (req) => search.search(parse(searchQuerySchema, req.query)));
 
   // Subjects (F-LIB-01)
   app.post('/api/subjects', async (req, reply) =>

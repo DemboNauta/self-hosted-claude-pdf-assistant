@@ -6,6 +6,7 @@ import type {
   DocumentDetail,
   DocumentSummary,
   LibraryTree,
+  OutlineEntry,
   ReadingPosition,
   SubjectNode,
   TrashedDocument,
@@ -246,6 +247,7 @@ export class LibraryService {
       topicName: location?.topicName ?? null,
       subjectName: location?.subjectName ?? null,
       pageSizes,
+      outline: row.outlineJson ? (JSON.parse(row.outlineJson) as OutlineEntry[]) : [],
     };
   }
 
@@ -294,7 +296,13 @@ export class LibraryService {
         .run();
       tx.update(pages)
         .set({ viewedAt: now })
-        .where(and(eq(pages.documentId, id), eq(pages.pageNumber, page), isNull(pages.viewedAt)))
+        .where(
+          and(
+            eq(pages.documentId, id),
+            inArray(pages.pageNumber, [page, ...(pos.viewed ?? [])]),
+            isNull(pages.viewedAt),
+          ),
+        )
         .run();
     });
   }

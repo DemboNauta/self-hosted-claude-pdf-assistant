@@ -49,6 +49,13 @@ export interface PageSize {
   height: number;
 }
 
+/** PDF bookmarks, resolved to 1-based page numbers (null when the target is unknown). */
+export interface OutlineEntry {
+  title: string;
+  page: number | null;
+  items: OutlineEntry[];
+}
+
 export interface DocumentDetail extends DocumentSummary {
   lastScroll: number;
   subjectId: string | null;
@@ -56,6 +63,7 @@ export interface DocumentDetail extends DocumentSummary {
   subjectName: string | null;
   /** Page sizes in PDF points, index 0 = page 1. Lets the viewer lay out before rendering. */
   pageSizes: PageSize[];
+  outline: OutlineEntry[];
 }
 
 export interface TrashedDocument {
@@ -81,6 +89,8 @@ export const readingPositionSchema = z.object({
   page: z.number().int().min(1),
   /** Fraction (0–1) of the page scrolled past the top of the viewport. */
   scroll: z.number().min(0).max(1),
+  /** Other pages read since the last save (counted for reading progress). */
+  viewed: z.array(z.number().int().min(1)).max(200).optional(),
 });
 
 export type CreateSubject = z.infer<typeof createSubjectSchema>;
@@ -108,3 +118,26 @@ export const createUploadSchema = z.object({
 export const uploadChunkQuerySchema = z.object({ offset: z.coerce.number().int().min(0) });
 
 export type CreateUpload = z.infer<typeof createUploadSchema>;
+
+/** Full-text search scope (F-VIS-02 uses `doc`, F-SRC-01 and `search_library` the others). */
+export type SearchScope = 'doc' | 'topic' | 'subject' | 'all';
+
+export interface SearchHit {
+  docId: string;
+  title: string;
+  page: number;
+  /** Excerpt with matches wrapped in SEARCH_MARK_START / SEARCH_MARK_END. */
+  snippet: string;
+}
+
+export const SEARCH_MARK_START = '';
+export const SEARCH_MARK_END = '';
+
+export const searchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200),
+  scope: z.enum(['doc', 'topic', 'subject', 'all']).default('all'),
+  /** Document, topic or subject id, depending on the scope. */
+  id: z.string().min(1).max(64).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type SearchQuery = z.infer<typeof searchQuerySchema>;

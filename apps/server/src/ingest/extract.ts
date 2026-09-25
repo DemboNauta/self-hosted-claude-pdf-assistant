@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { getDocument, Util, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import type { OutlineEntry } from '@pdfclaudeassistant/shared';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 
 const require = createRequire(import.meta.url);
@@ -13,11 +14,7 @@ const asDirUrl = (dir: string) => `${path.join(pdfjsRoot, dir).replaceAll('\\', 
 /** Compact text item: [text, x, y, width, height], coordinates normalised 0–1, top-left origin. */
 export type TextLayerItem = [string, number, number, number, number];
 
-export interface OutlineEntry {
-  title: string;
-  page: number | null;
-  items: OutlineEntry[];
-}
+export type { OutlineEntry };
 
 export interface ExtractedPage {
   pageNumber: number;
