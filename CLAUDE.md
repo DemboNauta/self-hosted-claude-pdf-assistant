@@ -32,13 +32,13 @@ memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
 
 ## Resolved open decisions (SPEC §14)
 
-1. Visual style: minimalist, typographic.
-2. Highlight colours: semantic set — yellow = important, green = definition,
-   blue = example, red = don't understand, purple = review. Claude uses its own
-   colour (orange). Configurable in Settings.
-3. Claude answers in the language of the user's question.
-6. No upload size limit (`MAX_UPLOAD_MB=0` = unlimited); uploads are streamed
-   to disk, long books handled via per-page text + virtualised viewer.
+- **#1** Visual style: minimalist, typographic.
+- **#2** Highlight colours: semantic set — yellow = important, green = definition,
+  blue = example, red = don't understand, purple = review. Claude uses its own
+  colour (orange). Configurable in Settings.
+- **#3** Claude answers in the language of the user's question.
+- **#6** No upload size limit (`MAX_UPLOAD_MB=0` = unlimited); uploads are streamed
+  to disk, long books handled via per-page text + virtualised viewer.
 
 Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 
