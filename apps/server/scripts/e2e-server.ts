@@ -31,6 +31,7 @@ const fakeQuery = (() =>
 
 const app = await buildApp(config, {
   logger: false,
+  loginAttemptsPerMinute: 1000,
   claudeStatus: new ClaudeStatusService(config, fakeQuery),
 });
 await app.listen({ host: '127.0.0.1', port: config.port });

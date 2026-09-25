@@ -24,6 +24,7 @@ export async function registerAuth(
   app: FastifyInstance,
   config: AppConfig,
   sessions: SessionStore,
+  loginAttemptsPerMinute = 5,
 ) {
   app.decorateRequest('authenticated', false);
 
@@ -49,7 +50,7 @@ export async function registerAuth(
 
   app.post(
     '/api/auth/login',
-    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: loginAttemptsPerMinute, timeWindow: '1 minute' } } },
     async (req, reply) => {
       const body = loginRequestSchema.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: 'invalid_request' });

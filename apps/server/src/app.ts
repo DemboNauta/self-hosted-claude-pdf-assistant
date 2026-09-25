@@ -19,6 +19,8 @@ export interface AppDeps {
   db?: Db;
   claudeStatus?: ClaudeStatusService;
   logger?: boolean;
+  /** Only the e2e server raises this: its tests log in many times per minute. */
+  loginAttemptsPerMinute?: number;
 }
 
 export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<FastifyInstance> {
@@ -32,7 +34,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
 
   await app.register(cookie, { secret: config.sessionSecret });
   await app.register(rateLimit, { global: false });
-  await registerAuth(app, config, new SessionStore(db));
+  await registerAuth(app, config, new SessionStore(db), deps.loginAttemptsPerMinute);
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.code });
