@@ -3,6 +3,8 @@
 Self-hosted study assistant: PDF viewer + Claude (via the owner's Claude
 subscription through the Claude Agent SDK, never an API key) with annotations,
 memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
+**Start every session by reading `docs/HANDOFF.md`** (context from previous
+sessions: owner preferences, open questions, next steps) and update it at the end.
 
 ## Conventions (SPEC §15)
 
