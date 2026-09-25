@@ -1,29 +1,54 @@
-# PdfClaudeAsistant — working notes for Claude Code
+# PdfClaudeAssistant — working notes for Claude Code
 
 Self-hosted study assistant: PDF viewer + Claude (via the owner's Claude
 subscription through the Claude Agent SDK, never an API key) with annotations,
-memory and spaced repetition. Single user.
+memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
 
-## Conventions
+## Conventions (SPEC §15)
 
-- **Language:** UI text in Spanish; code, identifiers, comments, docs and
-  commit messages in English.
-- **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`,
-  `refactor:`, `test:`, `build:`, `ci:`…), optional scope, e.g.
-  `feat(viewer): add thumbnail navigation`. Reference feature IDs from the spec
-  (e.g. `F-VIS-01`) in the body when relevant.
-- **No co-author or attribution trailers** in commits (no `Co-Authored-By`,
-  no session links). Never list Claude as a co-author.
+- **Naming:** internal/UI name `PdfClaudeAssistant`. Packages
+  `@pdfclaudeassistant/{web,server,shared}`, Docker services/network
+  `pdfclaudeassistant-*`, DB `pdfclaudeassistant.db`, log prefix
+  `[PdfClaudeAssistant]`, cookie `pdfclaudeassistant_session`.
+- **Language:** UI text in Spanish (centralised in `apps/web/src/i18n`); code,
+  identifiers, comments, docs and commits in English.
+- **Commits:** Conventional Commits in English with scope, e.g.
+  `feat(reader): add thumbnail navigation`, referencing feature IDs
+  (`F-ANN-01`) in the body. Commit on `main`, one commit per milestone.
+- **No co-author or attribution trailers** in commits. Never list Claude as a
+  co-author.
+- Strict TypeScript everywhere; no `any` unless justified.
+- Shared types (WS events, anchors, DTOs) live in `packages/shared`.
+- Zod validation on every input (REST, WS, MCP tools).
+- Tests: unit tests for services (FSRS, text anchoring, citation parsing) and
+  at least one Playwright e2e test per phase acceptance criterion.
+- Accessibility: keyboard navigable, AA contrast, `aria-label` on icons.
+- Viewer virtualisation: render only visible pages ± 2.
 - **No Anthropic API usage:** never add `ANTHROPIC_API_KEY`,
-  `ANTHROPIC_AUTH_TOKEN`, `@anthropic-ai/sdk` or direct calls to
-  `api.anthropic.com`. Claude is reached only through
-  `@anthropic-ai/claude-agent-sdk` with the subscription session.
-- Ask before implementing anything marked **[DECISIÓN ABIERTA]** in the spec.
-- Work phase by phase; do not start a phase until the previous one meets its
-  acceptance criteria.
+  `ANTHROPIC_AUTH_TOKEN`, `@anthropic-ai/sdk` or calls to the Anthropic API
+  host. Claude is reached only through `@anthropic-ai/claude-agent-sdk` with
+  the subscription session. `apps/server/test/no-api-key.test.ts` enforces it.
+- Ask before implementing anything marked **[DECISIÓN ABIERTA]** (SPEC §14).
+
+## Resolved open decisions (SPEC §14)
+
+1. Visual style: minimalist, typographic.
+2. Highlight colours: semantic set — yellow = important, green = definition,
+   blue = example, red = don't understand, purple = review. Claude uses its own
+   colour (orange). Configurable in Settings.
+3. Claude answers in the language of the user's question.
+6. No upload size limit (`MAX_UPLOAD_MB=0` = unlimited); uploads are streamed
+   to disk, long books handled via per-page text + virtualised viewer.
+
+Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
+
+## Commands
+
+- `pnpm install` — install workspace
+- `pnpm dev` — server (:3000) + web (:5173, proxies API/WS)
+- `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm e2e`
+- `pnpm --filter @pdfclaudeassistant/server db:generate` — new migration
 
 ## Status
 
-- Spec received only up to section 8 (data model). Sections 9–15 (phases,
-  open decisions, full conventions) are pending from the owner.
-- Current phase: **not started** — waiting for the rest of the spec.
+- Current phase: **Phase 0 — skeleton** (in progress).
