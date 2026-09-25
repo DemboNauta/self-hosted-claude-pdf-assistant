@@ -24,6 +24,8 @@ export interface AppConfig {
   port: number;
   dataDir: string;
   dbPath: string;
+  pdfDir: string;
+  coverDir: string;
   agentCwd: string;
   passwordHash: string;
   sessionSecret: string;
@@ -48,6 +50,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: e.PORT,
     dataDir,
     dbPath: path.join(dataDir, 'pdfclaudeassistant.db'),
+    pdfDir: path.join(dataDir, 'pdfs'),
+    coverDir: path.join(dataDir, 'covers'),
     agentCwd: path.join(dataDir, 'agent-cwd'),
     passwordHash: e.APP_PASSWORD_HASH,
     sessionSecret: e.SESSION_SECRET,

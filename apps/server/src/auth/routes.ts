@@ -31,7 +31,8 @@ export async function registerAuth(
     const token = readSessionToken(req);
     req.authenticated = token !== null && sessions.validate(token);
     const route = req.routeOptions.url ?? req.url.split('?')[0];
-    if (!req.authenticated && route?.startsWith('/api/') && !PUBLIC_ROUTES.has(route)) {
+    const protectedRoute = route?.startsWith('/api/') || route?.startsWith('/ws/');
+    if (!req.authenticated && protectedRoute && !PUBLIC_ROUTES.has(route!)) {
       return reply.code(401).send({ error: 'unauthorized' });
     }
   });
