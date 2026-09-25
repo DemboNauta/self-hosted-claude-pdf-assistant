@@ -170,3 +170,37 @@ body {
     padding: 0.25em 0;
   }
 }
+
+/* Claude's pointer marks (F-POINT-02): strokes draw themselves, fills fade in. */
+@keyframes pca-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes pca-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.pointer-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pca-draw 0.6s ease-out forwards;
+}
+.pointer-fade {
+  opacity: 0;
+  animation: pca-fade 0.4s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pointer-draw,
+  .pointer-fade,
+  .animate-flash {
+    animation-duration: 1ms;
+  }
+}

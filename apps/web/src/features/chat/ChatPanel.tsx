@@ -12,6 +12,7 @@ import {
   Copy,
   History,
   Loader2,
+  MousePointer2,
   Plus,
   Quote,
   Square,
@@ -25,8 +26,11 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
+import { useReader } from '../reader/store';
+import { CITATION_EVENT } from './CitationChip';
 import { Markdown } from './Markdown';
 import { useChat } from './store';
 
@@ -67,6 +71,47 @@ function CopyButton({ text }: { text: string }) {
       {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
     </button>
   );
+}
+
+/** "Claude pointed at p. N — Go · Clear" under the answer that drew the marks. */
+function PointerBar({ messageId }: { messageId: string }) {
+  const groups = useChat(useShallow((s) => s.pointers.filter((g) => g.messageId === messageId)));
+  const clear = useChat((s) => s.clearPointers);
+  if (!groups.length) return null;
+  const pages = [...new Set(groups.map((g) => g.page))];
+  return (
+    <div className="border-border flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-2 py-1.5 text-xs">
+      <MousePointer2 size={12} aria-hidden className="text-orange-600" />
+      {pages.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent(CITATION_EVENT));
+            useReader.getState().goTo(p);
+          }}
+          className="hover:underline"
+        >
+          {t.chat.pointers.shown(p)} · {t.chat.pointers.go}
+        </button>
+      ))}
+      <span className="flex-1" />
+      {extraPointerActions(messageId)}
+      <button
+        type="button"
+        onClick={() => clear(messageId)}
+        className="text-text-muted hover:text-text"
+      >
+        {t.chat.pointers.clear}
+      </button>
+    </div>
+  );
+}
+
+/** Hook for later features (saving marks as annotations). */
+let extraPointerActions: (messageId: string) => ReactNode = () => null;
+export function setPointerActions(fn: (messageId: string) => ReactNode) {
+  extraPointerActions = fn;
 }
 
 function MessageItem({ message }: { message: ChatMessage }) {
@@ -111,6 +156,7 @@ function MessageItem({ message }: { message: ChatMessage }) {
           {t.chat.thinking}
         </p>
       ) : null}
+      <PointerBar messageId={message.id} />
       {message.status === 'interrupted' && (
         <p className="text-text-muted text-xs italic">{t.chat.interrupted}</p>
       )}
@@ -270,7 +316,7 @@ function Composer() {
           onKeyDown={onKeyDown}
           placeholder={attached ? t.chat.placeholderSelection : t.chat.placeholder}
           aria-label={t.chat.placeholder}
-          className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none sm:text-sm"
+          className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"
         />
         {running ? (
           <button

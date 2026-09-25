@@ -10,6 +10,7 @@ import { useChat } from '../chat/store';
 import { libraryKey } from '../library/api';
 import { openPdf, type PDFDocumentProxy } from './pdf';
 import { PdfViewer, type ReadingPositionUpdate } from './PdfViewer';
+import { PointerLayer } from './PointerLayer';
 import { ReaderToolbar } from './ReaderToolbar';
 import { SelectionMenu } from './SelectionMenu';
 import { OutlinePanel, SearchPanel, ThumbnailsPanel } from './SidePanels';
@@ -122,6 +123,9 @@ export function ReaderPage() {
               initialScroll={citedPage ? 0 : doc.lastScroll}
               onPosition={savePosition}
               onScroller={setScroller}
+              overlay={(page, layers, size) => (
+                <PointerLayer pageNumber={page} docId={doc.id} layers={layers} {...size} />
+              )}
             />
           )}
         </div>

@@ -104,7 +104,11 @@ export function PdfViewer({
   initialPage: number;
   initialScroll: number;
   onPosition: (pos: ReadingPositionUpdate) => void;
-  overlay?: (pageNumber: number, layers: PageLayers) => ReactNode;
+  overlay?: (
+    pageNumber: number,
+    layers: PageLayers,
+    size: { width: number; height: number },
+  ) => ReactNode;
   /** Receives the scroll container (selection menu, pointer overlays). */
   onScroller?: (el: HTMLDivElement | null) => void;
 }) {
@@ -357,7 +361,12 @@ export function PdfViewer({
             width={layout.widths[i]!}
             height={layout.heights[i]!}
             style={{ top: layout.tops[i], left: (layout.innerWidth - layout.widths[i]!) / 2 }}
-            overlay={overlay ? (layers) => overlay(i + 1, layers) : undefined}
+            overlay={
+              overlay
+                ? (layers) =>
+                    overlay(i + 1, layers, { width: layout.widths[i]!, height: layout.heights[i]! })
+                : undefined
+            }
           />
         ))}
       </div>

@@ -33,13 +33,32 @@ const fakeQuery = (() =>
  * Fake chat turn: streams a short answer citing page 1 of the active document (with
  * the selected text as quote when there is one), so the UI can be tested end to end.
  */
-const fakeChat = ((args: { prompt: string }) =>
+type FakeTools = Record<string, { handler: (args: unknown, extra: unknown) => Promise<unknown> }>;
+
+const fakeChat = ((args: {
+  prompt: string;
+  options: { mcpServers?: Record<string, { instance?: { _registeredTools?: FakeTools } }> };
+}) =>
   (async function* () {
     const docId = /\(id ([0-9a-z]+)/.exec(args.prompt)?.[1] ?? 'unknown';
     const selected = /Selected text on page (\d+):\n"""\n([\s\S]*?)\n"""/.exec(args.prompt);
     const page = selected?.[1] ?? '1';
     const quote = selected?.[2]?.split(/\s+/).slice(0, 6).join(' ');
     const cite = `[[cite:${docId}:${page}${quote ? `|"${quote}"` : ''}]]`;
+    // "Señala…" makes the fake call the real point_at tool, as Claude would.
+    const tools = args.options.mcpServers?.pca?.instance?._registeredTools;
+    if (/señala/i.test(args.prompt.split('</context>')[1] ?? '') && tools?.point_at && quote) {
+      await tools.point_at.handler(
+        {
+          page: Number(page),
+          shapes: [
+            { type: 'circle', anchor: { kind: 'text', quote }, label: 'Aquí' },
+            { type: 'arrow', anchor: { kind: 'text', quote } },
+          ],
+        },
+        {},
+      );
+    }
     yield {
       type: 'system',
       subtype: 'init',

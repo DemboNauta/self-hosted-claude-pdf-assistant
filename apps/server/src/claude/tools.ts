@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import {
+  pointerShapeSchema,
   SEARCH_MARK_END,
   SEARCH_MARK_START,
   type OutlineEntry,
@@ -250,9 +251,66 @@ export function readingTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/** Ephemeral "teacher's pointer" marks on the page (F-POINT-01..05). */
+export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
+  return [
+    tool(
+      'point_at',
+      [
+        'Draw temporary marks on a page of the PDF while you explain: arrow, circle, rect (box), highlight or label.',
+        'Each shape has an anchor: {"kind":"text","quote":"exact words from the page"} (preferred; 2 to 12 consecutive words copied verbatim, add "occurrence" when the words repeat on the page) or {"kind":"rect","x":0.1,"y":0.2,"w":0.3,"h":0.1} in page fractions (origin top-left) for figures.',
+        'Use "label" for a short note shown next to the mark. The viewer jumps to the page. Marks disappear when the student sends the next message.',
+      ].join(' '),
+      {
+        docId: z.string().optional().describe('Default: the open document'),
+        page: z.number().int().min(1),
+        shapes: z.array(pointerShapeSchema).min(1).max(12),
+      },
+      tracked(
+        ctx,
+        'point_at',
+        ({ page }) => `p. ${page}`,
+        async ({ docId, page, shapes }) => {
+          const id = docId ?? ctx.docId;
+          let doc;
+          try {
+            doc = deps.library.detail(id);
+          } catch {
+            return fail(`Unknown document ${id}.`);
+          }
+          if (doc.pageCount && page > doc.pageCount)
+            return fail(`The document has ${doc.pageCount} pages.`);
+          ctx.emit({
+            type: 'pointer',
+            threadId: ctx.threadId,
+            group: { messageId: ctx.messageId, docId: id, page, shapes },
+          });
+          return text(
+            `Shown on page ${page} (${shapes.length} mark${shapes.length > 1 ? 's' : ''}).`,
+          );
+        },
+      ),
+    ),
+    tool(
+      'clear_pointers',
+      'Remove every temporary mark you drew on the PDF.',
+      {},
+      tracked(
+        ctx,
+        'clear_pointers',
+        () => '',
+        async () => {
+          ctx.emit({ type: 'clear_pointers', threadId: ctx.threadId });
+          return text('Cleared.');
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
-  const tools = [...readingTools(deps, ctx)];
+  const tools = [...readingTools(deps, ctx), ...pointerTools(deps, ctx)];
   return {
     server: createSdkMcpServer({ name: MCP_SERVER_NAME, version: '1.0.0', tools }),
     allowedTools: tools.map((t) => `mcp__${MCP_SERVER_NAME}__${t.name}`),

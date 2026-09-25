@@ -71,3 +71,38 @@ test('read a PDF and ask Claude about a selection', async ({ page }, info) => {
   }
   await expect(chat.getByTestId('user-message').first()).toContainText('cloroplastos');
 });
+
+// F-POINT-01..03: Claude's marks appear on the page, grouped under the answer, and go
+// away with the next question.
+test('Claude points at the page and the marks clear with the next question', async ({
+  page,
+}, info) => {
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Señales ${info.project.name}`,
+    tinyPdf([['La fotosintesis ocurre en los cloroplastos.', 'El ciclo de Calvin fija el CO2.']]),
+  );
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('Calvin');
+
+  await selectInPdf(page, 'El ciclo de Calvin fija');
+  await page
+    .getByRole('toolbar', { name: 'Acciones sobre la selección' })
+    .getByRole('button', { name: 'Preguntar' })
+    .click();
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  await composer.fill('Señala dónde está esto');
+  await composer.press('Enter');
+
+  await expect(page.locator('[data-page="1"] [data-testid="claude-pointers"]')).toBeVisible();
+  await expect(page.getByText('Claude ha señalado en la p. 1')).toBeVisible();
+  await expect(page.locator('[data-page="1"]').getByText('Aquí')).toBeVisible();
+
+  // Wait for the answer to finish before the next question.
+  await expect(page.getByRole('button', { name: 'Detener' })).toBeHidden();
+  await composer.fill('Gracias');
+  await composer.press('Enter');
+  await expect(page.getByTestId('assistant-message')).toHaveCount(2);
+  await expect(page.locator('[data-testid="claude-pointers"]')).toHaveCount(0);
+});

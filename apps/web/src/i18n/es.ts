@@ -199,6 +199,13 @@ export const es = {
       busy: 'Claude todavía está respondiendo en esta conversación.',
       internal: 'Algo ha fallado al hablar con Claude. Inténtalo de nuevo.',
     },
+    pointers: {
+      shown: (page: number) => `Claude ha señalado en la p. ${page}`,
+      go: 'Ir',
+      clear: 'Limpiar',
+      save: 'Guardar',
+      saved: 'Guardado como anotación',
+    },
     selection: {
       menu: 'Acciones sobre la selección',
       ask: 'Preguntar',

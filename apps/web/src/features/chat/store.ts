@@ -2,6 +2,7 @@ import type {
   ChatErrorCode,
   ChatMessage,
   ClientChatEvent,
+  PointerGroup,
   ServerChatEvent,
   StudyMode,
   SummaryFormat,
@@ -90,6 +91,8 @@ interface ChatState {
   summaryFormat: SummaryFormat;
   /** Selection attached to the next question ("Preguntar" in the selection menu). */
   attached: TextSelection | null;
+  /** Claude's temporary marks on the PDF (F-POINT-03: gone with the next question). */
+  pointers: PointerGroup[];
 
   openDocument: (docId: string) => Promise<void>;
   openThread: (threadId: string) => Promise<void>;
@@ -101,6 +104,7 @@ interface ChatState {
   setSummaryFormat: (format: SummaryFormat) => void;
   attach: (selection: TextSelection | null) => void;
   dismissError: () => void;
+  clearPointers: (messageId?: string) => void;
 }
 
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -116,10 +120,19 @@ export const useChat = create<ChatState>((set, get) => ({
   mode: 'free',
   summaryFormat: 'outline',
   attached: null,
+  pointers: [],
 
   openDocument: async (docId) => {
     if (get().docId === docId && get().threadId) return;
-    set({ docId, threadId: null, messages: [], threads: [], error: null, attached: null });
+    set({
+      docId,
+      threadId: null,
+      messages: [],
+      threads: [],
+      error: null,
+      attached: null,
+      pointers: [],
+    });
     chatSocket.connect();
     const active = await api<ThreadSummary>(`/documents/${docId}/threads/active`);
     if (get().docId !== docId) return;
@@ -179,7 +192,13 @@ export const useChat = create<ChatState>((set, get) => ({
       status: 'complete',
       createdAt: new Date().toISOString(),
     };
-    set({ messages: [...get().messages, optimistic], running: true, error: null, attached: null });
+    set({
+      messages: [...get().messages, optimistic],
+      running: true,
+      error: null,
+      attached: null,
+      pointers: [],
+    });
     chatSocket.send({ type: 'user_message', threadId, clientId, text, mode, context });
   },
 
@@ -192,6 +211,8 @@ export const useChat = create<ChatState>((set, get) => ({
   setSummaryFormat: (summaryFormat) => set({ summaryFormat }),
   attach: (attached) => set({ attached }),
   dismissError: () => set({ error: null }),
+  clearPointers: (messageId) =>
+    set({ pointers: messageId ? get().pointers.filter((g) => g.messageId !== messageId) : [] }),
 }));
 
 function upsert(messages: ChatMessage[], message: ChatMessage, replaceId = message.id) {
@@ -243,6 +264,18 @@ chatSocket.subscribe((event) => {
       void api<ThreadSummary[]>(`/documents/${s.docId}/threads`).then((threads) => {
         if (useChat.getState().docId === s.docId) useChat.setState({ threads });
       });
+      break;
+    case 'pointer': {
+      useChat.setState({ pointers: [...s.pointers, event.group] });
+      // Jump to the page Claude points at (F-POINT-05), unless the reader is already there.
+      const reader = useReader.getState();
+      if (event.group.docId === reader.docId && reader.currentPage !== event.group.page) {
+        reader.goTo(event.group.page);
+      }
+      break;
+    }
+    case 'clear_pointers':
+      useChat.setState({ pointers: [] });
       break;
     case 'error':
       useChat.setState({
