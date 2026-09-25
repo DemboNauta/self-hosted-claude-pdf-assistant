@@ -1,6 +1,6 @@
 /** Worker-thread entry: runs PDF extraction off the main event loop. */
 import { parentPort, workerData } from 'node:worker_threads';
-import { extractPdf } from './extract.js';
+import { extractPdf, type ExtractedPage, type ExtractResult } from './extract.js';
 
 export interface WorkerInput {
   filePath: string;
@@ -8,8 +8,8 @@ export interface WorkerInput {
 }
 
 export type WorkerMessage =
-  | { type: 'pages'; pages: import('./extract.js').ExtractedPage[] }
-  | { type: 'done'; result: import('./extract.js').ExtractResult }
+  | { type: 'pages'; pages: ExtractedPage[] }
+  | { type: 'done'; result: ExtractResult }
   | { type: 'error'; message: string };
 
 const { filePath, coverPath } = workerData as WorkerInput;
