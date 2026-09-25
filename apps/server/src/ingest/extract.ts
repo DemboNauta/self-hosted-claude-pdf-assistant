@@ -7,7 +7,8 @@ import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 
 const require = createRequire(import.meta.url);
 const pdfjsRoot = path.dirname(require.resolve('pdfjs-dist/package.json'));
-const asDirUrl = (dir: string) => path.join(pdfjsRoot, dir) + path.sep;
+// PDF.js requires a trailing "/" (not "\"), and forward slashes also work as fs paths on Windows.
+const asDirUrl = (dir: string) => `${path.join(pdfjsRoot, dir).replaceAll('\\', '/')}/`;
 
 /** Compact text item: [text, x, y, width, height], coordinates normalised 0–1, top-left origin. */
 export type TextLayerItem = [string, number, number, number, number];
