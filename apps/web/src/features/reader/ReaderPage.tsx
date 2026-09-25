@@ -1,13 +1,17 @@
 import type { DocumentDetail } from '@pdfclaudeassistant/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
+import { MessageSquare } from 'lucide-react';
 import { t } from '../../i18n';
 import { api } from '../../lib/api';
+import { ChatDock, useChatDock } from '../chat/ChatDock';
+import { useChat } from '../chat/store';
 import { libraryKey } from '../library/api';
 import { openPdf, type PDFDocumentProxy } from './pdf';
 import { PdfViewer, type ReadingPositionUpdate } from './PdfViewer';
 import { ReaderToolbar } from './ReaderToolbar';
+import { SelectionMenu } from './SelectionMenu';
 import { OutlinePanel, SearchPanel, ThumbnailsPanel } from './SidePanels';
 import { useReader } from './store';
 
@@ -35,7 +39,10 @@ function usePdf(docId: string | undefined, enabled: boolean) {
 /** Reader: PDF viewer with thumbnails, outline and search (F-VIS-01/02, F-LIB-04). */
 export function ReaderPage() {
   const { documentId } = useParams();
+  const [params] = useSearchParams();
   const qc = useQueryClient();
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const chatOpen = useChatDock((s) => s.open || s.sheet !== 'closed');
   const detail = useQuery({
     queryKey: ['document', documentId],
     queryFn: () => api<DocumentDetail>(`/documents/${documentId}`),
@@ -47,8 +54,17 @@ export function ReaderPage() {
   const panel = useReader((s) => s.panel);
 
   useEffect(() => {
-    if (detail.data) useReader.getState().open(detail.data.id, detail.data.pageSizes.length);
+    if (!detail.data) return;
+    useReader.getState().open(detail.data.id, detail.data.pageSizes.length);
+    void useChat.getState().openDocument(detail.data.id);
   }, [detail.data]);
+
+  // Arriving from a citation in another document: show that page and flash the quote.
+  const citedPage = Number(params.get('page')) || null;
+  const citedQuote = params.get('q') ?? undefined;
+  useEffect(() => {
+    if (pdf && citedPage) useReader.getState().goTo(citedPage, citedQuote);
+  }, [pdf, citedPage, citedQuote]);
 
   const savePosition = useCallback(
     (pos: ReadingPositionUpdate) => {
@@ -71,7 +87,22 @@ export function ReaderPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <ReaderToolbar title={doc.title} backTo={backTo} />
+      <ReaderToolbar
+        title={doc.title}
+        backTo={backTo}
+        trailing={
+          <button
+            type="button"
+            onClick={() => useChatDock.getState().toggle()}
+            aria-label={t.chat.open}
+            title={t.chat.open}
+            aria-pressed={chatOpen}
+            className="text-text-muted hover:text-text hover:bg-surface-muted aria-pressed:bg-surface-muted aria-pressed:text-text ml-1 rounded-md p-2"
+          >
+            <MessageSquare size={18} aria-hidden />
+          </button>
+        }
+      />
       <div className="relative flex min-h-0 flex-1">
         {pdf && panel === 'thumbnails' && <ThumbnailsPanel pdf={pdf} pageSizes={doc.pageSizes} />}
         {panel === 'outline' && <OutlinePanel outline={doc.outline} />}
@@ -87,13 +118,16 @@ export function ReaderPage() {
             <PdfViewer
               pdf={pdf}
               pageSizes={doc.pageSizes}
-              initialPage={doc.lastPage}
-              initialScroll={doc.lastScroll}
+              initialPage={citedPage ?? doc.lastPage}
+              initialScroll={citedPage ? 0 : doc.lastScroll}
               onPosition={savePosition}
+              onScroller={setScroller}
             />
           )}
         </div>
+        <ChatDock />
       </div>
+      <SelectionMenu root={scroller} />
     </div>
   );
 }

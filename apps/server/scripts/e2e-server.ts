@@ -29,9 +29,50 @@ const fakeQuery = (() =>
     yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' };
   })()) as never;
 
+/**
+ * Fake chat turn: streams a short answer citing page 1 of the active document (with
+ * the selected text as quote when there is one), so the UI can be tested end to end.
+ */
+const fakeChat = ((args: { prompt: string }) =>
+  (async function* () {
+    const docId = /\(id ([0-9a-z]+)/.exec(args.prompt)?.[1] ?? 'unknown';
+    const selected = /Selected text on page (\d+):\n"""\n([\s\S]*?)\n"""/.exec(args.prompt);
+    const page = selected?.[1] ?? '1';
+    const quote = selected?.[2]?.split(/\s+/).slice(0, 6).join(' ');
+    const cite = `[[cite:${docId}:${page}${quote ? `|"${quote}"` : ''}]]`;
+    yield {
+      type: 'system',
+      subtype: 'init',
+      session_id: 'e2e-session',
+      model: 'claude-e2e',
+      apiKeySource: 'none',
+    };
+    const parts = [
+      'Respuesta de prueba: ',
+      'la idea principal está en la página ',
+      `${page} ${cite}.`,
+      '\n\nFórmula: $E = mc^2$',
+    ];
+    yield {
+      type: 'stream_event',
+      parent_tool_use_id: null,
+      event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    };
+    for (const text of parts) {
+      await new Promise((r) => setTimeout(r, 60));
+      yield {
+        type: 'stream_event',
+        parent_tool_use_id: null,
+        event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
+      };
+    }
+    yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' };
+  })()) as never;
+
 const app = await buildApp(config, {
   logger: false,
   loginAttemptsPerMinute: 1000,
+  claudeQuery: fakeChat,
   claudeStatus: new ClaudeStatusService(config, fakeQuery),
 });
 await app.listen({ host: '127.0.0.1', port: config.port });

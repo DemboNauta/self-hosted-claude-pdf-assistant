@@ -97,6 +97,7 @@ export function PdfViewer({
   initialScroll,
   onPosition,
   overlay,
+  onScroller,
 }: {
   pdf: PDFDocumentProxy;
   pageSizes: PageSize[];
@@ -104,6 +105,8 @@ export function PdfViewer({
   initialScroll: number;
   onPosition: (pos: ReadingPositionUpdate) => void;
   overlay?: (pageNumber: number, layers: PageLayers) => ReactNode;
+  /** Receives the scroll container (selection menu, pointer overlays). */
+  onScroller?: (el: HTMLDivElement | null) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
@@ -138,8 +141,12 @@ export function PdfViewer({
     const el = scroller.current!;
     const ro = new ResizeObserver(() => setViewport({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    onScroller?.(el);
+    return () => {
+      ro.disconnect();
+      onScroller?.(null);
+    };
+  }, [onScroller]);
 
   const captureAnchor = useCallback((vx: number, vy: number, nextScale: number) => {
     const el = scroller.current;
@@ -214,8 +221,8 @@ export function PdfViewer({
     if (!nav || !el || !restored.current) return;
     const i = nav.page - 1;
     const l = layoutRef.current;
-    // With a quote, keep some context above the page top; otherwise align the top.
-    el.scrollTo({ top: l.tops[i]! - PAD / 2, behavior: nav.quote ? 'smooth' : 'auto' });
+    // With a quote, the highlight then scrolls itself into view (see PdfPage).
+    el.scrollTo({ top: l.tops[i]! - PAD / 2 });
   }, [nav]);
 
   // Current page, viewed pages and debounced position saving.

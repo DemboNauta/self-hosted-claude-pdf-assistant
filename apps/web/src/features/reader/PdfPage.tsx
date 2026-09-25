@@ -161,12 +161,18 @@ function Highlights({ pageNumber, layers }: { pageNumber: number; layers: PageLa
       {shownFlash.map((r, i) => (
         <div
           key={`f${i}`}
-          className="animate-flash absolute rounded-sm bg-orange-400/45"
+          ref={i === 0 ? scrollToFlash : undefined}
+          className="animate-flash absolute scroll-mt-20 rounded-sm bg-orange-400/45"
           style={toStyle(r)}
         />
       ))}
     </div>
   );
+}
+
+/** Brings a cited quote near the top of the viewer (a mobile chat sheet covers the bottom). */
+function scrollToFlash(el: HTMLDivElement | null) {
+  el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 export function toStyle(r: NormRect): React.CSSProperties {

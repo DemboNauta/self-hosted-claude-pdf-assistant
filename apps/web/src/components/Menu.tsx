@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { MoreHorizontal } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 export interface MenuAction {
   label: string;
@@ -13,10 +13,13 @@ export function Menu({
   label,
   actions,
   className,
+  icon,
 }: {
   label: string;
   actions: MenuAction[];
   className?: string;
+  /** Trigger icon (default "⋯"). */
+  icon?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -63,13 +66,13 @@ export function Menu({
         }}
         className="text-text-muted hover:text-text hover:bg-surface-muted rounded-md p-1.5"
       >
-        <MoreHorizontal size={16} aria-hidden />
+        {icon ?? <MoreHorizontal size={16} aria-hidden />}
       </button>
       {open && (
         <ul
           id={id}
           role="menu"
-          className="border-border bg-surface absolute right-0 z-30 mt-1 min-w-44 rounded-lg border py-1 shadow-lg"
+          className="border-border bg-surface absolute right-0 z-30 mt-1 max-h-80 max-w-[min(20rem,90vw)] min-w-44 overflow-y-auto rounded-lg border py-1 shadow-lg"
         >
           {actions.map((a) => (
             <li key={a.label} role="none">
