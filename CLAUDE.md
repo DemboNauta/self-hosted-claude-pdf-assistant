@@ -29,6 +29,10 @@ memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
   host. Claude is reached only through `@anthropic-ai/claude-agent-sdk` with
   the subscription session. `apps/server/test/no-api-key.test.ts` enforces it.
 - Ask before implementing anything marked **[DECISIÓN ABIERTA]** (SPEC §14).
+- **Owner preference:** whenever something is unclear or the owner's opinion
+  could matter (product behaviour, UX, data handling), ask before assuming.
+  Technology choices are left to Claude's judgement.
+- Commit author: `Edgar <edgarmila_10@outlook.com>` (set in local git config).
 
 ## Resolved open decisions (SPEC §14)
 
@@ -39,6 +43,13 @@ memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
 - **#3** Claude answers in the language of the user's question.
 - **#6** No upload size limit (`MAX_UPLOAD_MB=0` = unlimited); uploads are streamed
   to disk, long books handled via per-page text + virtualised viewer.
+
+Other owner decisions:
+
+- Deleting a subject/topic that still has PDFs moves those PDFs to the trash
+  (30 days); restoring asks for a destination topic. A minimal trash view ships
+  in Phase 1 for this reason (full F-LIB-05 in Phase 3).
+- Phase 1 started before the owner validated Phase 0 on the VPS (owner's call).
 
 Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 
