@@ -62,20 +62,53 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 
 ## Status
 
-- **Phase 0 — skeleton: implemented.** Monorepo, Fastify server with login,
-  SQLite + Drizzle migrations, API-key guard + filtered agent env,
-  `GET /api/claude/status`, React shell with Settings → Conexión con Claude,
-  Docker Compose + Caddy, CI. Acceptance on the real VPS (HTTPS + subscription
-  status) is pending the owner's deployment.
-- Deviations: API routes live under `/api` (Caddy routes `/api/*` and `/ws/*`
-  to the server); the web build is served by the `caddy` service, so there is
-  no separate `web` container.
-- Next: **Phase 1 — read and ask.**
+- **Phase 0 — skeleton: implemented, not yet accepted on the VPS.** Monorepo,
+  Fastify server with login, SQLite + Drizzle migrations, API-key guard +
+  filtered agent env, `GET /api/claude/status`, React shell with Settings →
+  Conexión con Claude, Docker Compose + Caddy, CI (lint, format, typecheck,
+  unit, e2e, Docker builds).
+- Deviations: API routes live under `/api`; the web build is served by the
+  `caddy` service (no separate `web` container) — this changes with the
+  deployment work below.
+- **Phase 1 — read and ask: in progress** (owner chose to start before
+  accepting Phase 0).
+  - Done: library API (subjects/topics/documents, reorder, move, trash,
+    reading position) and ingestion (streamed upload, worker-thread PDF.js
+    extraction with normalised text coordinates, page sizes, outline, cover,
+    FTS5).
+  - Remaining, in order: library UI (F-LIB-01..03), PDF viewer (F-VIS-01/02,
+    F-LIB-04), annotations (F-ANN-01/02/05/07), Claude chat backend (WS
+    `/ws/chat`, MCP tools `get_document_info`, `get_pages`, `search_library`,
+    citations `[[cite:docId:page|"quote"]]`), chat UI with selection menu and
+    citation jumps (F-CHAT-01/02/04/05/07, F-VIS-03), Phase 1 e2e test.
+
+## Deployment (pending, owner decisions)
+
+- The owner runs deploys from their Windows PC over SSH (same approach as
+  their other project's `deploy.ps1`: host read from an environment variable,
+  code copied with scp, never touching the server's `.env` or `data/`).
+- The VPS already runs its own **Caddy outside Docker** on 80/443, so this app
+  must not start its own Caddy there: the server container should also serve
+  the web build and listen only on `127.0.0.1:<port>`; the host Caddy
+  reverse-proxies the app's subdomain to it (WebSockets included). Keep the
+  bundled Caddy as an optional compose profile.
+- Docker is not installed on the VPS yet; the owner will install it.
+- **Never commit the domain, the VPS IP or any host detail**: they live only in
+  the VPS `.env`, the host Caddyfile and local environment variables.
+- **Open question:** the domain is on Cloudflare. If proxied (orange cloud),
+  the free plan rejects request bodies over 100 MB, which conflicts with
+  decision #6 (no upload limit). Options: chunked uploads (recommended), DNS
+  only (grey cloud), or cap at 100 MB. Ask the owner before implementing.
 
 ## Notes
 
 - Per-turn context (current page, selection, mode) must go in the user message,
   not the system prompt: the SDK snapshots the system prompt on the first
   request and reuses it on resume.
-- The Docker image cannot be fully built inside the Claude Code sandbox (apt and
-  prebuilt binaries are blocked); CI's `docker` job is the source of truth.
+- Dev workers: `src/ingest/service.ts` boots the TypeScript worker through a
+  tiny eval'd bootstrap that registers tsx (Node's native type stripping
+  otherwise skips `.js` → `.ts` resolution). The bundle uses
+  `dist/ingest-worker.js`. Do not add a `createRequire` banner to esbuild.
+- The previous cloud session could not build the full Docker image (apt and
+  prebuilt binaries blocked there) nor reach the VPS; CI's `docker` job builds
+  both images.
