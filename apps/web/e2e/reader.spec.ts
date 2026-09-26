@@ -1,22 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { login, seedDocument, tinyPdf } from './helpers';
-
-/** Selects `text` inside the PDF text layer, as a drag or long-press would. */
-async function selectInPdf(page: Page, text: string) {
-  await page.evaluate((needle) => {
-    const span = [...document.querySelectorAll('.textLayer span')].find((s) =>
-      s.textContent?.includes(needle),
-    );
-    if (!span?.firstChild) throw new Error(`"${needle}" not in the text layer`);
-    const start = span.textContent!.indexOf(needle);
-    const range = document.createRange();
-    range.setStart(span.firstChild, start);
-    range.setEnd(span.firstChild, start + needle.length);
-    const sel = window.getSelection()!;
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }, text);
-}
+import { expect, test } from '@playwright/test';
+import { login, openPanel, seedDocument, selectInPdf, tinyPdf } from './helpers';
 
 // Phase 1 acceptance: read on desktop and mobile, ask about a selection, get a streamed
 // answer with a citation that jumps to the page and highlights the quote.
@@ -35,7 +18,7 @@ test('read a PDF and ask Claude about a selection', async ({ page }, info) => {
   await expect(page.locator('[data-page="1"] .textLayer')).toContainText('cloroplastos');
 
   // In-document search jumps to the page and highlights the term (F-VIS-02).
-  await page.getByRole('button', { name: 'Buscar en el documento' }).click();
+  await openPanel(page, 'Buscar en el documento');
   await page.getByRole('searchbox', { name: 'Buscar en el documento' }).fill('Calvin');
   await page.getByRole('button', { name: /Página 2/ }).click();
   await expect(page.getByRole('textbox', { name: 'Página' })).toHaveValue('2');

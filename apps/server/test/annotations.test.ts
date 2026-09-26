@@ -1,6 +1,7 @@
 import type { Annotation, AppSettings, HighlightAnchor } from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
-import { PDFArray, PDFDocument, PDFName } from 'pdf-lib';
+import type { PDFArray } from 'pdf-lib';
+import { PDFDocument, PDFName } from 'pdf-lib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { annotationTools, type ToolContext } from '../src/claude/tools.js';
 import type { Db } from '../src/db/client.js';

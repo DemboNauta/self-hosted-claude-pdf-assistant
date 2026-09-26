@@ -65,3 +65,28 @@ export async function seedDocument(page: Page, name: string, pdf: Buffer): Promi
     .toBe('ready');
   return doc.id;
 }
+
+/** Selects `text` inside the PDF text layer, as a drag or long-press would. */
+export async function selectInPdf(page: Page, text: string) {
+  await page.evaluate((needle) => {
+    const span = [...document.querySelectorAll('.textLayer span')].find((s) =>
+      s.textContent?.includes(needle),
+    );
+    if (!span?.firstChild) throw new Error(`"${needle}" not in the text layer`);
+    const start = span.textContent!.indexOf(needle);
+    const range = document.createRange();
+    range.setStart(span.firstChild, start);
+    range.setEnd(span.firstChild, start + needle.length);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, text);
+}
+
+/** Opens a reader side panel: toolbar icon on wide screens, "Paneles" menu on phones. */
+export async function openPanel(page: Page, name: string) {
+  const direct = page.getByRole('button', { name, exact: true });
+  if (await direct.isVisible()) return direct.click();
+  await page.getByRole('button', { name: 'Paneles' }).click();
+  await page.getByRole('menuitem', { name }).click();
+}

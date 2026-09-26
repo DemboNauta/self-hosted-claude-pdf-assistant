@@ -2,9 +2,16 @@ import type { DocumentDetail } from '@pdfclaudeassistant/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, PenTool } from 'lucide-react';
 import { t } from '../../i18n';
 import { api } from '../../lib/api';
+import { AnnotationOverlay, AnnotationUnderlay } from '../annotations/AnnotationLayer';
+import { AnnotationsPanel } from '../annotations/AnnotationsPanel';
+import { AnnotationTools, useUndoShortcuts } from '../annotations/AnnotationTools';
+import {
+  installAnnotationIntegrations,
+  useSelectionAnnotationActions,
+} from '../annotations/integrations';
 import { ChatDock, useChatDock } from '../chat/ChatDock';
 import { useChat } from '../chat/store';
 import { libraryKey } from '../library/api';
@@ -37,13 +44,18 @@ function usePdf(docId: string | undefined, enabled: boolean) {
   return state;
 }
 
-/** Reader: PDF viewer with thumbnails, outline and search (F-VIS-01/02, F-LIB-04). */
+installAnnotationIntegrations();
+
+/** Reader: PDF viewer with side panels, annotations and the chat with Claude. */
 export function ReaderPage() {
   const { documentId } = useParams();
   const [params] = useSearchParams();
   const qc = useQueryClient();
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const chatOpen = useChatDock((s) => s.open || s.sheet !== 'closed');
+  const [showTools, setShowTools] = useState(false);
+  const selectionActions = useSelectionAnnotationActions(documentId ?? '');
+  useUndoShortcuts();
   const detail = useQuery({
     queryKey: ['document', documentId],
     queryFn: () => api<DocumentDetail>(`/documents/${documentId}`),
@@ -92,23 +104,39 @@ export function ReaderPage() {
         title={doc.title}
         backTo={backTo}
         trailing={
-          <button
-            type="button"
-            onClick={() => useChatDock.getState().toggle()}
-            aria-label={t.chat.open}
-            title={t.chat.open}
-            aria-pressed={chatOpen}
-            className="text-text-muted hover:text-text hover:bg-surface-muted aria-pressed:bg-surface-muted aria-pressed:text-text ml-1 rounded-md p-2"
-          >
-            <MessageSquare size={18} aria-hidden />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (showTools) useReader.getState().setTool('select');
+                setShowTools(!showTools);
+              }}
+              aria-label={t.annotations.tools.label}
+              title={t.annotations.tools.label}
+              aria-pressed={showTools}
+              className="text-text-muted hover:text-text hover:bg-surface-muted aria-pressed:bg-surface-muted aria-pressed:text-text ml-1 rounded-md p-2"
+            >
+              <PenTool size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => useChatDock.getState().toggle()}
+              aria-label={t.chat.open}
+              title={t.chat.open}
+              aria-pressed={chatOpen}
+              className="text-text-muted hover:text-text hover:bg-surface-muted aria-pressed:bg-surface-muted aria-pressed:text-text ml-1 rounded-md p-2"
+            >
+              <MessageSquare size={18} aria-hidden />
+            </button>
+          </>
         }
       />
       <div className="relative flex min-h-0 flex-1">
         {pdf && panel === 'thumbnails' && <ThumbnailsPanel pdf={pdf} pageSizes={doc.pageSizes} />}
         {panel === 'outline' && <OutlinePanel outline={doc.outline} />}
         {panel === 'search' && <SearchPanel docId={doc.id} />}
-        <div className="min-w-0 flex-1">
+        {panel === 'annotations' && <AnnotationsPanel docId={doc.id} />}
+        <div className="relative min-w-0 flex-1">
           {!ready ? (
             <p className="text-text-muted p-6">{t.reader.notReady}</p>
           ) : error ? (
@@ -123,15 +151,20 @@ export function ReaderPage() {
               initialScroll={citedPage ? 0 : doc.lastScroll}
               onPosition={savePosition}
               onScroller={setScroller}
+              underlay={(page) => <AnnotationUnderlay docId={doc.id} page={page} />}
               overlay={(page, layers, size) => (
-                <PointerLayer pageNumber={page} docId={doc.id} layers={layers} {...size} />
+                <>
+                  <AnnotationOverlay docId={doc.id} page={page} layers={layers} {...size} />
+                  <PointerLayer pageNumber={page} docId={doc.id} layers={layers} {...size} />
+                </>
               )}
             />
           )}
+          {showTools && pdf && <AnnotationTools />}
         </div>
         <ChatDock />
       </div>
-      <SelectionMenu root={scroller} />
+      <SelectionMenu root={scroller} extra={selectionActions} />
     </div>
   );
 }

@@ -4,9 +4,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { useChatDock } from '../chat/ChatDock';
 import { useChat } from '../chat/store';
+import type { NormRect } from './textMatch';
 
 interface Current {
   selection: TextSelection;
+  /** Selected text boxes on the selection's first page, in normalised page space. */
+  rects: NormRect[];
   /** Selection box in viewport coordinates. */
   rect: DOMRect;
 }
@@ -25,14 +28,49 @@ function readSelection(root: HTMLElement): Current | null {
   if (!pageEl || text.length < 2) return null;
   const rect = range.getBoundingClientRect();
   if (!rect.width && !rect.height) return null;
-  return { selection: { page: Number(pageEl.dataset.page), text: text.slice(0, 8000) }, rect };
+  const box = pageEl.getBoundingClientRect();
+  const rects = [...range.getClientRects()]
+    .filter(
+      (r) => r.width > 0.5 && r.height > 0.5 && r.bottom <= box.bottom + 2 && r.top >= box.top - 2,
+    )
+    .map((r) => ({
+      x: (r.left - box.left) / box.width,
+      y: (r.top - box.top) / box.height,
+      w: r.width / box.width,
+      h: r.height / box.height,
+    }));
+  return {
+    selection: { page: Number(pageEl.dataset.page), text: text.slice(0, 8000) },
+    rect,
+    rects: mergeRects(rects),
+  };
 }
 
 export interface SelectionAction {
   id: string;
   label: string;
-  icon: LucideIcon;
-  run: (selection: TextSelection) => void;
+  /** Icon, or a colour dot for highlight colours. */
+  icon?: LucideIcon;
+  color?: string;
+  run: (selection: TextSelection, rects: NormRect[]) => void;
+}
+
+/** Joins the per-span boxes of each line into one rectangle per line. */
+function mergeRects(rects: NormRect[]): NormRect[] {
+  const sorted = [...rects].sort((a, b) => a.y - b.y || a.x - b.x);
+  const out: NormRect[] = [];
+  for (const r of sorted) {
+    const last = out.at(-1);
+    if (last && Math.abs(last.y - r.y) < r.h * 0.5 && r.x <= last.x + last.w + 0.02) {
+      const x2 = Math.max(last.x + last.w, r.x + r.w);
+      const y2 = Math.max(last.y + last.h, r.y + r.h);
+      last.x = Math.min(last.x, r.x);
+      last.y = Math.min(last.y, r.y);
+      last.w = x2 - last.x;
+      last.h = y2 - last.y;
+    } else out.push({ ...r });
+  }
+  return out;
 }
 
 /** Built-in chat actions (F-CHAT-02); annotations add "Subrayar" through `extra`. */
@@ -127,7 +165,7 @@ export function SelectionMenu({
     : { left, width, top: Math.min(rect.bottom + MENU_GAP, window.innerHeight - 120) };
 
   const run = (action: SelectionAction) => {
-    action.run(current.selection);
+    action.run(current.selection, current.rects);
     window.getSelection()?.removeAllRanges();
     setCurrent(null);
   };
@@ -143,11 +181,28 @@ export function SelectionMenu({
       onPointerDown={(e) => e.preventDefault()}
     >
       <div className="border-border bg-surface flex flex-wrap justify-center gap-0.5 rounded-xl border p-1 shadow-lg">
-        {actions.map((a) => (
-          <MenuButton key={a.id} onClick={() => run(a)} label={a.label}>
-            <a.icon size={16} aria-hidden />
-          </MenuButton>
-        ))}
+        {actions.map((a) =>
+          a.color ? (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => run(a)}
+              aria-label={a.label}
+              title={a.label}
+              className="hover:bg-surface-muted flex min-h-10 min-w-9 items-center justify-center rounded-lg"
+            >
+              <span
+                aria-hidden
+                className="size-5 rounded-full ring-1 ring-black/10"
+                style={{ background: a.color }}
+              />
+            </button>
+          ) : (
+            <MenuButton key={a.id} onClick={() => run(a)} label={a.label}>
+              {a.icon && <a.icon size={16} aria-hidden />}
+            </MenuButton>
+          ),
+        )}
       </div>
     </div>
   );

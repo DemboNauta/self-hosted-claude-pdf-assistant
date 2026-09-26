@@ -97,6 +97,7 @@ export function PdfViewer({
   initialScroll,
   onPosition,
   overlay,
+  underlay,
   onScroller,
 }: {
   pdf: PDFDocumentProxy;
@@ -109,6 +110,7 @@ export function PdfViewer({
     layers: PageLayers,
     size: { width: number; height: number },
   ) => ReactNode;
+  underlay?: (pageNumber: number) => ReactNode;
   /** Receives the scroll container (selection menu, pointer overlays). */
   onScroller?: (el: HTMLDivElement | null) => void;
 }) {
@@ -361,6 +363,7 @@ export function PdfViewer({
             width={layout.widths[i]!}
             height={layout.heights[i]!}
             style={{ top: layout.tops[i], left: (layout.innerWidth - layout.widths[i]!) / 2 }}
+            underlay={underlay?.(i + 1)}
             overlay={
               overlay
                 ? (layers) =>

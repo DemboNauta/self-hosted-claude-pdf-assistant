@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import {
   ArrowLeft,
+  Highlighter,
   LayoutGrid,
   ListTree,
   Minus,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
 import { requestZoom } from './PdfViewer';
 import { useReader, ZOOM_STEPS, type SidePanel } from './store';
@@ -89,7 +91,7 @@ function ZoomControls() {
   };
   const value = zoomMode === 'custom' ? 'custom' : zoomMode;
   return (
-    <div className="flex items-center">
+    <div className="hidden items-center sm:flex">
       <IconButton label={t.reader.zoomOut} icon={Minus} onClick={() => step(-1)} />
       <select
         aria-label={t.reader.zoom}
@@ -119,6 +121,7 @@ const PANELS: { id: Exclude<SidePanel, null>; label: string; icon: LucideIcon }[
   { id: 'thumbnails', label: t.reader.thumbnails, icon: LayoutGrid },
   { id: 'outline', label: t.reader.outline, icon: ListTree },
   { id: 'search', label: t.reader.search, icon: Search },
+  { id: 'annotations', label: t.annotations.title, icon: Highlighter },
 ];
 
 export function ReaderToolbar({
@@ -143,16 +146,23 @@ export function ReaderToolbar({
         <ArrowLeft size={18} aria-hidden />
       </Link>
       <h1 className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{title}</h1>
-      {PANELS.map((p) => (
-        <IconButton
-          key={p.id}
-          label={p.label}
-          icon={p.icon}
-          pressed={panel === p.id}
-          onClick={() => togglePanel(p.id)}
-        />
-      ))}
-      <div className="bg-border mx-1 h-5 w-px" aria-hidden />
+      <div className="hidden items-center sm:flex">
+        {PANELS.map((p) => (
+          <IconButton
+            key={p.id}
+            label={p.label}
+            icon={p.icon}
+            pressed={panel === p.id}
+            onClick={() => togglePanel(p.id)}
+          />
+        ))}
+      </div>
+      <Menu
+        label={t.reader.panels}
+        className="sm:hidden"
+        actions={PANELS.map((p) => ({ label: p.label, onSelect: () => togglePanel(p.id) }))}
+      />
+      <div className="bg-border mx-1 hidden h-5 w-px sm:block" aria-hidden />
       <PageInput />
       <ZoomControls />
       {trailing}

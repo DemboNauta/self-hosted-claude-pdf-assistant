@@ -112,6 +112,7 @@ export async function exportAnnotatedPdf(
     }
     if (a.type === 'shape') {
       const s = a.anchor as ShapeAnchor;
+      if (!s.rects?.length) continue;
       const boxes = s.rects.map(box);
       const b = bounds(boxes);
       if (s.shape === 'highlight') {
@@ -133,7 +134,8 @@ export async function exportAnnotatedPdf(
       }
     }
   }
-  return pdf.save();
+  // Plain objects (no object streams) keep the annotations readable by simple readers.
+  return pdf.save({ useObjectStreams: false });
 }
 
 function bounds(

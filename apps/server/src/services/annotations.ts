@@ -109,7 +109,7 @@ export class AnnotationService {
     return this.get(id);
   }
 
-  setStatus(ids: string[], status: 'active' | 'rejected') {
+  setStatus(ids: string[], status: 'active' | 'rejected' | 'proposed') {
     this.db
       .update(annotations)
       .set({ status, updatedAt: now() })
@@ -124,13 +124,10 @@ export class AnnotationService {
   /** Quote-only anchors get rectangles from the stored text layer (for export and Claude). */
   private withRects(docId: string, page: number, type: string, anchor: unknown) {
     const a = anchor as { quote?: string; rects?: unknown[]; kind?: string };
-    if (
-      (type === 'highlight' || (type === 'note' && a.kind === 'text')) &&
-      a.quote &&
-      !a.rects?.length
-    ) {
-      const rects = quoteRects(pageItems(this.db, docId, page), a.quote);
-      return { ...a, rects };
+    const quoted =
+      type === 'highlight' || type === 'shape' || (type === 'note' && a.kind === 'text');
+    if (quoted && a.quote && !a.rects?.length) {
+      return { ...a, rects: quoteRects(pageItems(this.db, docId, page), a.quote) };
     }
     return anchor;
   }

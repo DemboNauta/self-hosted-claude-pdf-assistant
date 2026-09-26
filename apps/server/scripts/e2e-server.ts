@@ -47,7 +47,15 @@ const fakeChat = ((args: {
     const cite = `[[cite:${docId}:${page}${quote ? `|"${quote}"` : ''}]]`;
     // "Señala…" makes the fake call the real point_at tool, as Claude would.
     const tools = args.options.mcpServers?.pca?.instance?._registeredTools;
-    if (/señala/i.test(args.prompt.split('</context>')[1] ?? '') && tools?.point_at && quote) {
+    const question = args.prompt.split('</context>')[1] ?? '';
+    // "Ideas clave" makes the fake propose the selected text as a key idea.
+    if (/ideas clave/i.test(question) && tools?.highlight_key_ideas && selected?.[2]) {
+      await tools.highlight_key_ideas.handler(
+        { highlights: [{ page: Number(page), quote: selected[2], reason: 'Idea central' }] },
+        {},
+      );
+    }
+    if (/señala/i.test(question) && tools?.point_at && quote) {
       await tools.point_at.handler(
         {
           page: Number(page),

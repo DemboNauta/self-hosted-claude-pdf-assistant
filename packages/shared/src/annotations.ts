@@ -54,10 +54,14 @@ export const strokeSchema = z.object({
   color: z.string().max(32),
 });
 export const drawingAnchorSchema = z.object({ strokes: z.array(strokeSchema).min(1).max(200) });
-export const shapeAnchorSchema = z.object({
-  shape: z.enum(POINTER_SHAPES),
-  rects: z.array(normRectSchema).min(1).max(200),
-});
+export const shapeAnchorSchema = z
+  .object({
+    shape: z.enum(POINTER_SHAPES),
+    rects: z.array(normRectSchema).max(200).optional(),
+    /** Text anchor of a saved Claude mark; resolved to rects by the server. */
+    quote: z.string().max(1000).optional(),
+  })
+  .refine((a) => (a.rects?.length ?? 0) > 0 || Boolean(a.quote), 'rects or quote required');
 
 export type HighlightAnchor = z.infer<typeof highlightAnchorSchema>;
 export type NoteAnchor = z.infer<typeof noteAnchorSchema>;
@@ -94,14 +98,15 @@ export const createAnnotationsSchema = z.object({
 export const updateAnnotationSchema = z.object({
   color: z.string().min(1).max(32).optional(),
   content: z.string().max(10_000).nullable().optional(),
-  status: z.enum(['active', 'rejected']).optional(),
+  status: z.enum(['active', 'rejected', 'proposed']).optional(),
   anchor: z.unknown().optional(),
 });
 export type UpdateAnnotation = z.infer<typeof updateAnnotationSchema>;
 
 export const bulkStatusSchema = z.object({
   ids: z.array(id).min(1).max(1000),
-  status: z.enum(['active', 'rejected']),
+  /** `proposed` only to undo an accept/reject. */
+  status: z.enum(['active', 'rejected', 'proposed']),
 });
 
 export type AnnotationType = 'highlight' | 'note' | 'drawing' | 'shape';

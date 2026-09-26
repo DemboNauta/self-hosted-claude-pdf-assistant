@@ -27,6 +27,7 @@ export const PdfPage = memo(function PdfPage({
   height,
   style,
   overlay,
+  underlay,
 }: {
   pdf: PDFDocumentProxy;
   pageNumber: number;
@@ -35,6 +36,8 @@ export const PdfPage = memo(function PdfPage({
   height: number;
   style: React.CSSProperties;
   overlay?: (layers: PageLayers) => ReactNode;
+  /** Rendered under the text layer (highlights), so text stays selectable. */
+  underlay?: ReactNode;
 }) {
   const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
   const canvasBox = useRef<HTMLDivElement>(null);
@@ -119,6 +122,7 @@ export const PdfPage = memo(function PdfPage({
           {pageNumber}
         </div>
       )}
+      {underlay}
       <div ref={textRef} className="absolute inset-0" />
       <Highlights pageNumber={pageNumber} layers={layers} />
       {overlay?.(layers)}
