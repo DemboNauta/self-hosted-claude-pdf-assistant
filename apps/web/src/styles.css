@@ -62,9 +62,13 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
+/* In the base layer so a component with its own focus style can drop the ring with
+   `outline-none` (e.g. the chat composer, which highlights its whole box instead). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
 }
 
 /* Citation jump: the quoted fragment pulses, then fades (F-VIS-03). */
