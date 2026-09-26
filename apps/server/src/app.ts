@@ -32,6 +32,8 @@ import { registerMemoryRoutes } from './routes/memory.js';
 import { registerAnnotationRoutes } from './routes/annotations.js';
 import { registerDiagramRoutes } from './routes/diagrams.js';
 import { DiagramService } from './services/diagrams.js';
+import { registerFocusRoutes } from './routes/focus.js';
+import { FocusService } from './services/focus.js';
 import { UploadService } from './services/uploads.js';
 
 export interface AppDeps {
@@ -124,6 +126,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   await registerAnnotationRoutes(app, annotations, library, settings, db, config);
   const diagrams = new DiagramService(db);
   await registerDiagramRoutes(app, diagrams, library);
+  await registerFocusRoutes(app, new FocusService(db));
   const chat = new ChatService(
     config,
     threads,

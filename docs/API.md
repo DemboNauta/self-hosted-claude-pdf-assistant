@@ -134,21 +134,22 @@ The chat context also accepts `pageRange: { from, to }` (the scope of a diagram)
 
 ## Memory, review, stats, settings, backup
 
-| Method | Path                                             | Notes                                                          |
-| ------ | ------------------------------------------------ | -------------------------------------------------------------- |
-| GET    | `/api/memory`                                    | `MemoryOverview` (read-only).                                  |
-| GET    | `/api/flashcards?subjectId&topicId&documentId`   | Active and proposed cards.                                     |
-| POST   | `/api/flashcards`                                | `{ cards: [{front, back, documentId?, page?}] }` (user cards). |
-| PATCH  | `/api/flashcards/:id`                            | `{ front?, back?, status?: active\|rejected }`                 |
-| DELETE | `/api/flashcards/:id`                            |                                                                |
-| POST   | `/api/flashcards/:id/review`                     | `{ rating: 1..4, day: 'YYYY-MM-DD' }` → rescheduled card.      |
-| GET    | `/api/review/queue?subjectId&topicId&documentId` | `ReviewQueue` (due cards, next intervals, proposals, total).   |
-| GET    | `/api/review/today?day=`                         | `DailyBrief` (cached text for that day, or null).              |
-| POST   | `/api/review/today?day=`                         | Generates the brief with Claude.                               |
-| GET    | `/api/stats?day=`                                | `StudyStats`. `day` is the client's local day (streaks).       |
-| GET    | `/api/settings`                                  | `{ palette, claudeModel }`                                     |
-| PATCH  | `/api/settings`                                  | `{ palette?, claudeModel? }`                                   |
-| GET    | `/api/backup`                                    | `pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz`                  |
+| Method | Path                                             | Notes                                                                                             |
+| ------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| GET    | `/api/memory`                                    | `MemoryOverview` (read-only).                                                                     |
+| GET    | `/api/flashcards?subjectId&topicId&documentId`   | Active and proposed cards.                                                                        |
+| POST   | `/api/flashcards`                                | `{ cards: [{front, back, documentId?, page?}] }` (user cards).                                    |
+| PATCH  | `/api/flashcards/:id`                            | `{ front?, back?, status?: active\|rejected }`                                                    |
+| DELETE | `/api/flashcards/:id`                            |                                                                                                   |
+| POST   | `/api/flashcards/:id/review`                     | `{ rating: 1..4, day: 'YYYY-MM-DD' }` → rescheduled card.                                         |
+| GET    | `/api/review/queue?subjectId&topicId&documentId` | `ReviewQueue` (due cards, next intervals, proposals, total).                                      |
+| GET    | `/api/review/today?day=`                         | `DailyBrief` (cached text for that day, or null).                                                 |
+| POST   | `/api/review/today?day=`                         | Generates the brief with Claude.                                                                  |
+| GET    | `/api/stats?day=`                                | `StudyStats`. `day` is the client's local day (streaks).                                          |
+| GET    | `/api/settings`                                  | `{ palette, claudeModel, studyTimer }`                                                            |
+| PATCH  | `/api/settings`                                  | `{ palette?, claudeModel?, studyTimer? }`                                                         |
+| POST   | `/api/focus-sessions`                            | Study-timer block `{ id, documentId, day, seconds, completed, method }`; idempotent by `id`, 204. |
+| GET    | `/api/backup`                                    | `pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz`                                                     |
 
 With `WEB_DIR` set, any other GET outside `/api` and `/ws` returns `index.html`
 (SPA fallback), and unknown `/api/*` paths return `404 { error: 'not_found' }`.

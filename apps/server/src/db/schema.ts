@@ -289,3 +289,20 @@ export const diagrams = sqliteTable(
   },
   (t) => [index('diagrams_document_idx').on(t.documentId, t.createdAt)],
 );
+
+/** Study-timer focus blocks (F-FOCUS-02); kept when the PDF is deleted. */
+export const focusSessions = sqliteTable(
+  'focus_sessions',
+  {
+    /** Client-generated block id, so recording the same block twice is a no-op. */
+    id: text('id').primaryKey(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    /** Local calendar day, YYYY-MM-DD. */
+    day: text('day').notNull(),
+    seconds: integer('seconds').notNull(),
+    completed: integer('completed', { mode: 'boolean' }).notNull(),
+    method: text('method').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('focus_sessions_day_idx').on(t.day)],
+);

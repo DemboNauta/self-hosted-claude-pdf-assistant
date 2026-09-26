@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { Navigate, NavLink, Outlet } from 'react-router';
 import { useLogout, useSession } from '../features/auth/session';
+import { StudyTimerHost } from '../features/timer/StudyTimer';
+import { TimerToggle } from '../features/timer/TimerToggle';
 import { t } from '../i18n';
 
 interface NavItem {
@@ -68,6 +70,7 @@ export function AppShell() {
             </li>
           ))}
         </ul>
+        <TimerToggle nav />
         <button
           type="button"
           onClick={() => logout.mutate()}
@@ -103,6 +106,7 @@ export function AppShell() {
           </NavLink>
         ))}
       </nav>
+      <StudyTimerHost />
     </div>
   );
 }

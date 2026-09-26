@@ -1,8 +1,10 @@
 import {
   DEFAULT_PALETTE,
+  DEFAULT_STUDY_TIMER,
   HIGHLIGHT_KEYS,
   type AppSettings,
   type PaletteEntry,
+  type StudyTimerSettings,
 } from '@pdfclaudeassistant/shared';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
@@ -38,12 +40,17 @@ export class SettingsService {
     return {
       palette: this.palette(),
       claudeModel: this.read<string>('claude_model') ?? null,
+      studyTimer: {
+        ...DEFAULT_STUDY_TIMER,
+        ...this.read<Partial<StudyTimerSettings>>('study_timer'),
+      },
     };
   }
 
   update(patch: Partial<AppSettings>): AppSettings {
     if (patch.palette) this.write('palette', patch.palette);
     if (patch.claudeModel !== undefined) this.write('claude_model', patch.claudeModel);
+    if (patch.studyTimer) this.write('study_timer', patch.studyTimer);
     return this.all();
   }
 

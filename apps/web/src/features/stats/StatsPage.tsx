@@ -26,7 +26,7 @@ function Last30({ days }: { days: StudyStats['days'] }) {
         {days.map((d) => (
           <div
             key={d.day}
-            title={`${dayFmt.format(new Date(`${d.day}T00:00:00Z`))}: ${Math.round(d.seconds / 60)} ${t.stats.minutes}, ${d.reviews} ${t.stats.reviews.toLowerCase()}`}
+            title={`${dayFmt.format(new Date(`${d.day}T00:00:00Z`))}: ${Math.round(d.seconds / 60)} ${t.stats.minutes}, ${d.reviews} ${t.stats.reviews.toLowerCase()}, ${d.pomodoros} ${t.stats.pomodoros.toLowerCase()}`}
             className="bg-text/80 min-h-[2px] flex-1 rounded-t-sm"
             style={{ height: `${(d.seconds / max) * 100}%`, opacity: d.seconds ? 1 : 0.15 }}
           />
@@ -70,7 +70,16 @@ export function StatsPage() {
             />
           </div>
           <Last30 days={data.days} />
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Tile
+              label={t.stats.pomodoros}
+              value={String(data.focus.pomodorosTotal)}
+              detail={t.stats.pomodorosDetail(
+                data.focus.pomodorosToday,
+                data.focus.focusSecondsTotal,
+                t.stats.duration,
+              )}
+            />
             <Tile
               label={t.stats.cards}
               value={String(data.cards.total)}

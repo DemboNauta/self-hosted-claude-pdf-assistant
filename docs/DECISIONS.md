@@ -107,6 +107,22 @@ change them if he disagrees.
   precedence over `CLAUDE_MODEL` for chat and the daily brief (not for the status
   probe).
 
+- **Study timer** (2026-09-26, owner request: "un sistema de métodos de estudio, el
+  pomodoro y cosas así"). Asked and answered by the owner: methods = classic Pomodoro,
+  presets and custom (no Flowtime); a floating widget on the whole app that can be
+  moved out of the way; sound and a break screen (no browser notifications); blocks
+  saved in the statistics; Claude does not take part. Claude's choices:
+  - Presets: Pomodoro 25/5 with a 15-minute break every 4, long Pomodoro 50/10 (30
+    every 3), 52/17 and ultradian 90/20 (no long break).
+  - Breaks start by themselves; the next focus block waits for the user ("Se acabó el
+    descanso" prompt) unless "Empezar el siguiente bloque" is on.
+  - The running timer lives in `localStorage` (survives reloads, shared across tabs);
+    its options are server settings (`study_timer`).
+  - A completed block counts as a pomodoro and makes the day active for the streak.
+    A block cut short (skip/reset) after at least a minute adds focus time only. The
+    block is credited to the PDF open in the reader when it ends.
+  - Focus time is shown apart from reading time (no double counting).
+
 ## Technical decisions worth knowing
 
 - Claude is reached **only** via `@anthropic-ai/claude-agent-sdk` with the

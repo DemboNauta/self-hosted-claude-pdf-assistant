@@ -15,6 +15,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
+import { TimerToggle } from '../timer/TimerToggle';
 import { requestZoom } from './PdfViewer';
 import { useReader, ZOOM_STEPS, type SidePanel } from './store';
 
@@ -169,6 +170,7 @@ export function ReaderToolbar({
       <div className="bg-border mx-1 hidden h-5 w-px sm:block" aria-hidden />
       <PageInput />
       <ZoomControls />
+      <TimerToggle />
       {trailing}
     </header>
   );

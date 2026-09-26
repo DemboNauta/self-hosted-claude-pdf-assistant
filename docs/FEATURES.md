@@ -108,6 +108,7 @@ server, not against real Claude yet.
 | Feature        | Status  | Where / notes                                                                                                                                                                                                                                             |
 | -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Visual schemas | ✅ fake | "Esquema visual" chat mode (whole PDF or pages) and selection action; Claude picks mind map / tree / flowchart (Mermaid, `features/diagrams`). Shown in the chat, the reader's "Esquemas" panel and the `/diagrams` page. Not yet tried with real Claude. |
+| Study timer    | ✅      | F-FOCUS-01..03 (`features/timer`): floating, draggable widget on every page (sidebar, reader toolbar, phone page headers). Pomodoro 25/5 (long 15 every 4), 50/10, 52/17, 90/20 and custom. Chime, break screen, completed blocks in the stats.           |
 
 ## SPEC §11–12 (ops/security)
 

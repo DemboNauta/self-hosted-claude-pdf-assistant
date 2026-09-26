@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26 (annotation windows, drawing questions, deploy tooling). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-26 (study timer). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -55,6 +55,11 @@ shown in the chat and kept in the reader's "Esquemas" panel and the `/diagrams`
 page (`apps/web/src/features/diagrams`). Only tried with the fake Claude: check
 with real Claude that its Mermaid renders well on real PDFs.
 
+Then a study timer (Pomodoro and other methods): floating, draggable widget, break
+screen, chime and pomodoros in the statistics (`apps/web/src/features/timer`,
+`POST /api/focus-sessions`). Built in a cloud session on branch
+`claude/nifty-noether-7b2tc8`; the owner has not tried it yet.
+
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.
 
@@ -78,7 +83,7 @@ The **deployment** milestone:
 
 ## Verification done so far
 
-- `apps/server`: 56 unit/integration tests pass (`vitest`).
+- `apps/server`: 63 unit/integration tests pass (`vitest`).
 - `apps/web`: unit tests pass. The Playwright suite has 30 tests over desktop
   and mobile projects: 25 pass and 5 are skipped on mobile by design (pointer
   drag, drawing, keyboard shortcuts). The library drag-and-drop test is flaky

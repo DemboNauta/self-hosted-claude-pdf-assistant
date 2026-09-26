@@ -80,8 +80,14 @@ export interface DailyBrief {
 export interface StudyStats {
   streakDays: number;
   studySecondsTotal: number;
-  /** Last 30 days: seconds studied and cards reviewed per day. */
-  days: { day: string; seconds: number; reviews: number }[];
+  /** Last 30 days: seconds studied, cards reviewed and study-timer focus per day. */
+  days: {
+    day: string;
+    seconds: number;
+    reviews: number;
+    pomodoros: number;
+    focusSeconds: number;
+  }[];
   reviewsTotal: number;
   /** Share of reviews not rated "again" in the last 30 days (0–1), null if none. */
   retention: number | null;
@@ -101,4 +107,6 @@ export interface StudyStats {
   }[];
   concepts: { total: number; weak: number; mastered: number; averageMastery: number | null };
   exams: { total: number; correct: number };
+  /** Study timer (F-FOCUS-02): completed focus blocks and focused time, cut-short blocks included. */
+  focus: { pomodorosTotal: number; pomodorosToday: number; focusSecondsTotal: number };
 }

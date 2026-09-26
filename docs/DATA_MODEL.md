@@ -26,6 +26,7 @@ To change the schema:
 | `0008_thread_scopes`      | `threads.topic_id`, `threads.subject_id` (cascade)                              |
 | `0009_annotation_display` | `annotations.display_json` (note window: pinned, position, size)                |
 | `0010_diagrams`           | `diagrams`                                                                      |
+| `0011_focus_sessions`     | `focus_sessions`                                                                |
 
 ## Tables (main columns)
 
@@ -70,6 +71,9 @@ mastery 0–1, times_failed, last_evidence, last_seen_at`.
 - **exam_results** `document_id?, question, user_answer, correct,
 concepts_json`.
 - **study_sessions** `document_id, day (local), seconds` (unique per doc+day).
+- **focus_sessions** study-timer blocks: `id` (client-generated, so a block is recorded
+  once), `document_id?` (set null on delete), `day (local), seconds, completed, method`.
+  Settings key `study_timer` holds the timer options.
 - **flashcards**:
   - content and links: `document_id?, page?, concept_id?, front, back`;
   - `author, status (active|proposed|rejected)`;

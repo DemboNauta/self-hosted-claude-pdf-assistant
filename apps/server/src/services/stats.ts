@@ -35,8 +35,19 @@ export class StatsService {
         }[]
       ).map((r) => [r.day, r.n]),
     );
+    const perDayFocus = new Map(
+      (
+        c
+          .prepare(
+            'SELECT day, SUM(seconds) AS s, SUM(completed) AS n FROM focus_sessions GROUP BY day',
+          )
+          .all() as { day: string; s: number; n: number }[]
+      ).map((r) => [r.day, r]),
+    );
     const active = (day: string) =>
-      (perDaySeconds.get(day) ?? 0) >= 60 || (perDayReviews.get(day) ?? 0) > 0;
+      (perDaySeconds.get(day) ?? 0) >= 60 ||
+      (perDayReviews.get(day) ?? 0) > 0 ||
+      (perDayFocus.get(day)?.n ?? 0) > 0;
 
     // Streak: consecutive active days ending today (or yesterday, if today has no activity yet).
     const base = new Date(`${today}T00:00:00Z`);
@@ -53,6 +64,8 @@ export class StatsService {
         day,
         seconds: perDaySeconds.get(day) ?? 0,
         reviews: perDayReviews.get(day) ?? 0,
+        pomodoros: perDayFocus.get(day)?.n ?? 0,
+        focusSeconds: perDayFocus.get(day)?.s ?? 0,
       });
     }
     const since = days[0]!.day;
@@ -131,6 +144,11 @@ export class StatsService {
         averageMastery: concepts.avg,
       },
       exams: { total: exams.total, correct: exams.correct ?? 0 },
+      focus: {
+        pomodorosTotal: [...perDayFocus.values()].reduce((a, r) => a + r.n, 0),
+        pomodorosToday: perDayFocus.get(today)?.n ?? 0,
+        focusSecondsTotal: [...perDayFocus.values()].reduce((a, r) => a + r.s, 0),
+      },
     };
   }
 }
