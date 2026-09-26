@@ -512,6 +512,8 @@ export const es = {
     close: 'Cerrar esquema',
     zoomIn: 'Acercar',
     zoomOut: 'Alejar',
+    fit: 'Ver entero',
+    canvas: 'lienzo: rueda o pellizco para acercar, arrastra para mover',
     download: 'Descargar',
     downloadSvg: 'Descargar SVG',
     downloadPng: 'Descargar PNG',

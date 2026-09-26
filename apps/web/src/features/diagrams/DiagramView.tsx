@@ -1,6 +1,6 @@
 import type { Diagram } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { Download, Maximize2, Minus, Plus, Workflow, X } from 'lucide-react';
+import { Download, Maximize2, Workflow, X } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Menu } from '../../components/Menu';
@@ -8,6 +8,7 @@ import { t } from '../../i18n';
 import { CitationChip } from '../chat/CitationChip';
 import { useDiagram } from './api';
 import { renderDiagram } from './mermaid';
+import { PanZoom } from './PanZoom';
 
 function subscribeTheme(onChange: () => void) {
   const observer = new MutationObserver(onChange);
@@ -42,10 +43,10 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, '')
     .toLowerCase() || 'esquema';
 
-/** Width Mermaid laid the diagram out at (from the SVG viewBox). */
-function naturalWidth(svg: string): number {
-  const m = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+)/.exec(svg);
-  return m ? Number(m[1]) : 800;
+/** Size Mermaid laid the diagram out at (from the SVG viewBox). */
+function naturalSize(svg: string): { width: number; height: number } {
+  const m = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"/.exec(svg);
+  return m ? { width: Number(m[1]), height: Number(m[2]) } : { width: 800, height: 600 };
 }
 
 function save(blob: Blob, name: string) {
@@ -100,39 +101,21 @@ export function DiagramView({
   onExpand?: () => void;
 }) {
   const { svg, error } = useDiagramSvg(diagram.source);
-  const [zoom, setZoom] = useState(1);
   const file = slug(diagram.title);
   const full = variant === 'full';
 
   return (
     <figure
       data-testid="diagram"
-      className={clsx('flex min-h-0 flex-col', !full && 'border-border rounded-xl border')}
+      className={clsx(
+        'flex min-h-0 flex-col',
+        full ? 'h-full flex-1' : 'border-border rounded-xl border',
+      )}
     >
       <figcaption className="flex items-center gap-2 px-3 py-2">
         <Workflow size={14} aria-hidden className="text-text-muted shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{diagram.title}</span>
         <Pages diagram={diagram} />
-        {full && (
-          <>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.max(0.4, z / 1.25))}
-              aria-label={t.diagrams.zoomOut}
-              className="text-text-muted hover:text-text rounded p-1"
-            >
-              <Minus size={16} aria-hidden />
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
-              aria-label={t.diagrams.zoomIn}
-              className="text-text-muted hover:text-text rounded p-1"
-            >
-              <Plus size={16} aria-hidden />
-            </button>
-          </>
-        )}
         {svg && (
           <Menu
             label={t.diagrams.download}
@@ -161,39 +144,31 @@ export function DiagramView({
           </button>
         )}
       </figcaption>
-      <div
-        className={clsx(
-          'min-h-0 px-3 pb-3',
-          full ? 'flex-1 overflow-auto' : 'max-h-96 cursor-zoom-in overflow-hidden',
-        )}
-        onClick={!full ? onExpand : undefined}
-      >
-        {error ? (
-          <div role="alert" className="text-danger space-y-2 text-sm">
-            <p>{t.diagrams.renderError}</p>
-            <pre className="bg-surface-muted text-text overflow-auto rounded p-2 text-xs">
-              {diagram.source}
-            </pre>
-          </div>
-        ) : svg ? (
+      {error ? (
+        <div role="alert" className="text-danger space-y-2 px-3 pb-3 text-sm">
+          <p>{t.diagrams.renderError}</p>
+          <pre className="bg-surface-muted text-text overflow-auto rounded p-2 text-xs">
+            {diagram.source}
+          </pre>
+        </div>
+      ) : !svg ? (
+        <p className="text-text-muted py-6 text-center text-sm">{t.diagrams.rendering}</p>
+      ) : full ? (
+        <PanZoom {...naturalSize(svg)} label={diagram.title}>
           <div
-            className={clsx(
-              'diagram-svg mx-auto [&_svg]:mx-auto [&_svg]:h-auto',
-              full ? '[&_svg]:w-full [&_svg]:max-w-none!' : '[&_svg]:max-w-full',
-            )}
-            // Full view: fill the width, but a small diagram grows at most 2.5×; zoom scales it.
-            style={
-              full
-                ? { width: `min(${zoom * 100}%, ${Math.round(naturalWidth(svg) * 2.5 * zoom)}px)` }
-                : undefined
-            }
+            className="diagram-svg h-full w-full [&_svg]:h-full! [&_svg]:w-full! [&_svg]:max-w-none!"
             // Mermaid's own output, sanitised by its strict security level.
             dangerouslySetInnerHTML={{ __html: svg }}
           />
-        ) : (
-          <p className="text-text-muted py-6 text-center text-sm">{t.diagrams.rendering}</p>
-        )}
-      </div>
+        </PanZoom>
+      ) : (
+        <div className="max-h-96 cursor-zoom-in overflow-hidden px-3 pb-3" onClick={onExpand}>
+          <div
+            className="diagram-svg [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </div>
+      )}
     </figure>
   );
 }

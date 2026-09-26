@@ -58,7 +58,13 @@ with real Claude that its Mermaid renders well on real PDFs.
 Then a study timer (Pomodoro and other methods): floating, draggable widget, break
 screen, chime and pomodoros in the statistics (`apps/web/src/features/timer`,
 `POST /api/focus-sessions`). Built in a cloud session on branch
-`claude/nifty-noether-7b2tc8`; the owner has not tried it yet.
+`claude/nifty-noether-7b2tc8`, reviewed and fast-forwarded into `main`; the owner
+has not tried it yet.
+
+The owner tried the diagrams in production ("parece que lo hace bien") and asked
+for a better viewer: the full-screen viewer is now a canvas with free zoom and pan
+(wheel or trackpad pinch around the pointer, drag, two-finger pinch on touch,
+double click, keyboard), no scrollbars (`features/diagrams/PanZoom.tsx`).
 
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.

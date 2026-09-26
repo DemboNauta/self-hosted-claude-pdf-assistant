@@ -37,6 +37,24 @@ test('ask for a diagram of some pages and find it again', async ({ page }, info)
   await panel.getByRole('button', { name: /^Esquema de prueba/ }).click();
   const viewer = page.getByRole('dialog', { name: 'Esquema de prueba' });
   await expect(viewer.locator('.diagram-svg svg')).toBeVisible();
+  // Free zoom and pan on a canvas (no scrollbars): the wheel zooms, dragging moves.
+  const canvas = viewer.getByTestId('diagram-canvas');
+  const content = canvas.locator('> div').first();
+  const zoom = () => content.evaluate((el) => (el as HTMLElement).style.transform);
+  if (info.project.name === 'desktop') {
+    const box = (await canvas.boundingBox())!;
+    const before = await zoom();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, -300);
+    await expect.poll(zoom).not.toBe(before);
+    const zoomed = await zoom();
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 - 80, box.y + box.height / 2 - 40, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(zoom).not.toBe(zoomed);
+    await viewer.getByRole('button', { name: 'Ver entero' }).click();
+    await expect.poll(zoom).toBe(before);
+  }
   await viewer.getByRole('button', { name: 'Cerrar esquema' }).click();
 
   // …and on the general page, grouped under the document.
