@@ -103,6 +103,45 @@ describe('annotations', () => {
     expect((await list()).map((a) => a.id)).toContain(note!.id);
   });
 
+  it('keeps note windows pinned, moved and resized, and moves sticky notes', async () => {
+    const [note] = (
+      await app.inject({
+        method: 'POST',
+        url: `/api/documents/${docId}/annotations`,
+        headers,
+        payload: {
+          items: [
+            { type: 'note', page: 1, color: 'yellow', anchor: { kind: 'point', x: 0.5, y: 0.5 } },
+          ],
+        },
+      })
+    ).json<Annotation[]>();
+    expect(note!.display).toBeNull();
+
+    const display = { pinned: true, x: 0.6, y: 0.1, w: 420, h: 300 };
+    const patch = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'PATCH', url: `/api/annotations/${note!.id}`, headers, payload });
+    expect((await patch({ display })).statusCode).toBe(200);
+    expect((await patch({ anchor: { kind: 'point', x: 0.2, y: 0.3 } })).statusCode).toBe(200);
+    expect((await list())[0]).toMatchObject({ display, anchor: { x: 0.2, y: 0.3 } });
+
+    // Undoing a delete restores the window too.
+    await app.inject({
+      method: 'POST',
+      url: `/api/documents/${docId}/annotations`,
+      headers,
+      payload: {
+        items: [{ type: 'note', page: 1, color: 'yellow', anchor: note!.anchor, display }],
+        ids: [note!.id],
+      },
+    });
+    expect((await list())[0]!.display).toEqual(display);
+
+    expect((await patch({ display: { ...display, w: 5 } })).statusCode).toBe(400);
+    expect((await patch({ display: null })).statusCode).toBe(200);
+    expect((await list())[0]!.display).toBeNull();
+  });
+
   it('rejects malformed anchors', async () => {
     const res = await app.inject({
       method: 'POST',

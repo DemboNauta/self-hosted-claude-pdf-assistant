@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { getDocument, Util, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import type { OutlineEntry } from '@pdfclaudeassistant/shared';
+import type { OutlineEntry, Stroke } from '@pdfclaudeassistant/shared';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 
 const require = createRequire(import.meta.url);
@@ -127,6 +127,56 @@ export async function renderPageImage(filePath: string, pageNumber: number, maxS
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvas: canvas as never, canvasContext: ctx as never, viewport }).promise;
+    return { png: await canvas.encode('png'), width: canvas.width, height: canvas.height };
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+}
+
+/**
+ * Renders the part of a page the student marked (`rect`, normalised page space) with
+ * their freehand strokes drawn on top, as PNG for Claude. Small areas are zoomed in (up
+ * to 4×) so text and formulas stay legible.
+ */
+export async function renderMarkImage(
+  filePath: string,
+  pageNumber: number,
+  rect: { x: number; y: number; w: number; h: number },
+  strokes: Stroke[],
+  maxSide = 1200,
+) {
+  const pdf = await openPdf(filePath);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    const base = page.getViewport({ scale: 1 });
+    const rw = Math.max(1, rect.w * base.width);
+    const rh = Math.max(1, rect.h * base.height);
+    const scale = Math.min(4, maxSide / Math.max(rw, rh));
+    const pw = base.width * scale;
+    const ph = base.height * scale;
+    const ox = rect.x * pw;
+    const oy = rect.y * ph;
+    const viewport = page.getViewport({ scale, offsetX: -ox, offsetY: -oy });
+    const canvas = createCanvas(Math.ceil(rw * scale), Math.ceil(rh * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas: canvas as never, canvasContext: ctx as never, viewport }).promise;
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.85;
+    for (const s of strokes) {
+      ctx.strokeStyle = /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : '#d1242f';
+      ctx.lineWidth = Math.max(2, s.width * pw);
+      ctx.beginPath();
+      s.points.forEach(([x, y], i) =>
+        i === 0 ? ctx.moveTo(x * pw - ox, y * ph - oy) : ctx.lineTo(x * pw - ox, y * ph - oy),
+      );
+      if (s.points.length === 1)
+        ctx.lineTo(s.points[0]![0] * pw - ox + 0.1, s.points[0]![1] * ph - oy);
+      ctx.stroke();
+    }
     return { png: await canvas.encode('png'), width: canvas.width, height: canvas.height };
   } finally {
     await pdf.loadingTask.destroy();

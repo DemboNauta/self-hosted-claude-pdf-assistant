@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26. See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-26 (annotation windows and drawing questions). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -28,8 +28,25 @@ Last updated: 2026-09-26. See [`README.md`](README.md) for the reading order.
 ## Where the work stopped
 
 Phases 1, 2 and 3 of SPEC §13 are implemented, with unit and e2e tests (see
-`FEATURES.md`). The session stopped in the middle of the **deployment**
-milestone:
+`FEATURES.md`).
+
+Session of 2026-09-26: the owner tried the app locally (fresh clone, see
+`DEVELOPMENT.md` "Fresh clone") and asked, **before the deployment**, for:
+
+- Note windows that fit the screen (bottom sheet on phones), resize, move and
+  can be pinned open; saved on the server (`annotations.display_json`).
+- Sticky notes and drawings movable by dragging.
+- "Preguntar" about freehand drawings: pen toolbar button (drawings since the
+  last question) or the drawing's window. Claude gets the text inside the area
+  plus a server-rendered image with the drawing (`renderMarkImage`). Tried with
+  the real SDK.
+- Fix: reopening a document inside the app resumed at the stale page (cached
+  detail); now the detail query is dropped on leaving the reader.
+
+Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
+feedback on these; then continue with the deployment below.
+
+The **deployment** milestone was left in the middle:
 
 - Done: the server serves the built web app (`WEB_DIR`, SPA fallback,
   `src/routes/web.ts`). The Docker image builds web + server and runs as one
@@ -55,10 +72,11 @@ milestone:
 
 ## Verification done so far
 
-- `apps/server`: 53 unit/integration tests pass (`vitest`).
-- `apps/web`: unit tests pass. The Playwright suite has 24 tests over desktop
-  and mobile projects: 21 pass and 3 are skipped on mobile by design (pointer
-  drag, drawing, keyboard shortcuts).
+- `apps/server`: 56 unit/integration tests pass (`vitest`).
+- `apps/web`: unit tests pass. The Playwright suite has 30 tests over desktop
+  and mobile projects: 25 pass and 5 are skipped on mobile by design (pointer
+  drag, drawing, keyboard shortcuts). The library drag-and-drop test is flaky
+  (see `DEVELOPMENT.md`).
 - Real Claude, run through the owner's subscription with a temp data dir and
   generated PDFs:
   - A document question: Claude used `get_pages`, answered with correct

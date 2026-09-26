@@ -212,6 +212,78 @@ describe('chat', () => {
     expect(prompt).not.toContain('looking at page');
   });
 
+  it('asks about a freehand mark with an image of the marked area', async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const [drawing] = (
+      await app.inject({
+        method: 'POST',
+        url: `/api/documents/${docId}/annotations`,
+        headers,
+        payload: {
+          items: [
+            {
+              type: 'drawing',
+              page: 2,
+              color: '#d1242f',
+              anchor: {
+                strokes: [
+                  {
+                    points: [
+                      [0.1, 0.1, 0.5],
+                      [0.4, 0.12, 0.5],
+                    ],
+                    width: 0.004,
+                    color: '#d1242f',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      })
+    ).json<{ id: string }[]>();
+    const mark = {
+      page: 2,
+      rect: { x: 0.07, y: 0.07, w: 0.36, h: 0.08 },
+      annotationIds: [drawing!.id],
+      text: 'Pagina 2: la fotosintesis',
+    };
+
+    const events = await ask(thread.id, '', { context: { docId, currentPage: 2, mark } });
+    expect(events.at(-1)).toMatchObject({ type: 'assistant_done' });
+
+    // The prompt becomes a user message: the rendered area as an image, then the text.
+    const prompt = calls[0]!.prompt as unknown as AsyncIterable<{
+      message: { content: { type: string; text?: string; source?: { data: string } }[] };
+    }>;
+    const messages = [];
+    for await (const m of prompt) messages.push(m);
+    const [image, text] = messages[0]!.message.content;
+    expect(image!.type).toBe('image');
+    expect(Buffer.from(image!.source!.data, 'base64').subarray(1, 4).toString()).toBe('PNG');
+    expect(text!.text).toContain('freehand marks');
+    expect(text!.text).toContain('Pagina 2: la fotosintesis');
+    expect(text!.text).toContain('explain what the student marked');
+
+    const history = (
+      await app.inject({ url: `/api/threads/${thread.id}/messages`, headers })
+    ).json<{ messages: ChatMessage[] }>().messages;
+    expect(history[0]!.context?.mark).toMatchObject({ page: 2, annotationIds: [drawing!.id] });
+  });
+
+  it('asks about a mark without an image when its drawings are gone', async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const mark = { page: 1, rect: { x: 0, y: 0, w: 0.5, h: 0.1 }, annotationIds: ['x'], text: '' };
+    await ask(thread.id, '¿Esto?', { context: { docId, mark } });
+    expect(typeof calls[0]!.prompt).toBe('string');
+    expect(calls[0]!.prompt).toContain('freehand marks');
+    expect(calls[0]!.prompt).not.toContain('attached to this message');
+  });
+
   it('reports usage limits as rate_limited and keeps the failed turn', async () => {
     script = async function* () {
       yield {

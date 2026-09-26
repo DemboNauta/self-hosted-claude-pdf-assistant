@@ -7,14 +7,21 @@ import type {
   Stroke,
 } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { StickyNote } from 'lucide-react';
+import { MessageSquare, StickyNote } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
 import { useReader, type AnnotationFilter } from '../reader/store';
 import type { NormRect } from '../reader/textMatch';
-import { createAnnotations, deleteAnnotations, useAnnotations, usePalette } from './api';
+import {
+  createAnnotations,
+  deleteAnnotations,
+  updateAnnotation,
+  useAnnotations,
+  usePalette,
+} from './api';
 import { AnnotationPopover } from './AnnotationPopover';
+import { askAboutMark } from './mark';
 
 export function isVisible(a: Annotation, f: AnnotationFilter) {
   if (!f.visible || a.status === 'rejected') return false;
@@ -174,7 +181,46 @@ export function AnnotationOverlay({
   const drawings = visible.filter((a) => a.type === 'drawing');
   const shapes = visible.filter((a) => a.type === 'shape');
   const notes = visible.filter((a) => a.type === 'note');
+  // Open note windows: the pinned ones plus the one the user just opened.
+  const windows = visible.filter((a) => a.display?.pinned);
   const selected = all.find((a) => a.id === active);
+  if (selected && tool === 'select' && !windows.includes(selected)) windows.push(selected);
+
+  // Dragging a sticky note or a drawing (select tool): offset in page space while moving.
+  const [move, setMove] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  const moveStart = useRef<{ id: string; x: number; y: number; moved: boolean } | null>(null);
+  const startMove = (a: Annotation) => (e: RPointerEvent<Element>) => {
+    if (tool !== 'select' || a.author !== 'user') return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    moveStart.current = { id: a.id, x: e.clientX, y: e.clientY, moved: false };
+  };
+  const onMove = (e: RPointerEvent<Element>) => {
+    const m = moveStart.current;
+    if (!m) return;
+    const dx = e.clientX - m.x;
+    const dy = e.clientY - m.y;
+    if (!m.moved && Math.hypot(dx, dy) < 4) return;
+    m.moved = true;
+    setMove({ id: m.id, dx: dx / width, dy: dy / height });
+  };
+  /** Ends a drag: saves the new position (undoable) or, without movement, opens the note. */
+  const endMove = (a: Annotation) => () => {
+    const m = moveStart.current;
+    moveStart.current = null;
+    if (!m) return;
+    if (!m.moved || !move) {
+      setActive(active === a.id ? null : a.id);
+      return;
+    }
+    setMove(null);
+    void updateAnnotation(docId, a, { anchor: translateAnchor(a, move.dx, move.dy) });
+  };
+  const cancelMove = () => {
+    moveStart.current = null;
+    setMove(null);
+  };
+  const offset = (a: Annotation) => (move?.id === a.id ? move : { dx: 0, dy: 0 });
 
   return (
     <>
@@ -188,16 +234,47 @@ export function AnnotationOverlay({
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {drawings.flatMap((a) =>
-          (a.anchor as DrawingAnchor).strokes.map((s, i) => (
-            <path
-              key={`${a.id}-${i}`}
-              d={strokePath(s, width, height)}
-              stroke={s.color}
-              strokeWidth={strokeWidth(s, width)}
-            />
-          )),
-        )}
+        {drawings.map((a) => {
+          const o = offset(a);
+          const movable = tool === 'select' && a.author === 'user';
+          return (
+            <g
+              key={a.id}
+              transform={o.dx || o.dy ? `translate(${o.dx * width},${o.dy * height})` : undefined}
+              opacity={a.id === active ? 0.75 : 1}
+            >
+              {(a.anchor as DrawingAnchor).strokes.map((s, i) => (
+                <path
+                  key={i}
+                  d={strokePath(s, width, height)}
+                  stroke={s.color}
+                  strokeWidth={strokeWidth(s, width)}
+                />
+              ))}
+              {movable &&
+                (a.anchor as DrawingAnchor).strokes.map((s, i) => (
+                  // Wider invisible stroke: easy to grab with a finger; the page stays selectable.
+                  <path
+                    key={`hit-${i}`}
+                    data-annotation-ui
+                    data-drawing={a.id}
+                    d={strokePath(s, width, height)}
+                    stroke="transparent"
+                    strokeWidth={Math.max(16, strokeWidth(s, width))}
+                    className="cursor-move"
+                    style={{ pointerEvents: 'stroke', touchAction: 'none' }}
+                    onPointerDown={startMove(a)}
+                    onPointerMove={onMove}
+                    onPointerUp={endMove(a)}
+                    onPointerCancel={cancelMove}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <title>{t.annotations.moveMark}</title>
+                  </path>
+                ))}
+            </g>
+          );
+        })}
         {shapes.map((a) => {
           const s = a.anchor as ShapeAnchor;
           const b = boxOf(a);
@@ -279,6 +356,8 @@ export function AnnotationOverlay({
         const b = boxOf(a);
         if (!b) return null;
         const point = (a.anchor as NoteAnchor).kind === 'point';
+        const movable = point && tool === 'select' && a.author === 'user';
+        const o = offset(a);
         return (
           <button
             key={a.id}
@@ -286,15 +365,26 @@ export function AnnotationOverlay({
             data-annotation-ui
             aria-label={t.annotations.openNote}
             title={a.content ?? ''}
+            {...(movable && {
+              onPointerDown: startMove(a),
+              onPointerMove: onMove,
+              onPointerUp: endMove(a),
+              onPointerCancel: cancelMove,
+            })}
             onClick={(e) => {
               e.stopPropagation();
-              setActive(active === a.id ? null : a.id);
+              // Pointer users of a movable note open it on release (endMove); keyboard here.
+              if (!movable || e.detail === 0) setActive(active === a.id ? null : a.id);
             }}
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md p-1 text-white shadow"
+            className={clsx(
+              'absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md p-1 text-white shadow',
+              movable && 'cursor-move',
+            )}
             style={{
-              left: `${(point ? b.x : b.x + b.w) * 100}%`,
-              top: `${(point ? b.y : b.y) * 100}%`,
+              left: `${((point ? b.x : b.x + b.w) + o.dx) * 100}%`,
+              top: `${(b.y + o.dy) * 100}%`,
               background: colorOf(a.color),
+              ...(movable && { touchAction: 'none' as const }),
             }}
           >
             <StickyNote size={14} aria-hidden />
@@ -306,16 +396,53 @@ export function AnnotationOverlay({
         <InputSurface docId={docId} page={page} items={visible} width={width} height={height} />
       )}
 
-      {selected && tool === 'select' && (
+      {windows.map((a) => (
         <AnnotationPopover
+          key={a.id}
           docId={docId}
-          annotation={selected}
-          box={boxOf(selected)}
-          onClose={() => setActive(null)}
+          annotation={a}
+          box={boxOf(a)}
+          pageWidth={width}
+          pageHeight={height}
+          focused={a.id === active}
+          onFocus={() => setActive(a.id)}
+          onClose={() => {
+            if (active === a.id) setActive(null);
+          }}
+          extraActions={
+            a.type === 'drawing' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (askAboutMark(docId, a.page, [a.id])) setActive(null);
+                }}
+                className="hover:bg-surface-muted flex items-center gap-1 rounded-md px-2 py-1"
+              >
+                <MessageSquare size={14} aria-hidden />
+                {t.chat.selection.ask}
+              </button>
+            )
+          }
         />
-      )}
+      ))}
     </>
   );
+}
+
+/** The anchor of a sticky note or drawing moved by (dx, dy) in page space. */
+function translateAnchor(a: Annotation, dx: number, dy: number): Annotation['anchor'] {
+  const unit = (v: number) => Math.min(1, Math.max(0, v));
+  if (a.type === 'note') {
+    const p = a.anchor as { x: number; y: number };
+    return { kind: 'point', x: unit(p.x + dx), y: unit(p.y + dy) };
+  }
+  const d = a.anchor as DrawingAnchor;
+  return {
+    strokes: d.strokes.map((s) => ({
+      ...s,
+      points: s.points.map(([x, y, p]): [number, number, number] => [x + dx, y + dy, p]),
+    })),
+  };
 }
 
 /** Pen, eraser and note-pin input (F-ANN-02, F-ANN-03), with pen pressure when available. */
@@ -405,7 +532,9 @@ function InputSurface({
         if (!d || tool !== 'draw') return;
         void createAnnotations(docId, [
           { type: 'drawing', page, color: d.color, anchor: { strokes: [d] } },
-        ]);
+        ]).then(([created]) => {
+          if (created) useReader.getState().addDrawn(page, created.id);
+        });
       }}
     >
       {live && (

@@ -69,10 +69,26 @@ export type Stroke = z.infer<typeof strokeSchema>;
 export type DrawingAnchor = z.infer<typeof drawingAnchorSchema>;
 export type ShapeAnchor = z.infer<typeof shapeAnchorSchema>;
 
+/**
+ * How an annotation's note window is shown: pinned open or not, where it was moved to
+ * and the size it was given. Kept on the server so every device shows it the same way.
+ */
+export const annotationDisplaySchema = z.object({
+  pinned: z.boolean(),
+  /** Top-left corner of the window in page space; null = next to the annotation. */
+  x: unit.nullable(),
+  y: unit.nullable(),
+  /** Size in CSS pixels; null = default width / fit the content. */
+  w: z.number().int().min(160).max(2000).nullable(),
+  h: z.number().int().min(120).max(2000).nullable(),
+});
+export type AnnotationDisplay = z.infer<typeof annotationDisplaySchema>;
+
 const base = {
   page: z.number().int().min(1),
   color: z.string().min(1).max(32),
   content: z.string().max(10_000).nullable().optional(),
+  display: annotationDisplaySchema.nullable().optional(),
 };
 
 /** Annotation as created by the client (the user or saved Claude marks). */
@@ -100,6 +116,7 @@ export const updateAnnotationSchema = z.object({
   content: z.string().max(10_000).nullable().optional(),
   status: z.enum(['active', 'rejected', 'proposed']).optional(),
   anchor: z.unknown().optional(),
+  display: annotationDisplaySchema.nullable().optional(),
 });
 export type UpdateAnnotation = z.infer<typeof updateAnnotationSchema>;
 
@@ -121,6 +138,7 @@ export interface Annotation {
   color: string;
   anchor: HighlightAnchor | NoteAnchor | DrawingAnchor | ShapeAnchor;
   content: string | null;
+  display: AnnotationDisplay | null;
   createdAt: string;
   updatedAt: string;
 }

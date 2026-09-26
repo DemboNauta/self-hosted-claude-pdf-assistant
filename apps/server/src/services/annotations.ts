@@ -32,6 +32,7 @@ function toDto(row: Row): Annotation {
     color: row.color,
     anchor: JSON.parse(row.anchorJson) as Annotation['anchor'],
     content: row.content,
+    display: row.displayJson ? (JSON.parse(row.displayJson) as Annotation['display']) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -81,6 +82,7 @@ export class AnnotationService {
       color: item.color,
       anchorJson: JSON.stringify(this.withRects(documentId, item.page, item.type, item.anchor)),
       content: item.content ?? null,
+      displayJson: item.display ? JSON.stringify(item.display) : null,
       updatedAt: ts,
     }));
     this.db.transaction((tx) => {
@@ -100,6 +102,8 @@ export class AnnotationService {
     if (patch.color !== undefined) set.color = patch.color;
     if (patch.content !== undefined) set.content = patch.content;
     if (patch.status !== undefined) set.status = patch.status;
+    if (patch.display !== undefined)
+      set.displayJson = patch.display ? JSON.stringify(patch.display) : null;
     if (patch.anchor !== undefined) {
       const parsed = ANCHOR_SCHEMAS[current.type].safeParse(patch.anchor);
       if (!parsed.success) throw new HttpError(400, 'invalid_request');

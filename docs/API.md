@@ -84,6 +84,10 @@ Client → server:
   "mode": "free|eli5|summary|exam|relate",
   "context": { "docId": "…" /* or topicId / subjectId, exactly one */,
                "currentPage": 12, "selection": { "page": 12, "text": "…" },
+               // Area marked with freehand drawings (document chats only). The server
+               // renders it with the drawings on top and sends Claude the image.
+               "mark": { "page": 12, "rect": { "x": 0.1, "y": 0.2, "w": 0.4, "h": 0.1 },
+                         "annotationIds": ["…"], "text": "text inside the area" },
                "summaryFormat": "prose|outline|glossary" } }
 { "type": "stop", "threadId": "…" }
 ```
@@ -107,7 +111,7 @@ Server → client (`ServerChatEvent`):
 | ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | GET    | `/api/documents/:id/annotations`      | Non-rejected `Annotation[]`.                                                                                             |
 | POST   | `/api/documents/:id/annotations`      | `{ items: CreateAnnotation[], ids? }`. `ids` restores deleted ones (undo). Quote-only anchors get server-computed rects. |
-| PATCH  | `/api/annotations/:id`                | `{ color?, content?, status?, anchor? }`                                                                                 |
+| PATCH  | `/api/annotations/:id`                | `{ color?, content?, status?, anchor?, display? }` (`display`: note window, see DATA_MODEL)                              |
 | POST   | `/api/annotations/status`             | `{ ids, status: active\|rejected\|proposed }` (accept or discard proposals).                                             |
 | POST   | `/api/annotations/delete`             | `{ ids }`                                                                                                                |
 | GET    | `/api/documents/:id/export-annotated` | Downloads a copy of the PDF with standard annotations.                                                                   |

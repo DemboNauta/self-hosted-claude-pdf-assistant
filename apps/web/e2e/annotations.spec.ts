@@ -78,6 +78,119 @@ test('draw by hand and erase', async ({ page }, info) => {
   await expect(strokes).toHaveCount(0);
 });
 
+test('draw around something, move the drawing and ask Claude about it', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'mouse drawing');
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    'Marca',
+    tinyPdf([['Primera linea sin marcar.', 'E = m c^2 es la formula marcada.']]),
+  );
+  await page.goto(`/read/${docId}`);
+  const pageEl = page.locator('[data-page="1"]');
+  await expect(pageEl.locator('.textLayer')).toContainText('formula marcada');
+  const line = (await pageEl
+    .locator('.textLayer span', { hasText: 'formula marcada' })
+    .boundingBox())!;
+
+  await page.getByRole('button', { name: 'Herramientas de anotación' }).first().click();
+  await page.getByRole('button', { name: 'Dibujar a mano alzada' }).click();
+  const ask = page.getByRole('button', { name: 'Preguntar a Claude sobre lo marcado' });
+  await expect(ask).toBeDisabled();
+  // Underline drawn one line too high, then moved down onto the formula.
+  const y = line.y + line.height + 4 - 28;
+  await page.mouse.move(line.x, y);
+  await page.mouse.down();
+  await page.mouse.move(line.x + line.width, y, { steps: 10 });
+  await page.mouse.up();
+  await expect(ask).toBeEnabled();
+
+  const strokeY = async () => {
+    const res = await page.request.get(`/api/documents/${docId}/annotations`);
+    const list = (await res.json()) as { anchor: { strokes: { points: number[][] }[] } }[];
+    return list[0]!.anchor.strokes[0]!.points[0]![1]!;
+  };
+  const y0 = await strokeY();
+  await page.getByRole('button', { name: 'Seleccionar texto' }).click();
+  const hit = pageEl.locator('path[data-drawing]');
+  const hitBox = (await hit.boundingBox())!;
+  const cx = hitBox.x + hitBox.width / 2;
+  const cy = hitBox.y + hitBox.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx, cy + 28, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(strokeY).toBeGreaterThan(y0 + 0.015);
+
+  // Clicking the drawing opens its window; "Preguntar" attaches the marked area.
+  // (The grab area is a transparent stroke, so click it with the mouse.)
+  const moved = (await hit.boundingBox())!;
+  await page.mouse.click(moved.x + moved.width / 2, moved.y + moved.height / 2);
+  await page
+    .getByRole('dialog', { name: 'Editar anotación' })
+    .getByRole('button', { name: 'Preguntar' })
+    .click();
+  const attached = page.getByTestId('attached-mark');
+  await expect(attached).toContainText('Tu marca en la p. 1');
+  await expect(attached).toContainText('formula marcada');
+  await expect(attached).not.toContainText('Primera linea');
+  await page.getByRole('textbox', { name: 'Pregunta sobre el documento…' }).fill('Que significa?');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+  await expect(page.getByText('Veo tu marca en la página 1 (con imagen)')).toBeVisible();
+});
+
+test('pin a note window, move it and find it open after a reload', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'mouse dragging');
+  await login(page);
+  const docId = await seedDocument(page, 'Fijar', tinyPdf('Texto con una nota fijada'));
+  await page.request.post(`/api/documents/${docId}/annotations`, {
+    data: {
+      items: [
+        {
+          type: 'highlight',
+          page: 1,
+          color: 'yellow',
+          content: 'Mi nota',
+          anchor: { quote: 'nota fijada' },
+        },
+      ],
+    },
+  });
+  await page.goto(`/read/${docId}`);
+  const highlight = page.locator('[data-page="1"] [data-annotation]');
+  await expect(highlight).toHaveCount(1);
+  const box = (await highlight.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  const win = page.getByRole('dialog', { name: 'Editar anotación' });
+  await expect(win).toBeVisible();
+
+  const before = (await win.boundingBox())!;
+  await page.mouse.move(before.x + 40, before.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 80, before.y + 112, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await win.boundingBox())!.y).toBeGreaterThan(before.y + 50);
+  const moved = (await win.boundingBox())!;
+  await win.getByRole('button', { name: 'Dejar abierta' }).click();
+  await expect(win.getByRole('button', { name: 'No dejar abierta' })).toBeVisible();
+
+  // Clicking elsewhere closes unpinned windows only.
+  await page.mouse.click(box.x + 5, box.y + 300);
+  await expect(win).toBeVisible();
+  await page.reload();
+  await expect(win).toBeVisible();
+  await expect(win.getByRole('textbox', { name: 'Comentario' })).toHaveValue('Mi nota');
+  const after = (await win.boundingBox())!;
+  expect(Math.abs(after.x - moved.x)).toBeLessThan(3);
+  expect(Math.abs(after.y - moved.y)).toBeLessThan(3);
+
+  // Closing it unpins it: gone after the next reload.
+  await win.getByRole('button', { name: 'Cerrar panel' }).click();
+  await page.reload();
+  await expect(highlight).toHaveCount(1);
+  await expect(win).toHaveCount(0);
+});
+
 // F-ANN-01 configurable meanings + F-UX-03 shortcuts: rename a colour in Settings,
 // then highlight with the number key.
 test('configure colour meanings and highlight with a shortcut', async ({ page }, info) => {

@@ -14,6 +14,7 @@ import {
   Loader2,
   Mic,
   MousePointer2,
+  PenLine,
   Plus,
   Quote,
   Square,
@@ -119,17 +120,21 @@ export function setPointerActions(fn: (messageId: string) => ReactNode) {
 function MessageItem({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
     const sel = message.context?.selection;
+    const mark = message.context?.mark;
     const mode = message.mode && message.mode !== 'free' ? t.chat.modes[message.mode] : null;
+    const quoted = sel?.text ?? mark?.text;
     return (
       <li className="flex flex-col items-end gap-1" data-testid="user-message">
-        {(mode || sel) && (
+        {(mode || sel || mark) && (
           <span className="text-text-muted text-xs">
-            {[mode, sel && t.chat.attached(sel.page)].filter(Boolean).join(' · ')}
+            {[mode, sel && t.chat.attached(sel.page), mark && t.chat.attachedMark(mark.page)]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
         )}
-        {sel && (
+        {quoted && (
           <blockquote className="border-border text-text-muted line-clamp-3 max-w-[90%] border-l-2 pl-2 text-xs italic">
-            {sel.text}
+            {quoted}
           </blockquote>
         )}
         {message.content && (
@@ -263,8 +268,9 @@ function Composer() {
   const [text, setText] = useState('');
   const running = useChat((s) => s.running);
   const attached = useChat((s) => s.attached);
+  const attachedMark = useChat((s) => s.attachedMark);
   const mode = useChat((s) => s.mode);
-  const { send, stop, attach } = useChat.getState();
+  const { send, stop, attach, attachMark } = useChat.getState();
   const area = useRef<HTMLTextAreaElement>(null);
   const [canDictate] = useState(dictationSupported);
   const dictation = useDictation((phrase) =>
@@ -279,7 +285,9 @@ function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
 
-  const canSend = !running && (text.trim().length > 0 || attached !== null || mode !== 'free');
+  const canSend =
+    !running &&
+    (text.trim().length > 0 || attached !== null || attachedMark !== null || mode !== 'free');
   const submit = () => {
     if (!canSend) return;
     dictation.stop();
@@ -313,6 +321,26 @@ function Composer() {
           </button>
         </div>
       )}
+      {attachedMark && (
+        <div
+          className="bg-surface-muted flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs"
+          data-testid="attached-mark"
+        >
+          <PenLine size={12} aria-hidden className="mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{t.chat.attachedMark(attachedMark.page)}</p>
+            <p className="text-text-muted line-clamp-2">{attachedMark.text || t.chat.markNoText}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => attachMark(null)}
+            aria-label={t.chat.removeAttachedMark}
+            className="text-text-muted hover:text-text rounded p-0.5"
+          >
+            <X size={14} aria-hidden />
+          </button>
+        </div>
+      )}
       {dictation.listening && (
         <p className="text-text-muted text-xs italic" aria-live="polite">
           {dictation.interim || t.chat.voice.listening}
@@ -331,7 +359,13 @@ function Composer() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={attached ? t.chat.placeholderSelection : t.chat.placeholder}
+          placeholder={
+            attached
+              ? t.chat.placeholderSelection
+              : attachedMark
+                ? t.chat.placeholderMark
+                : t.chat.placeholder
+          }
           aria-label={t.chat.placeholder}
           className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"
         />

@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import {
   Eraser,
+  MessageSquare,
   MousePointer2,
   PenLine,
   Redo2,
@@ -12,6 +13,7 @@ import { useEffect } from 'react';
 import { t } from '../../i18n';
 import { useReader, type AnnotationTool } from '../reader/store';
 import { redo, undo, useAnnotationHistory } from './api';
+import { askAboutMark } from './mark';
 
 const TOOLS: { id: AnnotationTool; icon: LucideIcon; label: string }[] = [
   { id: 'select', icon: MousePointer2, label: t.annotations.tools.select },
@@ -52,6 +54,9 @@ export function AnnotationTools() {
   const setTool = useReader((s) => s.setTool);
   const pen = useReader((s) => s.pen);
   const setPen = useReader((s) => s.setPen);
+  const docId = useReader((s) => s.docId);
+  const drawn = useReader((s) => s.drawn);
+  const clearDrawn = useReader((s) => s.clearDrawn);
   const canUndo = useAnnotationHistory((s) => s.past.length > 0 && !s.busy);
   const canRedo = useAnnotationHistory((s) => s.future.length > 0 && !s.busy);
 
@@ -125,6 +130,24 @@ export function AnnotationTools() {
               </button>
             ))}
           </div>
+          <span className="bg-border mx-1 h-6 w-px" aria-hidden />
+          <button
+            type="button"
+            title={t.annotations.tools.askMark}
+            aria-label={t.annotations.tools.askMark}
+            disabled={!drawn || !docId}
+            onClick={() => {
+              if (!drawn || !docId) return;
+              if (askAboutMark(docId, drawn.page, drawn.ids)) {
+                clearDrawn();
+                setTool('select');
+              }
+            }}
+            className="bg-accent text-accent-contrast flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-30"
+          >
+            <MessageSquare size={16} aria-hidden />
+            <span className="hidden sm:inline">{t.annotations.tools.askMarkShort}</span>
+          </button>
         </>
       )}
       <span className="bg-border mx-1 h-6 w-px" aria-hidden />

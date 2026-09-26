@@ -164,6 +164,8 @@ export const annotations = sqliteTable(
     anchorJson: text('anchor_json').notNull(),
     /** Note text, Claude's reason for a proposed highlight or a mark's label. */
     content: text('content'),
+    /** Note window state (pinned, moved, resized) as JSON; null = defaults. */
+    displayJson: text('display_json'),
     createdAt: createdAt(),
     updatedAt: text('updated_at').notNull(),
   },

@@ -2,6 +2,7 @@ import type {
   ChatErrorCode,
   ChatMessage,
   ClientChatEvent,
+  DrawingMark,
   PointerGroup,
   ServerChatEvent,
   StudyMode,
@@ -93,6 +94,8 @@ interface ChatState {
   summaryFormat: SummaryFormat;
   /** Selection attached to the next question ("Preguntar" in the selection menu). */
   attached: TextSelection | null;
+  /** Area marked with drawings, attached to the next question (instead of a selection). */
+  attachedMark: DrawingMark | null;
   /** Claude's temporary marks on the PDF (F-POINT-03: gone with the next question). */
   pointers: PointerGroup[];
 
@@ -101,11 +104,15 @@ interface ChatState {
   openThread: (threadId: string) => Promise<void>;
   refresh: () => Promise<void>;
   newThread: () => Promise<void>;
-  send: (text: string, opts?: { mode?: StudyMode; selection?: TextSelection | null }) => void;
+  send: (
+    text: string,
+    opts?: { mode?: StudyMode; selection?: TextSelection | null; mark?: DrawingMark | null },
+  ) => void;
   stop: () => void;
   setMode: (mode: StudyMode) => void;
   setSummaryFormat: (format: SummaryFormat) => void;
   attach: (selection: TextSelection | null) => void;
+  attachMark: (mark: DrawingMark | null) => void;
   dismissError: () => void;
   clearPointers: (messageId?: string) => void;
 }
@@ -126,6 +133,7 @@ export const useChat = create<ChatState>((set, get) => ({
   mode: 'free',
   summaryFormat: 'outline',
   attached: null,
+  attachedMark: null,
   pointers: [],
 
   openDocument: (docId) => get().openScope({ kind: 'document', id: docId }),
@@ -140,6 +148,7 @@ export const useChat = create<ChatState>((set, get) => ({
       threads: [],
       error: null,
       attached: null,
+      attachedMark: null,
       pointers: [],
     });
     chatSocket.connect();
@@ -183,6 +192,7 @@ export const useChat = create<ChatState>((set, get) => ({
     const { threadId, scope, running } = get();
     if (!threadId || !scope || running) return;
     const selection = opts.selection === undefined ? get().attached : opts.selection;
+    const mark = opts.mark === undefined ? get().attachedMark : opts.mark;
     const mode = opts.mode ?? get().mode;
     const clientId = crypto.randomUUID();
     const context = {
@@ -192,6 +202,7 @@ export const useChat = create<ChatState>((set, get) => ({
           ? { topicId: scope.id }
           : { subjectId: scope.id }),
       ...(selection ? { selection } : {}),
+      ...(mark && scope.kind === 'document' ? { mark } : {}),
       ...(mode === 'summary' ? { summaryFormat: get().summaryFormat } : {}),
     };
     const optimistic: ChatMessage = {
@@ -209,6 +220,7 @@ export const useChat = create<ChatState>((set, get) => ({
       running: true,
       error: null,
       attached: null,
+      attachedMark: null,
       pointers: [],
     });
     chatSocket.send({ type: 'user_message', threadId, clientId, text, mode, context });
@@ -221,7 +233,8 @@ export const useChat = create<ChatState>((set, get) => ({
 
   setMode: (mode) => set({ mode }),
   setSummaryFormat: (summaryFormat) => set({ summaryFormat }),
-  attach: (attached) => set({ attached }),
+  attach: (attached) => set({ attached, ...(attached ? { attachedMark: null } : {}) }),
+  attachMark: (attachedMark) => set({ attachedMark, ...(attachedMark ? { attached: null } : {}) }),
   dismissError: () => set({ error: null }),
   clearPointers: (messageId) =>
     set({ pointers: messageId ? get().pointers.filter((g) => g.messageId !== messageId) : [] }),

@@ -95,12 +95,31 @@ export function buildTurnPrompt(input: {
   scope: string[];
   memory?: string;
   recoveredTranscript?: string;
+  /** An image of the marked area goes with the message (see `context.mark`). */
+  markImage?: boolean;
 }): string {
   const { text, mode, context } = input;
   const lines = [...input.scope];
   if (context.selection) {
     lines.push(
       `Selected text on page ${context.selection.page}:\n"""\n${context.selection.text}\n"""`,
+    );
+  }
+  if (context.mark) {
+    const r = context.mark.rect;
+    const pct = (v: number) => Math.round(v * 100);
+    lines.push(
+      [
+        `The student drew freehand marks (circles, arrows, underlines…) on page ${context.mark.page} and is asking about what they marked: the area from ${pct(r.x)}% to ${pct(r.x + r.w)}% of the page width and ${pct(r.y)}% to ${pct(r.y + r.h)}% of its height.`,
+        input.markImage
+          ? 'An image of that area with their drawing on top is attached to this message: look at what the drawing points to, circles or connects.'
+          : '',
+        context.mark.text
+          ? `Text inside the marked area:\n"""\n${context.mark.text}\n"""`
+          : 'The marked area has no text layer (a figure, formula or scanned text): rely on the image.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
     );
   }
   lines.push(MODE_INSTRUCTIONS[mode]);
@@ -117,6 +136,10 @@ export function buildTurnPrompt(input: {
     text.trim() ||
     (context.selection
       ? '(No question typed: apply the mode to the selected text.)'
-      : '(No question typed.)');
+      : context.mark
+        ? mode === 'free'
+          ? '(No question typed: explain what the student marked.)'
+          : '(No question typed: apply the mode to what the student marked.)'
+        : '(No question typed.)');
   return `<context>\n${lines.join('\n\n')}\n</context>\n\n${question}`;
 }

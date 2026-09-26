@@ -55,6 +55,40 @@ test('read a PDF and ask Claude about a selection', async ({ page }, info) => {
   await expect(chat.getByTestId('user-message').first()).toContainText('cloroplastos');
 });
 
+// F-LIB-04: leaving the reader and opening the document again (without reloading the
+// app) resumes at the page where the reading stopped.
+test('reopening a document resumes at the last page read', async ({ page }, info) => {
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Retomar ${info.project.name}`,
+    tinyPdf([['Pagina uno.'], ['Pagina dos.'], ['Pagina tres.'], ['Pagina cuatro.']]),
+  );
+  const { topicId } = (await (await page.request.get(`/api/documents/${docId}`)).json()) as {
+    topicId: string;
+  };
+  await page.goto(`/library/t/${topicId}`);
+  const card = page.locator(`a[href="/read/${docId}"]`).first();
+  await card.click();
+  const pageInput = page.getByRole('textbox', { name: 'Página' });
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('Pagina uno');
+
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith(`/api/documents/${docId}/position`) && r.request().method() === 'PUT',
+  );
+  await pageInput.fill('3');
+  await pageInput.press('Enter');
+  await expect(pageInput).toHaveValue('3');
+  await saved;
+
+  // Back to the topic and into the document again, all inside the app.
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/library/t/${topicId}`));
+  await card.click();
+  await expect(page.locator('[data-page="3"] .textLayer')).toContainText('Pagina tres');
+  await expect(pageInput).toHaveValue('3');
+});
+
 // F-POINT-01..03: Claude's marks appear on the page, grouped under the answer, and go
 // away with the next question.
 test('Claude points at the page and the marks clear with the next question', async ({

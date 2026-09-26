@@ -294,6 +294,12 @@ export const es = {
     export: 'Exportar PDF anotado',
     drawing: 'Dibujo',
     shape: 'Marca de Claude',
+    resize: 'Cambiar tamaño de la anotación',
+    resizeHint: 'Arrastra para cambiar el tamaño · doble clic para restablecer',
+    moveHint: 'Arrastra para mover',
+    pin: 'Dejar abierta',
+    unpin: 'No dejar abierta',
+    moveMark: 'Arrastra para mover',
     tools: {
       label: 'Herramientas de anotación',
       select: 'Seleccionar texto',
@@ -304,6 +310,8 @@ export const es = {
       penWidth: 'Grosor',
       undo: 'Deshacer',
       redo: 'Rehacer',
+      askMark: 'Preguntar a Claude sobre lo marcado',
+      askMarkShort: 'Preguntar',
     },
   },
   chat: {
@@ -332,6 +340,10 @@ export const es = {
     interrupted: 'Respuesta interrumpida.',
     attached: (page: number) => `Selección de la p. ${page}`,
     removeAttached: 'Quitar selección',
+    attachedMark: (page: number) => `Tu marca en la p. ${page}`,
+    removeAttachedMark: 'Quitar marca',
+    markNoText: 'Sin texto: Claude verá la imagen de la zona marcada.',
+    placeholderMark: 'Pregunta sobre lo que has marcado…',
     goToPage: (page: number) => `Ir a la página ${page}`,
     citationLabel: (label: string) => `Ir a ${label}`,
     voice: {

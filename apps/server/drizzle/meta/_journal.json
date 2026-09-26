@@ -64,6 +64,13 @@
       "when": 1790383064623,
       "tag": "0008_thread_scopes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790407579387,
+      "tag": "0009_annotation_display",
+      "breakpoints": true
     }
   ]
 }

@@ -38,6 +38,22 @@ change them if he disagrees.
   - The VPS already runs its **own Caddy outside Docker**, so the app container
     listens on `127.0.0.1:<port>` only and his Caddy reverse-proxies the
     subdomain.
+- Annotation windows (2026-09-26):
+  - The note window adapts to the screen: a floating window on desktop and
+    tablet, a bottom sheet on phones. The user can resize it.
+  - It can be moved (drag its header) and **pinned open**. The pinned state,
+    position (page space) and size are **stored on the server**, so every
+    device shows them the same way.
+  - Sticky notes (point notes) and drawings can be moved by dragging them.
+    Highlights stay on their text.
+- Asking Claude about a drawing (2026-09-26):
+  - Only through a button: "Preguntar" in the pen toolbar (for the drawings made
+    since the last question) or in a drawing's window. No menu pops up by itself.
+  - Claude gets the text inside the marked area **and an image** of that area
+    with the drawing on top.
+  - The drawings stay as normal annotations.
+- Reopening a document must resume at the page where the reading stopped, also
+  when navigating inside the app (bug fixed 2026-09-26).
 
 ## Provisional product choices (Claude, "don't ask until deploy")
 

@@ -40,6 +40,8 @@ interface ReaderState {
   filter: AnnotationFilter;
   /** Annotation whose popover is open. */
   activeAnnotation: string | null;
+  /** Drawings made since the last question about them ("Preguntar sobre lo marcado"). */
+  drawn: { page: number; ids: string[] } | null;
 
   open: (docId: string, pageCount: number) => void;
   setCurrentPage: (page: number) => void;
@@ -53,6 +55,9 @@ interface ReaderState {
   setPen: (pen: Partial<{ color: string; width: number }>) => void;
   setFilter: (filter: Partial<AnnotationFilter>) => void;
   setActiveAnnotation: (id: string | null) => void;
+  /** Records a new drawing; one on another page starts a new mark. */
+  addDrawn: (page: number, id: string) => void;
+  clearDrawn: () => void;
 }
 
 let nonce = 0;
@@ -71,6 +76,7 @@ export const useReader = create<ReaderState>((set, get) => ({
   pen: { color: '#1f6feb', width: 0.003 },
   filter: { visible: true, mine: true, claude: true, hiddenColors: [] },
   activeAnnotation: null,
+  drawn: null,
 
   open: (docId, pageCount) =>
     set({
@@ -82,6 +88,7 @@ export const useReader = create<ReaderState>((set, get) => ({
       searchTerms: null,
       tool: 'select',
       activeAnnotation: null,
+      drawn: null,
     }),
   setCurrentPage: (currentPage) => {
     if (get().currentPage !== currentPage) set({ currentPage });
@@ -104,6 +111,11 @@ export const useReader = create<ReaderState>((set, get) => ({
   setPen: (pen) => set({ pen: { ...get().pen, ...pen } }),
   setFilter: (filter) => set({ filter: { ...get().filter, ...filter } }),
   setActiveAnnotation: (activeAnnotation) => set({ activeAnnotation }),
+  addDrawn: (page, id) => {
+    const d = get().drawn;
+    set({ drawn: d && d.page === page ? { page, ids: [...d.ids, id] } : { page, ids: [id] } });
+  },
+  clearDrawn: () => set({ drawn: null }),
 }));
 
 export const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];

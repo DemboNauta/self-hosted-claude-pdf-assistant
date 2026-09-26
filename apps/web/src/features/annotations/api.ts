@@ -3,6 +3,7 @@ import {
   CLAUDE_COLOR_KEY,
   DEFAULT_PALETTE,
   type Annotation,
+  type AnnotationDisplay,
   type AppSettings,
   type CreateAnnotation,
   type UpdateAnnotation,
@@ -114,6 +115,7 @@ function toCreate(a: Annotation): CreateAnnotation {
     page: a.page,
     color: a.color,
     content: a.content,
+    display: a.display,
     anchor: a.anchor,
   } as CreateAnnotation;
 }
@@ -174,6 +176,15 @@ export async function updateAnnotation(docId: string, before: Annotation, patch:
   };
   await apply(patch);
   push(docId, { undo: () => apply(reverse), redo: () => apply(patch) });
+}
+
+/**
+ * Pins, moves or resizes an annotation's note window. Window placement is not an edit
+ * of the annotation, so it stays out of the undo history.
+ */
+export async function updateDisplay(docId: string, id: string, display: AnnotationDisplay | null) {
+  setCache(docId, (list) => list.map((a) => (a.id === id ? { ...a, display } : a)));
+  await api<Annotation>(`/annotations/${id}`, { method: 'PATCH', json: { display } });
 }
 
 /** Accept or discard Claude's proposals (F-ANN-04), undoable as one step. */

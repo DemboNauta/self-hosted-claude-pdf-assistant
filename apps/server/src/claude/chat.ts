@@ -1,7 +1,9 @@
-import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type {
   ChatContext,
   ChatErrorCode,
+  DrawingAnchor,
+  DrawingMark,
   ChatMessage,
   ServerChatEvent,
   StudyMode,
@@ -11,6 +13,7 @@ import type {
 import type { FastifyBaseLogger } from 'fastify';
 import { FORBIDDEN_CLAUDE_ENV_VARS } from '../auth-guard.js';
 import type { AppConfig } from '../config.js';
+import { renderMarkImage } from '../ingest/extract.js';
 import { HttpError } from '../services/errors.js';
 import type { LibraryService } from '../services/library.js';
 import type { ThreadService } from '../services/threads.js';
@@ -122,6 +125,7 @@ export class ChatService {
     };
 
     try {
+      const markImage = docId && ctx.mark ? await this.markImage(docId, ctx.mark) : null;
       const prompt = (recoveredTranscript?: string) =>
         buildTurnPrompt({
           text: input.text,
@@ -130,10 +134,11 @@ export class ChatService {
           scope: scopeLines,
           memory: this.memory(docId),
           recoveredTranscript,
+          markImage: markImage !== null,
         });
       const run = (resume: string | null, recovered?: string) =>
         this.runTurn({
-          prompt: prompt(recovered),
+          prompt: withImage(prompt(recovered), markImage),
           resume,
           abort,
           threadId: thread.id,
@@ -182,6 +187,24 @@ export class ChatService {
     }
   }
 
+  /** Image of the area the student marked with their drawings, or null if unavailable. */
+  private async markImage(docId: string, mark: DrawingMark): Promise<Buffer | null> {
+    const strokes = this.toolDeps.annotations
+      .list(docId)
+      .filter(
+        (a) => a.type === 'drawing' && a.page === mark.page && mark.annotationIds.includes(a.id),
+      )
+      .flatMap((a) => (a.anchor as DrawingAnchor).strokes);
+    if (!strokes.length) return null;
+    try {
+      const row = this.library.getLive(docId);
+      return (await renderMarkImage(row.filePath, mark.page, mark.rect, strokes)).png;
+    } catch (err) {
+      this.log.warn({ err }, 'Could not render the marked area; asking without the image');
+      return null;
+    }
+  }
+
   /** Context lines describing what the conversation is about. */
   private describeScope(scope: ThreadScope, currentPage?: number): string[] {
     if (scope.kind === 'document') return documentScope(this.library.detail(scope.id), currentPage);
@@ -205,7 +228,7 @@ export class ChatService {
   }
 
   private async runTurn(t: {
-    prompt: string;
+    prompt: string | AsyncIterable<SDKUserMessage>;
     resume: string | null;
     abort: AbortController;
     threadId: string;
@@ -280,6 +303,28 @@ export class ChatService {
       }
     }
   }
+}
+
+/** The turn prompt, as a user message with an image block when there is one. */
+function withImage(text: string, png: Buffer | null): string | AsyncIterable<SDKUserMessage> {
+  if (!png) return text;
+  const message: SDKUserMessage = {
+    type: 'user',
+    parent_tool_use_id: null,
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/png', data: png.toString('base64') },
+        },
+        { type: 'text', text },
+      ],
+    },
+  };
+  return (async function* () {
+    yield message;
+  })();
 }
 
 function isMissingSession(err: unknown): boolean {

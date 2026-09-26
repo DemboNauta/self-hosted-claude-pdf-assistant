@@ -66,6 +66,8 @@ export function ReaderPage() {
     queryFn: () => api<DocumentDetail>(`/documents/${documentId}`),
     // The saved position is read once; refetching would not move the viewer anyway.
     staleTime: Infinity,
+    // ...but drop it on leaving, so reopening the document reads the position saved since.
+    gcTime: 0,
   });
   const ready = detail.data?.status === 'ready';
   const { pdf, error } = usePdf(documentId, ready);

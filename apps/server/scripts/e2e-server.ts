@@ -35,19 +35,34 @@ const fakeQuery = (() =>
  */
 type FakeTools = Record<string, { handler: (args: unknown, extra: unknown) => Promise<unknown> }>;
 
+/** A turn prompt with an image comes as a user message with content blocks. */
+type FakePrompt =
+  string | AsyncIterable<{ message: { content: { type: string; text?: string }[] } }>;
+
 const fakeChat = ((args: {
-  prompt: string;
+  prompt: FakePrompt;
   options: { mcpServers?: Record<string, { instance?: { _registeredTools?: FakeTools } }> };
 }) =>
   (async function* () {
-    const docId = /\(id ([0-9a-z]+)/.exec(args.prompt)?.[1] ?? 'unknown';
-    const selected = /Selected text on page (\d+):\n"""\n([\s\S]*?)\n"""/.exec(args.prompt);
+    let prompt = '';
+    let image = false;
+    if (typeof args.prompt === 'string') prompt = args.prompt;
+    else {
+      for await (const m of args.prompt) {
+        for (const block of m.message.content) {
+          if (block.type === 'image') image = true;
+          if (block.type === 'text') prompt += block.text ?? '';
+        }
+      }
+    }
+    const docId = /\(id ([0-9a-z]+)/.exec(prompt)?.[1] ?? 'unknown';
+    const selected = /Selected text on page (\d+):\n"""\n([\s\S]*?)\n"""/.exec(prompt);
     const page = selected?.[1] ?? '1';
     const quote = selected?.[2]?.split(/\s+/).slice(0, 6).join(' ');
     const cite = `[[cite:${docId}:${page}${quote ? `|"${quote}"` : ''}]]`;
     // "Señala…" makes the fake call the real point_at tool, as Claude would.
     const tools = args.options.mcpServers?.pca?.instance?._registeredTools;
-    const question = args.prompt.split('</context>')[1] ?? '';
+    const question = prompt.split('</context>')[1] ?? '';
     // "Tarjetas" makes the fake propose a flashcard about the selection.
     if (/tarjetas/i.test(question) && tools?.create_flashcards && selected?.[2]) {
       await tools.create_flashcards.handler(
@@ -93,7 +108,12 @@ const fakeChat = ((args: {
       model: 'claude-e2e',
       apiKeySource: 'none',
     };
+    // A drawing mark: say whether the image of the marked area came with the question.
+    const marked = /freehand marks[^\n]* on page (\d+)/.exec(prompt);
     const parts = [
+      ...(marked
+        ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]
+        : []),
       'Respuesta de prueba: ',
       'la idea principal está en la página ',
       `${page} ${cite}.`,

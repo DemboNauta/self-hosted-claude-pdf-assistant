@@ -16,6 +16,23 @@ export const selectionSchema = z.object({
 });
 export type TextSelection = z.infer<typeof selectionSchema>;
 
+const unitSchema = z.number().min(0).max(1);
+
+/**
+ * Area the student marked with freehand drawings to ask about it. The server renders
+ * that part of the page with the drawings on top and sends the image to Claude.
+ */
+export const markSchema = z.object({
+  page: z.number().int().min(1),
+  /** Bounding box of the drawings (plus a margin), in normalised page space. */
+  rect: z.object({ x: unitSchema, y: unitSchema, w: unitSchema, h: unitSchema }),
+  /** The drawing annotations that make up the mark. */
+  annotationIds: z.array(id).min(1).max(50),
+  /** Text of the page inside the marked area (may be empty: figures, formulas). */
+  text: z.string().max(8000),
+});
+export type DrawingMark = z.infer<typeof markSchema>;
+
 /** Per-turn context: goes in the user message, never the system prompt (see CLAUDE.md). */
 export const chatContextSchema = z
   .object({
@@ -25,6 +42,7 @@ export const chatContextSchema = z
     subjectId: id.optional(),
     currentPage: z.number().int().min(1).optional(),
     selection: selectionSchema.optional(),
+    mark: markSchema.optional(),
     summaryFormat: z.enum(SUMMARY_FORMATS).optional(),
   })
   .refine((c) => [c.docId, c.topicId, c.subjectId].filter(Boolean).length === 1, {

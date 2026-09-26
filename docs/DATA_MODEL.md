@@ -13,17 +13,18 @@ To change the schema:
    `ON DELETE cascade`, add it by hand (done in `0008`).
 4. Commit the SQL and the `meta/` snapshot.
 
-| Migration             | Adds                                                                            |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `0000_init`           | `settings`, `auth_sessions`                                                     |
-| `0001_library`        | `subjects`, `topics`, `documents`, `pages`                                      |
-| `0002_pages_fts`      | FTS5 `pages_fts` (external content, `unicode61 remove_diacritics 2`) + triggers |
-| `0003_chat`           | `threads`, `messages`                                                           |
-| `0004_annotations`    | `annotations`                                                                   |
-| `0005_memory`         | `memory_items`, `concepts`, `exam_results`                                      |
-| `0006_study_sessions` | `study_sessions`                                                                |
-| `0007_flashcards`     | `flashcards`, `reviews`                                                         |
-| `0008_thread_scopes`  | `threads.topic_id`, `threads.subject_id` (cascade)                              |
+| Migration                 | Adds                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `0000_init`               | `settings`, `auth_sessions`                                                     |
+| `0001_library`            | `subjects`, `topics`, `documents`, `pages`                                      |
+| `0002_pages_fts`          | FTS5 `pages_fts` (external content, `unicode61 remove_diacritics 2`) + triggers |
+| `0003_chat`               | `threads`, `messages`                                                           |
+| `0004_annotations`        | `annotations`                                                                   |
+| `0005_memory`             | `memory_items`, `concepts`, `exam_results`                                      |
+| `0006_study_sessions`     | `study_sessions`                                                                |
+| `0007_flashcards`         | `flashcards`, `reviews`                                                         |
+| `0008_thread_scopes`      | `threads.topic_id`, `threads.subject_id` (cascade)                              |
+| `0009_annotation_display` | `annotations.display_json` (note window: pinned, position, size)                |
 
 ## Tables (main columns)
 
@@ -55,7 +56,10 @@ context}), tool_events_json, status (complete|interrupted|error), error_code`.
   - `document_id (cascade), page, type (highlight|note|drawing|shape),
 author (user|claude), status (active|proposed|rejected)`;
   - `color`: a palette key, `claude` or a hex value;
-  - `anchor_json` and `content` (note text, proposal reason, or mark label).
+  - `anchor_json` and `content` (note text, proposal reason, or mark label);
+  - `display_json` (nullable): the note window's state, `{ pinned, x, y, w, h }`.
+    `x, y` are the window's top-left corner in page space (null = next to the
+    annotation); `w, h` are CSS pixels (null = default / fit the content).
 - **memory_items** `scope (global|document), document_id?, category, content`.
 - **concepts** `name, key (canonical name for merging), document_id?, page?,
 mastery 0–1, times_failed, last_evidence, last_seen_at`.
