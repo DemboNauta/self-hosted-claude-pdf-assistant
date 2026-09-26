@@ -21,6 +21,8 @@ import { SearchService } from './services/search.js';
 import { ThreadService } from './services/threads.js';
 import { AnnotationService } from './services/annotations.js';
 import { SettingsService } from './services/settings.js';
+import { MemoryService } from './services/memory.js';
+import { registerMemoryRoutes } from './routes/memory.js';
 import { registerAnnotationRoutes } from './routes/annotations.js';
 import { UploadService } from './services/uploads.js';
 
@@ -87,15 +89,18 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   const threads = new ThreadService(db);
   const annotations = new AnnotationService(db);
   const settings = new SettingsService(db);
+  const memory = new MemoryService(db);
+  await registerMemoryRoutes(app, memory);
   await registerAnnotationRoutes(app, annotations, library, settings);
   const chat = new ChatService(
     config,
     threads,
     library,
-    { db, library, search, annotations, settings },
+    { db, library, search, annotations, settings, memory },
     claudeStatus,
     app.log,
     deps.claudeQuery ?? query,
+    (docId) => memory.contextFor(docId),
   );
   await registerChatRoutes(app, threads, library, chat);
 

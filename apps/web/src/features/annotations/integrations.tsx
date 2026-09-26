@@ -102,6 +102,9 @@ export function installAnnotationIntegrations() {
   installed = true;
   setPointerActions((messageId) => <SavePointersButton messageId={messageId} />);
   chatSocket.subscribe((event) => {
+    if (event.type === 'data_changed' && event.scope === 'memory') {
+      void queryClient.invalidateQueries({ queryKey: ['memory'] });
+    }
     if (event.type === 'data_changed' && event.scope === 'annotations') {
       const docId = useReader.getState().docId;
       if (docId) void queryClient.invalidateQueries({ queryKey: annotationsKey(docId) });

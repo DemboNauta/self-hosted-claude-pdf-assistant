@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type ZoomMode = 'fit-width' | 'fit-page' | 'custom';
-export type SidePanel = 'thumbnails' | 'outline' | 'search' | 'annotations' | null;
+export type SidePanel = 'thumbnails' | 'outline' | 'search' | 'annotations' | 'memory' | null;
 
 /** Pointer tool on the page: normal reading/selection, freehand pen, eraser or note pin. */
 export type AnnotationTool = 'select' | 'draw' | 'erase' | 'note';

@@ -162,3 +162,52 @@ export const annotations = sqliteTable(
   },
   (t) => [index('annotations_document_idx').on(t.documentId, t.page)],
 );
+
+/** Distilled memory written by Claude through tools (F-MEM-01/02/04). */
+export const memoryItems = sqliteTable(
+  'memory_items',
+  {
+    id: text('id').primaryKey(),
+    scope: text('scope', { enum: ['global', 'document'] }).notNull(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    content: text('content').notNull(),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('memory_scope_idx').on(t.scope, t.documentId)],
+);
+
+/** Concepts the student finds hard, with a 0–1 mastery level (F-MEM-03). */
+export const concepts = sqliteTable(
+  'concepts',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    /** Lower-cased, accent-free name used to merge duplicates. */
+    key: text('key').notNull(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    page: integer('page'),
+    mastery: real('mastery').notNull().default(0.3),
+    timesFailed: integer('times_failed').notNull().default(0),
+    lastEvidence: text('last_evidence'),
+    lastSeenAt: text('last_seen_at').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('concepts_key_idx').on(t.key)],
+);
+
+/** Exam answers evaluated by Claude (F-CHAT-03 exam mode, statistics). */
+export const examResults = sqliteTable(
+  'exam_results',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    question: text('question').notNull(),
+    userAnswer: text('user_answer').notNull(),
+    correct: integer('correct', { mode: 'boolean' }).notNull(),
+    conceptsJson: text('concepts_json').notNull().default('[]'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('exam_results_document_idx').on(t.documentId, t.createdAt)],
+);

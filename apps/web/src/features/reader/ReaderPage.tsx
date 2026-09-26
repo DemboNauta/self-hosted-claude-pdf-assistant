@@ -13,6 +13,7 @@ import {
   useSelectionAnnotationActions,
 } from '../annotations/integrations';
 import { ChatDock, useChatDock } from '../chat/ChatDock';
+import { MemoryPanel } from '../memory/MemoryPanel';
 import { useChat } from '../chat/store';
 import { libraryKey } from '../library/api';
 import { openPdf, type PDFDocumentProxy } from './pdf';
@@ -136,6 +137,7 @@ export function ReaderPage() {
         {panel === 'outline' && <OutlinePanel outline={doc.outline} />}
         {panel === 'search' && <SearchPanel docId={doc.id} />}
         {panel === 'annotations' && <AnnotationsPanel docId={doc.id} />}
+        {panel === 'memory' && <MemoryPanel docId={doc.id} />}
         <div className="relative min-w-0 flex-1">
           {!ready ? (
             <p className="text-text-muted p-6">{t.reader.notReady}</p>

@@ -89,3 +89,27 @@ test('Claude points at the page and the marks clear with the next question', asy
   await expect(page.getByTestId('assistant-message')).toHaveCount(2);
   await expect(page.locator('[data-testid="claude-pointers"]')).toHaveCount(0);
 });
+
+// F-MEM-04/05: what Claude saves through its tools shows up, read-only, in "Memoria".
+test('Claude remembers preferences and difficult concepts', async ({ page }, info) => {
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Memoria ${info.project.name}`,
+    tinyPdf('El ciclo de Calvin.'),
+  );
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"]')).toBeVisible();
+  const chat = page.locator('section[aria-label="Claude"]');
+  if (!(await chat.isVisible()))
+    await page.getByRole('button', { name: 'Abrir chat con Claude' }).click();
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  await composer.fill(`Recuerda que prefiero ejemplos prácticos ${info.project.name}`);
+  await composer.press('Enter');
+  await expect(page.getByTestId('assistant-message').last()).toContainText('Respuesta de prueba');
+  await page.goto('/memory');
+  await expect(
+    page.getByText(`que prefiero ejemplos prácticos ${info.project.name}`),
+  ).toBeVisible();
+  await expect(page.getByRole('meter', { name: 'Dominio de Ciclo de Calvin' })).toBeVisible();
+});

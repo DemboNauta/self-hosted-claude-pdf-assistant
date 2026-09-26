@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import {
   ArrowLeft,
+  Brain,
   Highlighter,
   LayoutGrid,
   ListTree,
@@ -122,6 +123,7 @@ const PANELS: { id: Exclude<SidePanel, null>; label: string; icon: LucideIcon }[
   { id: 'outline', label: t.reader.outline, icon: ListTree },
   { id: 'search', label: t.reader.search, icon: Search },
   { id: 'annotations', label: t.annotations.title, icon: Highlighter },
+  { id: 'memory', label: t.memory.panel, icon: Brain },
 ];
 
 export function ReaderToolbar({

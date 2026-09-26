@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { BookOpen, Home, Layers, LogOut, Settings, type LucideIcon } from 'lucide-react';
+import { BookOpen, Brain, Home, Layers, LogOut, Settings, type LucideIcon } from 'lucide-react';
 import { Navigate, NavLink, Outlet } from 'react-router';
 import { useLogout, useSession } from '../features/auth/session';
 import { t } from '../i18n';
@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { to: '/', label: t.nav.home, icon: Home },
   { to: '/library', label: t.nav.library, icon: BookOpen },
   { to: '/review', label: t.nav.review, icon: Layers },
+  { to: '/memory', label: t.nav.memory, icon: Brain },
   { to: '/settings', label: t.nav.settings, icon: Settings },
 ];
 
@@ -67,7 +68,7 @@ export function AppShell() {
 
       <nav
         aria-label={t.nav.mainNavigation}
-        className="border-border bg-surface grid grid-cols-4 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="border-border bg-surface grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         {NAV.map((item) => (
           <NavLink

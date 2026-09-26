@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_CATEGORIES,
   pointerShapeSchema,
   SEARCH_MARK_END,
   SEARCH_MARK_START,
@@ -15,6 +16,7 @@ import { renderPageImage } from '../ingest/extract.js';
 import { newId } from '../services/ids.js';
 import type { AnnotationService } from '../services/annotations.js';
 import type { LibraryService } from '../services/library.js';
+import type { MemoryService } from '../services/memory.js';
 import type { SearchService } from '../services/search.js';
 import type { SettingsService } from '../services/settings.js';
 
@@ -41,6 +43,7 @@ export interface ToolDeps {
   search: SearchService;
   annotations: AnnotationService;
   settings: SettingsService;
+  memory: MemoryService;
 }
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -448,12 +451,152 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/**
+ * Memory tools (SPEC §7 "Memoria"): Claude writes short, de-duplicated notes about
+ * the student and records difficult concepts and exam results.
+ */
+export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
+  const changed = () => ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'memory' });
+  const { memory } = deps;
+  return [
+    tool(
+      'remember',
+      [
+        'Save something worth remembering about the student, concisely (one sentence, in Spanish).',
+        'scope "global": preferences and way of studying (e.g. prefers practical examples); scope "document": what they read, understood, doubts solved, pending points.',
+        'Do not save whole conversations or trivia. Pass replaceId (the [id] shown in your memory) to update an item instead of adding a new one.',
+      ].join(' '),
+      {
+        scope: z.enum(['global', 'document']),
+        docId: z.string().optional(),
+        category: z.enum(MEMORY_CATEGORIES),
+        content: z.string().min(3).max(500),
+        replaceId: z.string().optional(),
+      },
+      tracked(
+        ctx,
+        'remember',
+        () => '',
+        async ({ scope, docId, category, content, replaceId }) => {
+          const r = memory.remember({
+            scope,
+            documentId: scope === 'document' ? (docId ?? ctx.docId) : null,
+            category,
+            content,
+            replaceId,
+          });
+          changed();
+          return text(r.action === 'updated' ? `Updated memory ${r.id}.` : `Saved as ${r.id}.`);
+        },
+      ),
+    ),
+    tool(
+      'mark_concept_difficult',
+      'Record that the student struggles with a concept (a failed answer, a repeated question, a passage marked in red). Use a short, canonical concept name.',
+      {
+        concept: z.string().min(2).max(120),
+        docId: z.string().optional(),
+        page: z.number().int().min(1).optional(),
+        evidence: z.string().min(3).max(500),
+      },
+      tracked(
+        ctx,
+        'mark_concept_difficult',
+        ({ concept }) => `«${concept}»`,
+        async (a) => {
+          const id = memory.markDifficult({
+            concept: a.concept,
+            documentId: a.docId ?? ctx.docId,
+            page: a.page ?? null,
+            evidence: a.evidence,
+          });
+          changed();
+          return text(`Concept recorded (${id}).`);
+        },
+      ),
+    ),
+    tool(
+      'update_concept_mastery',
+      'Raise or lower the mastery (0–1) of a difficult concept by delta (e.g. +0.15 after a good explanation back, -0.1 after confusion).',
+      {
+        conceptId: z.string(),
+        delta: z.number().min(-1).max(1),
+        evidence: z.string().min(3).max(500),
+      },
+      tracked(
+        ctx,
+        'update_concept_mastery',
+        () => '',
+        async ({ conceptId, delta, evidence }) => {
+          try {
+            const m = memory.updateMastery(conceptId, delta, evidence);
+            changed();
+            return text(`Mastery now ${m.toFixed(2)}.`);
+          } catch {
+            return fail(`Unknown concept ${conceptId}.`);
+          }
+        },
+      ),
+    ),
+    tool(
+      'update_progress',
+      'Note what the student has covered in a document (pages, sections, what is left).',
+      { docId: z.string().optional(), note: z.string().min(3).max(500) },
+      tracked(
+        ctx,
+        'update_progress',
+        () => '',
+        async ({ docId, note }) => {
+          memory.remember({
+            scope: 'document',
+            documentId: docId ?? ctx.docId,
+            category: 'progress',
+            content: note,
+          });
+          changed();
+          return text('Progress noted.');
+        },
+      ),
+    ),
+    tool(
+      'record_exam_result',
+      'Record the evaluation of one exam answer (exam mode). Failed concepts become difficult concepts; correct answers raise their mastery.',
+      {
+        docId: z.string().optional(),
+        question: z.string().min(3).max(2000),
+        userAnswer: z.string().max(4000),
+        correct: z.boolean(),
+        concepts: z.array(z.string().min(2).max(120)).max(10),
+        page: z.number().int().min(1).optional(),
+      },
+      tracked(
+        ctx,
+        'record_exam_result',
+        ({ correct }) => (correct ? '✓' : '✗'),
+        async (a) => {
+          memory.recordExam({
+            documentId: a.docId ?? ctx.docId,
+            question: a.question,
+            userAnswer: a.userAnswer,
+            correct: a.correct,
+            concepts: a.concepts,
+            page: a.page ?? null,
+          });
+          changed();
+          return text('Result recorded.');
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
   const tools = [
     ...readingTools(deps, ctx),
     ...pointerTools(deps, ctx),
     ...annotationTools(deps, ctx),
+    ...memoryTools(deps, ctx),
   ];
   return {
     server: createSdkMcpServer({ name: MCP_SERVER_NAME, version: '1.0.0', tools }),

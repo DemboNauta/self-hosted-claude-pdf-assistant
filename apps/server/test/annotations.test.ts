@@ -8,6 +8,7 @@ import type { Db } from '../src/db/client.js';
 import { AnnotationService } from '../src/services/annotations.js';
 import { quoteRects } from '../src/services/anchoring.js';
 import { LibraryService } from '../src/services/library.js';
+import { MemoryService } from '../src/services/memory.js';
 import { SearchService } from '../src/services/search.js';
 import { SettingsService } from '../src/services/settings.js';
 import { authedApp, seedDocument, tempDataDir } from './helpers.js';
@@ -127,6 +128,7 @@ describe('annotations', () => {
       search: new SearchService(db),
       annotations: new AnnotationService(db),
       settings: new SettingsService(db),
+      memory: new MemoryService(db),
     };
     const tool = annotationTools(deps, ctx).find((t) => t.name === 'highlight_key_ideas')!;
     const result = await tool.handler(
