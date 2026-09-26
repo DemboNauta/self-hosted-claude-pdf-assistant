@@ -5,9 +5,13 @@ import { hash } from '@node-rs/argon2';
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
+import type { ServicesFor, UserServices } from '../src/services/scope.js';
+import { OWNER_ID } from '../src/services/users.js';
 import { makePdf } from './fixtures/pdf.js';
 
 export const TEST_PASSWORD = 'correct horse battery staple';
+/** The admin created by migration 0012; its password comes from `passwordHash`. */
+export const TEST_USERNAME = 'admin';
 
 export async function testConfig(overrides: Partial<AppConfig> = {}): Promise<AppConfig> {
   return {
@@ -19,6 +23,7 @@ export async function testConfig(overrides: Partial<AppConfig> = {}): Promise<Ap
     pdfDir: '/tmp/pdfclaudeassistant-test/pdfs',
     coverDir: '/tmp/pdfclaudeassistant-test/covers',
     agentCwd: '/tmp/pdfclaudeassistant-test/agent-cwd',
+    claudeUsersDir: '/tmp/pdfclaudeassistant-test/claude-users',
     passwordHash: await hash(TEST_PASSWORD),
     sessionSecret: 'x'.repeat(32),
     cookieSecure: false,
@@ -43,10 +48,15 @@ export async function authedApp(overrides: Partial<AppConfig> = {}, deps: Partia
   const res = await app.inject({
     method: 'POST',
     url: '/api/auth/login',
-    payload: { password: TEST_PASSWORD },
+    payload: { username: TEST_USERNAME, password: TEST_PASSWORD },
   });
   const cookie = res.cookies.find((c) => c.name === 'pdfclaudeassistant_session')!;
   return { app, config, headers: { cookie: `${cookie.name}=${cookie.value}` } };
+}
+
+/** A user's services, below the HTTP layer (the admin's by default). */
+export function servicesOf(app: FastifyInstance, userId = OWNER_ID): UserServices {
+  return (app as unknown as { pcaServicesFor: ServicesFor }).pcaServicesFor(userId);
 }
 
 /** Creates subject → topic → PDF (one text line array per page) and waits for ingestion. */

@@ -29,6 +29,8 @@ export interface AppConfig {
   pdfDir: string;
   coverDir: string;
   agentCwd: string;
+  /** Claude Code config dirs of the users other than the admin (one per user). */
+  claudeUsersDir: string;
   passwordHash: string;
   sessionSecret: string;
   cookieSecure: boolean;
@@ -56,6 +58,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     pdfDir: path.join(dataDir, 'pdfs'),
     coverDir: path.join(dataDir, 'covers'),
     agentCwd: path.join(dataDir, 'agent-cwd'),
+    claudeUsersDir: path.join(dataDir, 'claude-users'),
     passwordHash: e.APP_PASSWORD_HASH,
     sessionSecret: e.SESSION_SECRET,
     cookieSecure: e.COOKIE_SECURE ?? e.NODE_ENV === 'production',

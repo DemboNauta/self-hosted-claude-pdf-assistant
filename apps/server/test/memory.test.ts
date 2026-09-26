@@ -1,9 +1,8 @@
 import type { MemoryOverview } from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Db } from '../src/db/client.js';
-import { MemoryService } from '../src/services/memory.js';
-import { authedApp, seedDocument, tempDataDir } from './helpers.js';
+import type { MemoryService } from '../src/services/memory.js';
+import { authedApp, seedDocument, tempDataDir, servicesOf } from './helpers.js';
 
 let app: FastifyInstance;
 let headers: Record<string, string>;
@@ -13,7 +12,7 @@ let memory: MemoryService;
 beforeEach(async () => {
   ({ app, headers } = await authedApp(tempDataDir('pca-mem-')));
   ({ docId } = await seedDocument(app, headers, [['Derivadas e integrales.']]));
-  memory = new MemoryService((app as unknown as { pcaDb: Db }).pcaDb);
+  memory = servicesOf(app).memory;
 });
 afterEach(() => app.close());
 

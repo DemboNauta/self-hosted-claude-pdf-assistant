@@ -6,6 +6,7 @@ import type { AppConfig } from '../config.js';
 import { HttpError, notFound } from './errors.js';
 import { newId } from './ids.js';
 import type { LibraryService } from './library.js';
+import { OWNER_ID } from './users.js';
 import { DEFAULT_URL_LIMIT, downloadPdf } from './url-import.js';
 
 /** 32 MiB: well under Cloudflare's 100 MB request limit, small enough to retry cheaply. */
@@ -16,6 +17,8 @@ const PDF_MAGIC = Buffer.from('%PDF-');
 
 interface UploadMeta {
   id: string;
+  /** Missing in uploads started before accounts existed: those were the admin's. */
+  userId?: string;
   topicId: string;
   filename: string;
   size: number;
@@ -34,7 +37,8 @@ export function titleFromFilename(name: string): string {
 /**
  * Resumable chunked uploads (F-ING-01). Each upload is a `<id>.json` metadata file
  * plus a `<id>.part` file that chunks are appended to; the byte count on disk is the
- * source of truth, so an upload survives server restarts and client retries.
+ * source of truth, so an upload survives server restarts and client retries. Every
+ * method takes the id of the user doing the upload; other users' uploads are not found.
  */
 export class UploadService {
   private readonly dir: string;
@@ -42,7 +46,7 @@ export class UploadService {
 
   constructor(
     private readonly config: AppConfig,
-    private readonly library: LibraryService,
+    private readonly libraryFor: (userId: string) => LibraryService,
     private readonly onCreated: (docId: string) => void,
     private readonly allowPrivateUrls = false,
   ) {
@@ -51,18 +55,18 @@ export class UploadService {
     fs.mkdirSync(config.pdfDir, { recursive: true });
   }
 
-  create(input: CreateUpload): UploadSession {
+  create(userId: string, input: CreateUpload): UploadSession {
     const max = this.config.maxUploadBytes;
     if (max !== null && input.size > max) throw new HttpError(413, 'file_too_large');
-    this.library.getTopicOrThrow(input.topicId);
-    const meta: UploadMeta = { id: newId(), ...input };
+    this.libraryFor(userId).getTopicOrThrow(input.topicId);
+    const meta: UploadMeta = { id: newId(), userId, ...input };
     fs.writeFileSync(this.partPath(meta.id), '');
     fs.writeFileSync(this.metaPath(meta.id), JSON.stringify(meta));
     return { id: meta.id, size: meta.size, received: 0, chunkSize: CHUNK_SIZE };
   }
 
-  status(id: string): UploadSession {
-    const meta = this.meta(id);
+  status(userId: string, id: string): UploadSession {
+    const meta = this.meta(userId, id);
     return { id, size: meta.size, received: this.received(id), chunkSize: CHUNK_SIZE };
   }
 
@@ -70,8 +74,13 @@ export class UploadService {
    * Appends a chunk that must start at `offset` (= bytes already stored). On any
    * failure the part file is truncated back, so a retry of the same chunk is safe.
    */
-  async appendChunk(id: string, offset: number, body: Readable): Promise<UploadSession> {
-    const meta = this.meta(id);
+  async appendChunk(
+    userId: string,
+    id: string,
+    offset: number,
+    body: Readable,
+  ): Promise<UploadSession> {
+    const meta = this.meta(userId, id);
     if (this.busy.has(id)) throw new HttpError(409, 'upload_busy');
     const received = this.received(id);
     if (offset !== received) throw new OffsetMismatch(received);
@@ -99,32 +108,33 @@ export class UploadService {
 
     // Reject non-PDFs as soon as the first bytes arrive instead of after the whole file.
     if (offset === 0 && !(await startsWithPdfMagic(this.partPath(id)))) {
-      await this.cancel(id);
+      await this.cancel(userId, id);
       throw new HttpError(415, 'not_a_pdf');
     }
-    return this.status(id);
+    return this.status(userId, id);
   }
 
   /** Turns a fully received upload into a document and hands it to ingestion. */
-  async complete(id: string): Promise<DocumentSummary> {
-    const meta = this.meta(id);
+  async complete(userId: string, id: string): Promise<DocumentSummary> {
+    const meta = this.meta(userId, id);
+    const library = this.libraryFor(userId);
     if (this.busy.has(id)) throw new HttpError(409, 'upload_busy');
     if (this.received(id) !== meta.size) throw new HttpError(409, 'upload_incomplete');
     if (!(await startsWithPdfMagic(this.partPath(id)))) {
-      await this.cancel(id);
+      await this.cancel(userId, id);
       throw new HttpError(415, 'not_a_pdf');
     }
     try {
       // The topic may have been deleted while the file was uploading.
-      this.library.getTopicOrThrow(meta.topicId);
+      library.getTopicOrThrow(meta.topicId);
     } catch (err) {
-      await this.cancel(id);
+      await this.cancel(userId, id);
       throw err;
     }
     const finalPath = path.join(this.config.pdfDir, `${id}.pdf`);
     await fs.promises.rename(this.partPath(id), finalPath);
     await fs.promises.rm(this.metaPath(id), { force: true });
-    const doc = this.library.createDocument({
+    const doc = library.createDocument({
       id,
       topicId: meta.topicId,
       title: titleFromFilename(meta.filename),
@@ -136,8 +146,9 @@ export class UploadService {
   }
 
   /** Downloads a PDF from a URL into a topic (F-ING-02). */
-  async importUrl(topicId: string, url: string): Promise<DocumentSummary> {
-    this.library.getTopicOrThrow(topicId);
+  async importUrl(userId: string, topicId: string, url: string): Promise<DocumentSummary> {
+    const library = this.libraryFor(userId);
+    library.getTopicOrThrow(topicId);
     const id = newId();
     const tmp = path.join(this.dir, `${id}.url.part`);
     const { filename, size } = await downloadPdf(
@@ -152,7 +163,7 @@ export class UploadService {
     }
     const finalPath = path.join(this.config.pdfDir, `${id}.pdf`);
     await fs.promises.rename(tmp, finalPath);
-    const doc = this.library.createDocument({
+    const doc = library.createDocument({
       id,
       topicId,
       title: titleFromFilename(filename),
@@ -164,8 +175,8 @@ export class UploadService {
     return doc;
   }
 
-  async cancel(id: string): Promise<void> {
-    this.meta(id);
+  async cancel(userId: string, id: string): Promise<void> {
+    this.meta(userId, id);
     await fs.promises.rm(this.partPath(id), { force: true });
     await fs.promises.rm(this.metaPath(id), { force: true });
   }
@@ -187,14 +198,17 @@ export class UploadService {
     return removed;
   }
 
-  private meta(id: string): UploadMeta {
+  private meta(userId: string, id: string): UploadMeta {
     // Ids come from the URL: only accept our own alphabet so they can't escape the directory.
     if (!/^[0-9a-z]{1,64}$/.test(id)) throw notFound();
+    let meta: UploadMeta;
     try {
-      return JSON.parse(fs.readFileSync(this.metaPath(id), 'utf8')) as UploadMeta;
+      meta = JSON.parse(fs.readFileSync(this.metaPath(id), 'utf8')) as UploadMeta;
     } catch {
       throw notFound();
     }
+    if ((meta.userId ?? OWNER_ID) !== userId) throw notFound();
+    return meta;
   }
 
   private received(id: string): number {

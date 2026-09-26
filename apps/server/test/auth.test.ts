@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ClaudeStatusService } from '../src/claude/status.js';
-import { TEST_PASSWORD, testConfig } from './helpers.js';
+import { TEST_PASSWORD, TEST_USERNAME, testConfig } from './helpers.js';
 
 let app: FastifyInstance;
 
@@ -16,7 +16,11 @@ beforeEach(async () => {
 afterEach(() => app.close());
 
 const login = (password: string) =>
-  app.inject({ method: 'POST', url: '/api/auth/login', payload: { password } });
+  app.inject({
+    method: 'POST',
+    url: '/api/auth/login',
+    payload: { username: TEST_USERNAME, password },
+  });
 
 describe('auth', () => {
   it('exposes health without a session', async () => {
@@ -41,7 +45,10 @@ describe('auth', () => {
     const headers = { cookie: `${cookie!.name}=${cookie!.value}` };
 
     const session = await app.inject({ url: '/api/auth/session', headers });
-    expect(session.json()).toEqual({ authenticated: true });
+    expect(session.json()).toMatchObject({
+      authenticated: true,
+      user: { username: TEST_USERNAME, role: 'admin', serverClaude: true },
+    });
 
     await app.inject({ method: 'POST', url: '/api/auth/logout', headers });
     const after = await app.inject({ url: '/api/auth/session', headers });

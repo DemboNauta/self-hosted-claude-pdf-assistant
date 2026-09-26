@@ -6,6 +6,7 @@ import {
 } from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { userOf } from '../auth/routes.js';
 import { OffsetMismatch, type UploadService } from '../services/uploads.js';
 import { parse } from './validate.js';
 
@@ -22,14 +23,14 @@ export async function registerUploadRoutes(app: FastifyInstance, uploads: Upload
     );
 
     scope.post('/api/uploads', async (req, reply) =>
-      reply.code(201).send(uploads.create(parse(createUploadSchema, req.body))),
+      reply.code(201).send(uploads.create(userOf(req).id, parse(createUploadSchema, req.body))),
     );
-    scope.get('/api/uploads/:id', async (req) => uploads.status(id(req.params)));
+    scope.get('/api/uploads/:id', async (req) => uploads.status(userOf(req).id, id(req.params)));
     scope.put('/api/uploads/:id', async (req, reply) => {
       const uploadId = id(req.params);
       const { offset } = parse(uploadChunkQuerySchema, req.query);
       try {
-        return await uploads.appendChunk(uploadId, offset, req.body as Readable);
+        return await uploads.appendChunk(userOf(req).id, uploadId, offset, req.body as Readable);
       } catch (err) {
         if (err instanceof OffsetMismatch) {
           return reply.code(409).send({ error: err.code, received: err.received });
@@ -38,14 +39,14 @@ export async function registerUploadRoutes(app: FastifyInstance, uploads: Upload
       }
     });
     scope.post('/api/uploads/:id/complete', async (req, reply) =>
-      reply.code(201).send(await uploads.complete(id(req.params))),
+      reply.code(201).send(await uploads.complete(userOf(req).id, id(req.params))),
     );
     scope.post('/api/documents/import-url', async (req, reply) => {
       const { topicId, url } = parse(importUrlSchema, req.body);
-      return reply.code(201).send(await uploads.importUrl(topicId, url));
+      return reply.code(201).send(await uploads.importUrl(userOf(req).id, topicId, url));
     });
     scope.delete('/api/uploads/:id', async (req, reply) => {
-      await uploads.cancel(id(req.params));
+      await uploads.cancel(userOf(req).id, id(req.params));
       return reply.code(204).send();
     });
   });

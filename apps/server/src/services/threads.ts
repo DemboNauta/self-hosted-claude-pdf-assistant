@@ -52,7 +52,10 @@ export function scopeOf(row: ThreadRow): ThreadScope {
 
 /** Chat threads and their messages (F-CHAT-07/08). */
 export class ThreadService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
 
   list(scope: ThreadScope): ThreadSummary[] {
     return this.db
@@ -67,7 +70,7 @@ export class ThreadService {
         messageCount: sql<number>`(SELECT count(*) FROM messages m WHERE m.thread_id = threads.id)`,
       })
       .from(threads)
-      .where(eq(scopeColumn(scope.kind), scope.id))
+      .where(and(eq(threads.userId, this.userId), eq(scopeColumn(scope.kind), scope.id)))
       .orderBy(desc(threads.updatedAt))
       .all();
   }
@@ -75,13 +78,15 @@ export class ThreadService {
   create(scope: ThreadScope): ThreadSummary {
     const row = {
       id: newId(),
+      userId: this.userId,
       documentId: scope.kind === 'document' ? scope.id : null,
       topicId: scope.kind === 'topic' ? scope.id : null,
       subjectId: scope.kind === 'subject' ? scope.id : null,
       updatedAt: now(),
     };
     this.db.insert(threads).values(row).run();
-    return { ...row, title: null, createdAt: row.updatedAt, messageCount: 0 };
+    const { userId: _owner, ...summary } = row;
+    return { ...summary, title: null, createdAt: row.updatedAt, messageCount: 0 };
   }
 
   /** The scope's active thread: the most recently used one, created if missing. */
@@ -90,13 +95,13 @@ export class ThreadService {
   }
 
   get(id: string): ThreadRow {
-    const row = this.db.select().from(threads).where(eq(threads.id, id)).get();
+    const row = this.db.select().from(threads).where(this.own(id)).get();
     if (!row) throw notFound();
     return row;
   }
 
   delete(id: string) {
-    const res = this.db.delete(threads).where(eq(threads.id, id)).run();
+    const res = this.db.delete(threads).where(this.own(id)).run();
     if (res.changes === 0) throw notFound();
   }
 
@@ -191,7 +196,7 @@ export class ThreadService {
       .select({ message: messages })
       .from(messages)
       .innerJoin(threads, eq(threads.id, messages.threadId))
-      .where(eq(threads.documentId, documentId))
+      .where(and(eq(threads.userId, this.userId), eq(threads.documentId, documentId)))
       .orderBy(asc(messages.threadId), asc(messages.createdAt), asc(sql`messages.rowid`))
       .all()
       .map((r) => toMessage(r.message));
@@ -235,6 +240,10 @@ export class ThreadService {
       .set({ claudeSessionId: sessionId })
       .where(eq(threads.id, threadId))
       .run();
+  }
+
+  private own(id: string) {
+    return and(eq(threads.id, id), eq(threads.userId, this.userId));
   }
 
   private getMessage(id: string): MessageRow {

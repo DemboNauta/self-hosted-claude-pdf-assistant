@@ -39,7 +39,10 @@ const now = () => new Date().toISOString();
 
 /** Claude's visual schemas: stored as they are made, listed per PDF and overall. */
 export class DiagramService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
 
   private query() {
     return this.db
@@ -60,7 +63,10 @@ export class DiagramService {
 
   /** Newest first; diagrams of PDFs in the trash are hidden until they are restored. */
   list(documentId?: string): Diagram[] {
-    const live = or(isNull(diagrams.documentId), isNull(documents.deletedAt));
+    const live = and(
+      eq(diagrams.userId, this.userId),
+      or(isNull(diagrams.documentId), isNull(documents.deletedAt)),
+    );
     return this.query()
       .where(documentId ? and(eq(diagrams.documentId, documentId), live) : live)
       .orderBy(desc(diagrams.updatedAt))
@@ -68,7 +74,9 @@ export class DiagramService {
   }
 
   get(id: string): Diagram {
-    const row = this.query().where(eq(diagrams.id, id)).get();
+    const row = this.query()
+      .where(and(eq(diagrams.id, id), eq(diagrams.userId, this.userId)))
+      .get();
     if (!row) throw notFound();
     return row;
   }
@@ -76,10 +84,17 @@ export class DiagramService {
   create(input: NewDiagram): Diagram {
     const problem = checkDiagramSource(input.source);
     if (problem) throw new HttpError(400, 'invalid_diagram');
+    if (input.documentId) this.requireDocument(input.documentId);
     const id = newId();
     this.db
       .insert(diagrams)
-      .values({ id, ...input, source: input.source.trim(), updatedAt: now() })
+      .values({
+        id,
+        userId: this.userId,
+        ...input,
+        source: input.source.trim(),
+        updatedAt: now(),
+      })
       .run();
     return this.get(id);
   }
@@ -104,5 +119,14 @@ export class DiagramService {
   delete(id: string) {
     this.get(id);
     this.db.delete(diagrams).where(eq(diagrams.id, id)).run();
+  }
+
+  private requireDocument(id: string) {
+    const doc = this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.userId, this.userId)))
+      .get();
+    if (!doc) throw notFound();
   }
 }

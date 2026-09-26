@@ -5,6 +5,7 @@ import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ClaudeAuthMethod, ClaudeStatus } from '@pdfclaudeassistant/shared';
 import { FORBIDDEN_CLAUDE_ENV_VARS } from '../auth-guard.js';
 import type { AppConfig } from '../config.js';
+import type { ClaudeAuth } from './credentials.js';
 import { classifyAssistantError, classifyErrorText } from './errors.js';
 import { baseAgentOptions } from './options.js';
 
@@ -12,8 +13,9 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 const PROBE_TIMEOUT_MS = 60 * 1000;
 
 /** Which subscription credential Claude Code will use (SPEC §6.2). */
-export function detectAuthMethod(config: AppConfig): ClaudeAuthMethod {
-  if (config.hasOauthToken) return 'oauth_token';
+export function detectAuthMethod(config: AppConfig, auth: ClaudeAuth | null): ClaudeAuthMethod {
+  if (!auth) return 'none';
+  if (auth.kind === 'token' || config.hasOauthToken) return 'oauth_token';
   const home = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
   return fs.existsSync(path.join(home, '.credentials.json')) ? 'interactive_login' : 'none';
 }
@@ -21,38 +23,61 @@ export function detectAuthMethod(config: AppConfig): ClaudeAuthMethod {
 type QueryFn = typeof query;
 
 /**
- * Health check for the Claude connection. Each probe is a real (tiny) request that
- * counts against the subscription, so results are cached.
+ * Health check for each user's Claude connection. Each probe is a real (tiny) request
+ * that counts against that user's subscription, so results are cached per user.
  */
 export class ClaudeStatusService {
-  private cached: ClaudeStatus | null = null;
-  private inFlight: Promise<ClaudeStatus> | null = null;
+  private readonly cached = new Map<string, ClaudeStatus>();
+  private readonly inFlight = new Map<string, Promise<ClaudeStatus>>();
 
   constructor(
     private readonly config: AppConfig,
     private readonly runQuery: QueryFn = query,
   ) {}
 
-  async get(refresh = false): Promise<ClaudeStatus> {
-    const fresh =
-      this.cached && Date.now() - new Date(this.cached.checkedAt).getTime() < CACHE_TTL_MS;
-    if (fresh && !refresh) return this.cached!;
-    this.inFlight ??= this.probe().finally(() => (this.inFlight = null));
-    this.cached = await this.inFlight;
-    return this.cached;
+  async get(userId: string, auth: ClaudeAuth | null, refresh = false): Promise<ClaudeStatus> {
+    if (!auth) {
+      this.cached.delete(userId);
+      return {
+        state: 'not_configured',
+        authMethod: 'none',
+        model: null,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+    const cached = this.cached.get(userId);
+    const fresh = cached && Date.now() - new Date(cached.checkedAt).getTime() < CACHE_TTL_MS;
+    if (fresh && !refresh) return cached;
+    let probe = this.inFlight.get(userId);
+    if (!probe) {
+      probe = this.probe(auth).finally(() => this.inFlight.delete(userId));
+      this.inFlight.set(userId, probe);
+    }
+    const status = await probe;
+    this.cached.set(userId, status);
+    return status;
   }
 
   /** Lets the chat report auth/limit failures without an extra probe. */
-  report(status: Omit<ClaudeStatus, 'checkedAt' | 'authMethod'>): void {
-    this.cached = {
+  report(
+    userId: string,
+    auth: ClaudeAuth,
+    status: Omit<ClaudeStatus, 'checkedAt' | 'authMethod'>,
+  ): void {
+    this.cached.set(userId, {
       ...status,
-      authMethod: detectAuthMethod(this.config),
+      authMethod: detectAuthMethod(this.config, auth),
       checkedAt: new Date().toISOString(),
-    };
+    });
   }
 
-  private async probe(): Promise<ClaudeStatus> {
-    const authMethod = detectAuthMethod(this.config);
+  /** Forgets a user's cached state (their token changed). */
+  forget(userId: string): void {
+    this.cached.delete(userId);
+  }
+
+  private async probe(auth: ClaudeAuth): Promise<ClaudeStatus> {
+    const authMethod = detectAuthMethod(this.config, auth);
     const base = { authMethod, checkedAt: new Date().toISOString() };
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), PROBE_TIMEOUT_MS);
@@ -62,7 +87,7 @@ export class ClaudeStatusService {
       const q = this.runQuery({
         prompt: 'Reply with the single word: ok',
         options: {
-          ...baseAgentOptions(this.config),
+          ...baseAgentOptions(this.config, auth),
           abortController,
           maxTurns: 1,
           persistSession: false,

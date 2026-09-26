@@ -6,8 +6,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AppConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
-import { LibraryService } from '../src/services/library.js';
-import { authedApp } from './helpers.js';
+import { purgeExpiredTrash } from '../src/services/library.js';
+import { authedApp, servicesOf } from './helpers.js';
 
 let app: FastifyInstance;
 let headers: Record<string, string>;
@@ -30,7 +30,7 @@ const tree = async () => (await req('GET', '/api/library')).body as LibraryTree;
 
 /** Inserts a document row directly (upload is covered by the ingest tests). */
 function addDoc(topicId: string, title = 'Doc'): string {
-  const service = new LibraryService(dbOf(app), config);
+  const service = servicesOf(app).library;
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pca-')), 'a.pdf');
   fs.writeFileSync(file, '%PDF-1.4');
   const id = `d${Math.random().toString(36).slice(2, 10)}`;
@@ -143,12 +143,14 @@ describe('library', () => {
       id: string;
     };
     const docId = addDoc(t.id);
-    const service = new LibraryService(dbOf(app), config);
+    const service = servicesOf(app).library;
     const file = service.getRow(docId).filePath;
     await req('DELETE', `/api/documents/${docId}`);
 
-    expect(service.purgeExpiredTrash(new Date(Date.now() + 29 * 86400_000))).toBe(0);
-    expect(service.purgeExpiredTrash(new Date(Date.now() + 31 * 86400_000))).toBe(1);
+    const purge = (days: number) =>
+      purgeExpiredTrash(dbOf(app), config, new Date(Date.now() + days * 86400_000));
+    expect(purge(29)).toBe(0);
+    expect(purge(31)).toBe(1);
     expect(fs.existsSync(file)).toBe(false);
   });
 });

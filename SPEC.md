@@ -24,6 +24,8 @@ Una web personal, alojada en mi VPS, para **estudiar y aprender a partir de PDFs
 
 **Usuario:** uno solo (yo). No hay registro, ni multiusuario, ni roles.
 
+> **Actualización 2026-09-26 (decisión del propietario):** la app pasa a ser multiusuario. Cada usuario tiene sus datos aislados y conecta su propia suscripción de Claude con su token; las cuentas las crea el administrador (yo) o se crean con un enlace de invitación de un solo uso. Detalles en `docs/DECISIONS.md`.
+
 **Uso principal:** estudio, aprendizaje e investigación sobre PDFs de todo tipo (apuntes, libros, papers, documentación).
 
 **Dispositivos:** ordenador, tablet y móvil por igual → diseño responsive real, no "adaptado".

@@ -6,25 +6,35 @@ import {
   type PaletteEntry,
   type StudyTimerSettings,
 } from '@pdfclaudeassistant/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { settings } from '../db/schema.js';
+import { userSettings } from '../db/schema.js';
 
-/** User settings stored as JSON values in the `settings` table (SPEC §4 "Ajustes"). */
+/** One user's settings, stored as JSON values in `user_settings` (SPEC §4 "Ajustes"). */
 export class SettingsService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
 
-  private read<T>(key: string): T | undefined {
-    const row = this.db.select().from(settings).where(eq(settings.key, key)).get();
+  read<T>(key: string): T | undefined {
+    const row = this.db
+      .select()
+      .from(userSettings)
+      .where(and(eq(userSettings.userId, this.userId), eq(userSettings.key, key)))
+      .get();
     return row ? (JSON.parse(row.value) as T) : undefined;
   }
 
-  private write(key: string, value: unknown) {
+  write(key: string, value: unknown) {
     const json = JSON.stringify(value);
     this.db
-      .insert(settings)
-      .values({ key, value: json })
-      .onConflictDoUpdate({ target: settings.key, set: { value: json } })
+      .insert(userSettings)
+      .values({ userId: this.userId, key, value: json })
+      .onConflictDoUpdate({
+        target: [userSettings.userId, userSettings.key],
+        set: { value: json },
+      })
       .run();
   }
 

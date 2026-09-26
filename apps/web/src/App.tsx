@@ -1,6 +1,8 @@
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { AppShell } from './components/AppShell';
 import { LoginPage } from './features/auth/LoginPage';
+import { SignupPage } from './features/auth/SignupPage';
+import { AdminPage } from './features/admin/AdminPage';
 import { HomePage } from './features/home/HomePage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { DiagramsPage } from './features/diagrams/DiagramsPage';
@@ -16,6 +18,7 @@ import { useApplyTheme } from './lib/theme';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/invite/:token', element: <SignupPage /> },
   {
     element: <AppShell />,
     children: [
@@ -32,6 +35,7 @@ const router = createBrowserRouter([
       { path: 'chat/subject/:id', element: <ScopeChatPage kind="subject" /> },
       { path: 'stats', element: <StatsPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'admin', element: <AdminPage /> },
     ],
   },
 ]);

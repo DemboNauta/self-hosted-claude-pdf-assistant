@@ -4,16 +4,8 @@ import type { PDFArray } from 'pdf-lib';
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { annotationTools, type ToolContext } from '../src/claude/tools.js';
-import type { Db } from '../src/db/client.js';
-import { AnnotationService } from '../src/services/annotations.js';
 import { quoteRects } from '../src/services/anchoring.js';
-import { LibraryService } from '../src/services/library.js';
-import { MemoryService } from '../src/services/memory.js';
-import { DiagramService } from '../src/services/diagrams.js';
-import { ReviewService } from '../src/services/review.js';
-import { SearchService } from '../src/services/search.js';
-import { SettingsService } from '../src/services/settings.js';
-import { authedApp, seedDocument, tempDataDir } from './helpers.js';
+import { authedApp, seedDocument, tempDataDir, servicesOf } from './helpers.js';
 
 let app: FastifyInstance;
 let headers: Record<string, string>;
@@ -154,7 +146,6 @@ describe('annotations', () => {
   });
 
   it('lets Claude propose key ideas that the student accepts or rejects', async () => {
-    const db = (app as unknown as { pcaDb: Db }).pcaDb;
     const events: unknown[] = [];
     const ctx: ToolContext = {
       threadId: 't',
@@ -164,16 +155,7 @@ describe('annotations', () => {
       emit: (e) => events.push(e),
       record: () => {},
     };
-    const deps = {
-      db,
-      library: new LibraryService(db, {} as never),
-      search: new SearchService(db),
-      annotations: new AnnotationService(db),
-      settings: new SettingsService(db),
-      memory: new MemoryService(db),
-      review: new ReviewService(db),
-      diagrams: new DiagramService(db),
-    };
+    const deps = servicesOf(app);
     const tool = annotationTools(deps, ctx).find((t) => t.name === 'highlight_key_ideas')!;
     const result = await tool.handler(
       {

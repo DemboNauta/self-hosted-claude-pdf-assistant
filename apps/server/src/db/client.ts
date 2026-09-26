@@ -20,9 +20,15 @@ export function openDb(dbPath: string): Db {
   if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const sqlite = new Database(dbPath);
   sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('foreign_keys = ON');
   sqlite.pragma('busy_timeout = 5000');
   const db = drizzle(sqlite, { schema });
+  // Foreign keys stay off while migrating: SQLite refuses to add a REFERENCES column
+  // with a default otherwise (0012 gives existing rows to the admin that way). The
+  // check afterwards makes sure no migration left a dangling reference.
+  sqlite.pragma('foreign_keys = OFF');
   migrate(db, { migrationsFolder });
+  const dangling = sqlite.pragma('foreign_key_check') as unknown[];
+  if (dangling.length) throw new Error(`Migration left ${dangling.length} broken reference(s)`);
+  sqlite.pragma('foreign_keys = ON');
   return db;
 }

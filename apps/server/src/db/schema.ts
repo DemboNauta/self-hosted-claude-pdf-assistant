@@ -1,19 +1,86 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 const createdAt = () =>
   text('created_at')
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`);
 
+/** Server-wide values (not per user), e.g. which APP_PASSWORD_HASH was last applied. */
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
 
-/** Login sessions for the single user; only a SHA-256 of the cookie token is stored. */
+/**
+ * Accounts (multi-user). The admin is the server owner: the account the migration
+ * created for the pre-existing data, whose password comes from APP_PASSWORD_HASH and
+ * who alone may use the server's own Claude credentials. Everyone else brings their
+ * own Claude token, stored encrypted.
+ */
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  /** Lower-case login name. */
+  username: text('username').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role', { enum: ['admin', 'user'] })
+    .notNull()
+    .default('user'),
+  /** AES-256-GCM encrypted CLAUDE_CODE_OAUTH_TOKEN (see services/secrets.ts). */
+  claudeTokenEnc: text('claude_token_enc'),
+  disabledAt: text('disabled_at'),
+  lastLoginAt: text('last_login_at'),
+  createdAt: createdAt(),
+});
+
+/** Single-use sign-up links created by the admin; only a SHA-256 of the token is stored. */
+export const invitations = sqliteTable('invitations', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  /** Free text to remember who the link is for. */
+  note: text('note'),
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+  expiresAt: text('expires_at').notNull(),
+  usedAt: text('used_at'),
+  usedBy: text('used_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+/**
+ * Owner of a row. Existing rows were given to the admin by migration 0012 (the column
+ * has that id as its database default only so the migration could add it).
+ */
+const userId = () =>
+  text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' });
+
+/** Per-user settings as JSON values (palette, model, study timer, daily brief). */
+export const userSettings = sqliteTable(
+  'user_settings',
+  {
+    userId: userId(),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
+/** Login sessions; only a SHA-256 of the cookie token is stored. */
 export const authSessions = sqliteTable('auth_sessions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: userId(),
   tokenHash: text('token_hash').notNull().unique(),
   createdAt: createdAt(),
   lastSeenAt: text('last_seen_at').notNull(),
@@ -21,18 +88,24 @@ export const authSessions = sqliteTable('auth_sessions', {
   userAgent: text('user_agent'),
 });
 
-export const subjects = sqliteTable('subjects', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  color: text('color').notNull(),
-  position: integer('position').notNull(),
-  createdAt: createdAt(),
-});
+export const subjects = sqliteTable(
+  'subjects',
+  {
+    id: text('id').primaryKey(),
+    userId: userId(),
+    name: text('name').notNull(),
+    color: text('color').notNull(),
+    position: integer('position').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('subjects_user_idx').on(t.userId, t.position)],
+);
 
 export const topics = sqliteTable(
   'topics',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     subjectId: text('subject_id')
       .notNull()
       .references(() => subjects.id, { onDelete: 'cascade' }),
@@ -47,6 +120,7 @@ export const documents = sqliteTable(
   'documents',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     /** Null only while in the trash after its topic was deleted. */
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
     title: text('title').notNull(),
@@ -73,6 +147,7 @@ export const documents = sqliteTable(
   (t) => [
     index('documents_topic_idx').on(t.topicId),
     index('documents_deleted_idx').on(t.deletedAt),
+    index('documents_user_idx').on(t.userId, t.lastOpenedAt),
   ],
 );
 
@@ -103,6 +178,7 @@ export const threads = sqliteTable(
   'threads',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
     /** Topic or subject threads (F-CHAT-08) ask about several PDFs at once. */
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'cascade' }),
@@ -150,6 +226,7 @@ export const annotations = sqliteTable(
   'annotations',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     documentId: text('document_id')
       .notNull()
       .references(() => documents.id, { onDelete: 'cascade' }),
@@ -177,6 +254,7 @@ export const memoryItems = sqliteTable(
   'memory_items',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     scope: text('scope', { enum: ['global', 'document'] }).notNull(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
     category: text('category').notNull(),
@@ -184,7 +262,7 @@ export const memoryItems = sqliteTable(
     createdAt: createdAt(),
     updatedAt: text('updated_at').notNull(),
   },
-  (t) => [index('memory_scope_idx').on(t.scope, t.documentId)],
+  (t) => [index('memory_scope_idx').on(t.userId, t.scope, t.documentId)],
 );
 
 /** Concepts the student finds hard, with a 0–1 mastery level (F-MEM-03). */
@@ -192,6 +270,7 @@ export const concepts = sqliteTable(
   'concepts',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     name: text('name').notNull(),
     /** Lower-cased, accent-free name used to merge duplicates. */
     key: text('key').notNull(),
@@ -203,7 +282,7 @@ export const concepts = sqliteTable(
     lastSeenAt: text('last_seen_at').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index('concepts_key_idx').on(t.key)],
+  (t) => [index('concepts_key_idx').on(t.userId, t.key)],
 );
 
 /** Exam answers evaluated by Claude (F-CHAT-03 exam mode, statistics). */
@@ -211,6 +290,7 @@ export const examResults = sqliteTable(
   'exam_results',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
     question: text('question').notNull(),
     userAnswer: text('user_answer').notNull(),
@@ -218,7 +298,10 @@ export const examResults = sqliteTable(
     conceptsJson: text('concepts_json').notNull().default('[]'),
     createdAt: createdAt(),
   },
-  (t) => [index('exam_results_document_idx').on(t.documentId, t.createdAt)],
+  (t) => [
+    index('exam_results_document_idx').on(t.documentId, t.createdAt),
+    index('exam_results_user_idx').on(t.userId),
+  ],
 );
 
 /** Reading time per document and day (F-VIS-05, statistics). */
@@ -226,13 +309,17 @@ export const studySessions = sqliteTable(
   'study_sessions',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: userId(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
     /** Local calendar day, YYYY-MM-DD. */
     day: text('day').notNull(),
     seconds: integer('seconds').notNull().default(0),
     updatedAt: text('updated_at').notNull(),
   },
-  (t) => [uniqueIndex('study_sessions_doc_day_idx').on(t.documentId, t.day)],
+  (t) => [
+    uniqueIndex('study_sessions_doc_day_idx').on(t.documentId, t.day),
+    index('study_sessions_user_idx').on(t.userId, t.day),
+  ],
 );
 
 /** Flashcards with FSRS scheduling state (F-REV-01/02). */
@@ -240,6 +327,7 @@ export const flashcards = sqliteTable(
   'flashcards',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
     page: integer('page'),
     conceptId: text('concept_id').references(() => concepts.id, { onDelete: 'set null' }),
@@ -255,13 +343,14 @@ export const flashcards = sqliteTable(
     createdAt: createdAt(),
     updatedAt: text('updated_at').notNull(),
   },
-  (t) => [index('flashcards_due_idx').on(t.status, t.dueAt)],
+  (t) => [index('flashcards_due_idx').on(t.userId, t.status, t.dueAt)],
 );
 
 export const reviews = sqliteTable(
   'reviews',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: userId(),
     flashcardId: text('flashcard_id')
       .notNull()
       .references(() => flashcards.id, { onDelete: 'cascade' }),
@@ -271,7 +360,7 @@ export const reviews = sqliteTable(
     /** Local calendar day, for streaks. */
     day: text('day').notNull(),
   },
-  (t) => [index('reviews_day_idx').on(t.day)],
+  (t) => [index('reviews_day_idx').on(t.userId, t.day)],
 );
 
 /** Visual schemas drawn by Claude (Mermaid source), listed per PDF and on "Esquemas". */
@@ -279,6 +368,7 @@ export const diagrams = sqliteTable(
   'diagrams',
   {
     id: text('id').primaryKey(),
+    userId: userId(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     source: text('source').notNull(),
@@ -287,7 +377,10 @@ export const diagrams = sqliteTable(
     createdAt: createdAt(),
     updatedAt: text('updated_at').notNull(),
   },
-  (t) => [index('diagrams_document_idx').on(t.documentId, t.createdAt)],
+  (t) => [
+    index('diagrams_document_idx').on(t.documentId, t.createdAt),
+    index('diagrams_user_idx').on(t.userId, t.updatedAt),
+  ],
 );
 
 /** Study-timer focus blocks (F-FOCUS-02); kept when the PDF is deleted. */
@@ -296,6 +389,7 @@ export const focusSessions = sqliteTable(
   {
     /** Client-generated block id, so recording the same block twice is a no-op. */
     id: text('id').primaryKey(),
+    userId: userId(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
     /** Local calendar day, YYYY-MM-DD. */
     day: text('day').notNull(),
@@ -304,5 +398,5 @@ export const focusSessions = sqliteTable(
     method: text('method').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index('focus_sessions_day_idx').on(t.day)],
+  (t) => [index('focus_sessions_day_idx').on(t.userId, t.day)],
 );

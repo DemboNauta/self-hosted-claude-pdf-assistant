@@ -2,7 +2,9 @@
 
 Self-hosted study assistant: PDF viewer + Claude (via the owner's Claude
 subscription through the Claude Agent SDK, never an API key) with annotations,
-memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
+memory and spaced repetition. Multi-user since 2026-09-26 (isolated accounts, each
+with their own Claude subscription token; see `docs/DECISIONS.md`). `SPEC.md` is the
+source of truth.
 **Start every session by reading `docs/README.md`** (reading order; `docs/HANDOFF.md`
 has owner preferences and next steps) and update `docs/HANDOFF.md` at the end.
 
@@ -47,6 +49,11 @@ has owner preferences and next steps) and update `docs/HANDOFF.md` at the end.
   to disk, long books handled via per-page text + virtualised viewer.
 
 Other owner decisions:
+
+- Multi-user: every user has their own Claude token (never the owner's
+  subscription for others), accounts come from the admin or single-use
+  invitation links, data is fully isolated per user (every service is scoped by
+  `user_id`), and the pre-existing data belongs to the admin.
 
 - Deleting a subject/topic that still has PDFs moves those PDFs to the trash
   (30 days); restoring asks for a destination topic. A minimal trash view ships

@@ -14,14 +14,20 @@ export class StatsService {
   constructor(
     private readonly db: Db,
     private readonly library: LibraryService,
+    private readonly userId: string,
   ) {}
 
   /** `today` is the viewer's local day (YYYY-MM-DD). */
   stats(today: string): StudyStats {
     const c = this.db.$client;
+    const u = this.userId;
     const perDaySeconds = new Map(
       (
-        c.prepare('SELECT day, SUM(seconds) AS s FROM study_sessions GROUP BY day').all() as {
+        c
+          .prepare(
+            'SELECT day, SUM(seconds) AS s FROM study_sessions WHERE user_id = ? GROUP BY day',
+          )
+          .all(u) as {
           day: string;
           s: number;
         }[]
@@ -29,7 +35,9 @@ export class StatsService {
     );
     const perDayReviews = new Map(
       (
-        c.prepare('SELECT day, COUNT(*) AS n FROM reviews GROUP BY day').all() as {
+        c
+          .prepare('SELECT day, COUNT(*) AS n FROM reviews WHERE user_id = ? GROUP BY day')
+          .all(u) as {
           day: string;
           n: number;
         }[]
@@ -39,9 +47,9 @@ export class StatsService {
       (
         c
           .prepare(
-            'SELECT day, SUM(seconds) AS s, SUM(completed) AS n FROM focus_sessions GROUP BY day',
+            'SELECT day, SUM(seconds) AS s, SUM(completed) AS n FROM focus_sessions WHERE user_id = ? GROUP BY day',
           )
-          .all() as { day: string; s: number; n: number }[]
+          .all(u) as { day: string; s: number; n: number }[]
       ).map((r) => [r.day, r]),
     );
     const active = (day: string) =>
@@ -70,16 +78,18 @@ export class StatsService {
     }
     const since = days[0]!.day;
     const recent = c
-      .prepare('SELECT COUNT(*) AS n, SUM(rating > 1) AS ok FROM reviews WHERE day >= ?')
-      .get(since) as { n: number; ok: number | null };
+      .prepare(
+        'SELECT COUNT(*) AS n, SUM(rating > 1) AS ok FROM reviews WHERE user_id = ? AND day >= ?',
+      )
+      .get(u, since) as { n: number; ok: number | null };
 
     const secondsByDoc = new Map(
       (
         c
           .prepare(
-            'SELECT document_id AS id, SUM(seconds) AS s FROM study_sessions GROUP BY document_id',
+            'SELECT document_id AS id, SUM(seconds) AS s FROM study_sessions WHERE user_id = ? GROUP BY document_id',
           )
-          .all() as {
+          .all(u) as {
           id: string;
           s: number;
         }[]
@@ -117,17 +127,24 @@ export class StatsService {
         `SELECT COUNT(*) AS total,
                 SUM(due_at <= ?) AS due,
                 SUM(json_extract(fsrs_json, '$.stability') >= 21) AS mature
-           FROM flashcards WHERE status = 'active'`,
+           FROM flashcards WHERE user_id = ? AND status = 'active'`,
       )
-      .get(now) as { total: number; due: number | null; mature: number | null };
+      .get(now, u) as { total: number; due: number | null; mature: number | null };
     const concepts = c
       .prepare(
-        'SELECT COUNT(*) AS total, SUM(mastery < 0.4) AS weak, SUM(mastery >= 0.8) AS mastered, AVG(mastery) AS avg FROM concepts',
+        'SELECT COUNT(*) AS total, SUM(mastery < 0.4) AS weak, SUM(mastery >= 0.8) AS mastered, AVG(mastery) AS avg FROM concepts WHERE user_id = ?',
       )
-      .get() as { total: number; weak: number | null; mastered: number | null; avg: number | null };
+      .get(u) as {
+      total: number;
+      weak: number | null;
+      mastered: number | null;
+      avg: number | null;
+    };
     const exams = c
-      .prepare('SELECT COUNT(*) AS total, SUM(correct) AS correct FROM exam_results')
-      .get() as { total: number; correct: number | null };
+      .prepare(
+        'SELECT COUNT(*) AS total, SUM(correct) AS correct FROM exam_results WHERE user_id = ?',
+      )
+      .get(u) as { total: number; correct: number | null };
 
     return {
       streakDays: streak,

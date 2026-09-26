@@ -3,15 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildTurnPrompt } from '../src/claude/prompt.js';
 import { diagramTools, type ToolContext, type ToolDeps } from '../src/claude/tools.js';
-import type { Db } from '../src/db/client.js';
-import { AnnotationService } from '../src/services/annotations.js';
-import { checkDiagramSource, DiagramService } from '../src/services/diagrams.js';
-import { LibraryService } from '../src/services/library.js';
-import { MemoryService } from '../src/services/memory.js';
-import { ReviewService } from '../src/services/review.js';
-import { SearchService } from '../src/services/search.js';
-import { SettingsService } from '../src/services/settings.js';
-import { authedApp, seedDocument, tempDataDir } from './helpers.js';
+import { checkDiagramSource } from '../src/services/diagrams.js';
+import { authedApp, seedDocument, tempDataDir, servicesOf } from './helpers.js';
 
 let app: FastifyInstance;
 let headers: Record<string, string>;
@@ -24,7 +17,6 @@ const MINDMAP = 'mindmap\n  root((Fotosíntesis))\n    Fase luminosa\n    Ciclo 
 beforeEach(async () => {
   ({ app, headers } = await authedApp(tempDataDir('pca-diag-')));
   ({ docId } = await seedDocument(app, headers, [['La fotosíntesis.'], ['El ciclo de Calvin.']]));
-  const db = (app as unknown as { pcaDb: Db }).pcaDb;
   events = [];
   const ctx: ToolContext = {
     threadId: 't',
@@ -34,16 +26,7 @@ beforeEach(async () => {
     emit: (e) => events.push(e),
     record: () => {},
   };
-  const deps: ToolDeps = {
-    db,
-    library: new LibraryService(db, {} as never),
-    search: new SearchService(db),
-    annotations: new AnnotationService(db),
-    settings: new SettingsService(db),
-    memory: new MemoryService(db),
-    review: new ReviewService(db),
-    diagrams: new DiagramService(db),
-  };
+  const deps: ToolDeps = servicesOf(app);
   tools = diagramTools(deps, ctx);
 });
 afterEach(() => app.close());

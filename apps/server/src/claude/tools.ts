@@ -11,21 +11,11 @@ import {
 } from '@pdfclaudeassistant/shared';
 import { and, asc, between, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Db } from '../db/client.js';
 import { pages } from '../db/schema.js';
 import { renderPageImage } from '../ingest/extract.js';
 import { newId } from '../services/ids.js';
-import type { AnnotationService } from '../services/annotations.js';
-import {
-  checkDiagramSource,
-  MAX_DIAGRAM_SOURCE,
-  type DiagramService,
-} from '../services/diagrams.js';
-import type { LibraryService } from '../services/library.js';
-import type { MemoryService } from '../services/memory.js';
-import type { ReviewService } from '../services/review.js';
-import type { SearchService } from '../services/search.js';
-import type { SettingsService } from '../services/settings.js';
+import { checkDiagramSource, MAX_DIAGRAM_SOURCE } from '../services/diagrams.js';
+import type { UserServices } from '../services/scope.js';
 
 export const MCP_SERVER_NAME = 'pca';
 /** Max pages returned by one `get_pages` call (SPEC §7). */
@@ -46,16 +36,11 @@ export interface ToolContext {
   record: (event: ToolEvent) => void;
 }
 
-export interface ToolDeps {
-  db: Db;
-  library: LibraryService;
-  search: SearchService;
-  annotations: AnnotationService;
-  settings: SettingsService;
-  memory: MemoryService;
-  review: ReviewService;
-  diagrams: DiagramService;
-}
+/** The services of the user whose turn this is: tools only see that user's data. */
+export type ToolDeps = Pick<
+  UserServices,
+  'db' | 'library' | 'search' | 'annotations' | 'settings' | 'memory' | 'review' | 'diagrams'
+>;
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
 const fail = (t: string): CallToolResult => ({
