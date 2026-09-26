@@ -3,8 +3,8 @@
 Self-hosted study assistant: PDF viewer + Claude (via the owner's Claude
 subscription through the Claude Agent SDK, never an API key) with annotations,
 memory and spaced repetition. Single user. `SPEC.md` is the source of truth.
-**Start every session by reading `docs/HANDOFF.md`** (context from previous
-sessions: owner preferences, open questions, next steps) and update it at the end.
+**Start every session by reading `docs/README.md`** (reading order; `docs/HANDOFF.md`
+has owner preferences and next steps) and update `docs/HANDOFF.md` at the end.
 
 ## Conventions (SPEC §15)
 
@@ -64,58 +64,38 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 
 ## Status
 
-- **Phase 0 — skeleton: implemented, not yet accepted on the VPS.** Monorepo,
-  Fastify server with login, SQLite + Drizzle migrations, API-key guard +
-  filtered agent env, `GET /api/claude/status`, React shell with Settings →
-  Conexión con Claude, Docker Compose + Caddy, CI (lint, format, typecheck,
-  unit, e2e, Docker builds).
-- Deviations: API routes live under `/api`; the web build is served by the
-  `caddy` service (no separate `web` container) — this changes with the
-  deployment work below.
-- **Phase 1 — read and ask: in progress** (owner chose to start before
-  accepting Phase 0).
-  - Done: library API (subjects/topics/documents, reorder, move, trash,
-    reading position), ingestion (worker-thread PDF.js extraction with
-    normalised text coordinates, page sizes, outline, cover, FTS5),
-    resumable chunked uploads (`/api/uploads`, 32 MiB chunks) and the library
-    UI (F-LIB-01..03: tree + card grid, drag & drop, upload progress, minimal
-    trash). The reader route `/read/:id` is still a placeholder.
-  - Remaining, in order: PDF viewer (F-VIS-01/02, F-LIB-04), annotations
-    (F-ANN-01/02/05/07), Claude chat backend (WS `/ws/chat`, MCP tools
-    `get_document_info`, `get_pages`, `search_library`, citations
-    `[[cite:docId:page|"quote"]]`), chat UI with selection menu and citation
-    jumps (F-CHAT-01/02/04/05/07, F-VIS-03), rest of the Phase 1 e2e test.
+Phases 0–3 of SPEC §13 are implemented and tested (unit + Playwright with a fake
+Claude). Phase 0 is not yet accepted on the VPS, and the deployment milestone is
+in progress. Per-feature status: `docs/FEATURES.md`. Next steps:
+`docs/HANDOFF.md` and `docs/DEPLOYMENT.md`.
 
-## Deployment (pending, owner decisions)
+## Where to look
 
-- The owner runs deploys from their Windows PC over SSH (same approach as
-  their other project's `deploy.ps1`: host read from an environment variable,
-  code copied with scp, never touching the server's `.env` or `data/`).
-- The VPS already runs its own **Caddy outside Docker** on 80/443, so this app
-  must not start its own Caddy there: the server container should also serve
-  the web build and listen only on `127.0.0.1:<port>`; the host Caddy
-  reverse-proxies the app's subdomain to it (WebSockets included). Keep the
-  bundled Caddy as an optional compose profile.
-- Docker is not installed on the VPS yet; the owner will install it.
-- **Never commit the domain, the VPS IP or any host detail**: they live only in
-  the VPS `.env`, the host Caddyfile and local environment variables.
-- The domain is on Cloudflare (proxied). The owner chose **chunked uploads**
-  so files pass the 100 MB request limit without capping PDF size.
+- `docs/README.md`: reading order for a new session.
+- `docs/DECISIONS.md`: owner decisions and provisional choices. Open decisions
+  4 (semantic search: not done), 5 (voice: Web Speech API) and 7 (no usage
+  counter) were settled provisionally by Claude.
+- `docs/ARCHITECTURE.md`, `docs/CLAUDE_INTEGRATION.md`, `docs/API.md`,
+  `docs/DATA_MODEL.md`: references.
+- `docs/DEVELOPMENT.md`: Windows quirks (`corepack pnpm`, Playwright pnpm shim,
+  preview-pane launch configs, LF endings) and gotchas.
+
+## Deployment (summary)
+
+- Deploys run from the owner's Windows PC over SSH with `scripts/deploy.ps1`
+  (to be written: host from an env var, code copied with scp, never touching the
+  server's `.env` or `data/`).
+- The VPS runs its own **Caddy outside Docker**. The app container serves web,
+  API and WS on `127.0.0.1:${APP_PORT}` only; the bundled Caddy is an optional
+  compose profile.
+- **Never commit the domain, the VPS IP or any host detail.**
+- The domain is on Cloudflare (proxied). Uploads are chunked, so there is no
+  100 MB problem.
 
 ## Notes
 
-- Per-turn context (current page, selection, mode) must go in the user message,
-  not the system prompt: the SDK snapshots the system prompt on the first
-  request and reuses it on resume.
-- Dev workers: `src/ingest/service.ts` boots the TypeScript worker through a
-  tiny eval'd bootstrap that registers tsx (Node's native type stripping
-  otherwise skips `.js` → `.ts` resolution). The bundle uses
-  `dist/ingest-worker.js`. Do not add a `createRequire` banner to esbuild.
-- On the owner's Windows PC `pnpm` is only available as `corepack pnpm`
-  (nested `pnpm` calls in scripts fail). `.claude/launch.json` (uncommitted)
-  starts `server` (:3000, no watch) and `web` (:5173) for the preview pane;
-  restart `server` after server changes. For Playwright, put a `pnpm.cmd`
-  shim (`@corepack pnpm %*`) on PATH. Local `.env` uses `DATA_DIR=../../data`.
-- The previous cloud session could not build the full Docker image (apt and
-  prebuilt binaries blocked there) nor reach the VPS; CI's `docker` job builds
-  both images.
+- Per-turn context (current page, selection, mode, memory) must go in the user
+  message, not the system prompt: the SDK snapshots the system prompt on the
+  first request and reuses it on resume.
+- Never read, copy or modify the owner's local `data/` (his real PDFs). Test
+  with the e2e server or a temp `DATA_DIR`.
