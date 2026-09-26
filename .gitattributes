@@ -1,0 +1,8 @@
+# The repo is LF everywhere (Prettier enforces it); shell scripts must stay LF even on
+# Windows checkouts with core.autocrlf=true, or bash on the VPS fails.
+* text=auto eol=lf
+*.sh text eol=lf
+*.pdf binary
+*.png binary
+*.webp binary
+*.ico binary

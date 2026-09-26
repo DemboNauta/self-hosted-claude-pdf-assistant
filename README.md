@@ -14,47 +14,98 @@ Single user, runs on your own VPS. See [`SPEC.md`](SPEC.md) for the full product
 
 ## Deploying on a VPS
 
-Requirements: Docker with Compose, a domain whose DNS points at the VPS, and ports
-80/443 open.
+The app runs as **one container** (`pdfclaudeassistant-server`) that serves the web
+app, the API and the chat WebSocket. It listens only on `127.0.0.1:${APP_PORT}`; a
+reverse proxy on the host publishes it over HTTPS.
 
-```bash
-git clone https://github.com/DemboNauta/self-hosted-claude-pdf-assistant.git
-cd self-hosted-claude-pdf-assistant
-cp .env.example .env
+Requirements on the VPS: Docker with the Compose plugin, a reverse proxy (the
+host's own Caddy is assumed below; see [bundled Caddy](#without-a-reverse-proxy-bundled-caddy)
+otherwise) and a DNS name pointing at the VPS.
 
-# The container runs as uid 1000; give it the data directory.
-mkdir -p data/claude-home && sudo chown -R 1000:1000 data
+### Deploying from your PC (`scripts/deploy.ps1`)
 
-docker compose build
+Deploys run from a Windows PC over SSH. The script packs the **committed** code
+(`git archive HEAD`), copies it with `scp`, swaps it into the deploy directory,
+rebuilds and restarts the container, and waits for `/api/health`. It never
+touches the server's `.env` or `data/`.
+
+```powershell
+$env:PCA_DEPLOY_HOST = 'root@<VPS_HOST>'   # required
+# optional: $env:PCA_DEPLOY_DIR (default /opt/pdfclaudeassistant)
+#           $env:PCA_SSH_KEY    (default $env:USERPROFILE\.ssh\id_ed25519)
+.\scripts\deploy.ps1
 ```
 
-Fill in `.env`:
+It refuses to run with uncommitted changes (pass `-AllowDirty` to deploy `HEAD`
+anyway). Database migrations run automatically when the server starts.
 
-| Variable                  | Value                                                                     |
-| ------------------------- | ------------------------------------------------------------------------- |
-| `DOMAIN`                  | Your domain, e.g. `estudio.example.com`. Caddy gets the HTTPS cert.       |
-| `APP_PASSWORD_HASH`       | Output of the command below, **inside single quotes** (the hash has `$`). |
-| `SESSION_SECRET`          | `openssl rand -hex 32`                                                    |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Subscription token (method 1 below). Leave empty for method 2.            |
-| `CLAUDE_MODEL`            | Optional model alias/ID. Empty uses Claude Code's default.                |
-| `MAX_UPLOAD_MB`           | `0` = no limit.                                                           |
-| `OCR_LANGS`               | Tesseract languages, default `spa+eng`.                                   |
+### First-time setup
 
-Generate the password hash:
+1. Install Docker and the Compose plugin on the VPS.
+2. Run `.\scripts\deploy.ps1` once. It copies the code to
+   `/opt/pdfclaudeassistant`, creates `data/` (owned by uid 1000, the container
+   user) and stops because `.env` does not exist yet.
+3. On the VPS, create `.env`:
 
-```bash
-docker compose run --rm --no-deps server node dist/hash-password.js 'your password'
-# -> APP_PASSWORD_HASH='$argon2id$v=19$...'   paste this line into .env
+   ```bash
+   cd /opt/pdfclaudeassistant
+   cp .env.example .env
+   docker compose build server
+   docker compose run --rm --no-deps server node dist/hash-password.js 'your password'
+   # -> APP_PASSWORD_HASH='$argon2id$v=19$...'   paste this line into .env
+   ```
+
+   | Variable                  | Value                                                                     |
+   | ------------------------- | ------------------------------------------------------------------------- |
+   | `APP_PORT`                | A free loopback port on the host (the proxy points here). Default 3000.   |
+   | `APP_PASSWORD_HASH`       | Output of the command above, **inside single quotes** (the hash has `$`). |
+   | `SESSION_SECRET`          | `openssl rand -hex 32`                                                    |
+   | `CLAUDE_CODE_OAUTH_TOKEN` | Subscription token (method 1 below). Leave empty for method 2.            |
+   | `CLAUDE_MODEL`            | Optional model alias/ID. Empty uses Claude Code's default.                |
+   | `MAX_UPLOAD_MB`           | `0` = no limit.                                                           |
+   | `OCR_LANGS`               | Tesseract languages, default `spa+eng`.                                   |
+
+4. Run `.\scripts\deploy.ps1` again: it builds, starts and health-checks the app.
+5. Add the site to the host Caddy: copy the block from
+   [`deploy/host-caddy.example`](deploy/host-caddy.example) into the Caddyfile
+   (your domain, and your `APP_PORT` if it is not 3000), then
+   `systemctl reload caddy`. Behind Cloudflare (proxied), use SSL/TLS mode
+   **Full (strict)**; uploads go in 32 MiB chunks, below Cloudflare's body limit.
+6. Open `https://your-domain`, log in and check **Ajustes → Conexión con Claude**:
+   it should say _Conectado con tu suscripción_.
+
+### Backups
+
+`docker compose exec -T server node dist/backup.js` writes
+`data/backups/pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz` (database snapshot,
+PDFs and covers; the Claude session in `data/claude-home` is left out).
+**Ajustes** also has a download button. A daily backup at 04:00 with cron
+(`crontab -e` on the VPS):
+
+```cron
+0 4 * * * cd /opt/pdfclaudeassistant && docker compose exec -T server node dist/backup.js >> data/backups/cron.log 2>&1
 ```
 
-Then connect Claude (next section) and start:
+Copy `data/backups/` somewhere off the VPS from time to time, and delete old
+archives when they pile up.
+
+### Operating
+
+- Logs: `docker compose logs -f server` (lines prefixed `[PdfClaudeAssistant]`).
+- Deployed revision: `cat /opt/pdfclaudeassistant/REVISION`.
+- Everything that matters lives in `data/` (SQLite, PDFs, covers, Claude
+  session). Deploys keep it; never delete it.
+- Host-specific compose tweaks go in `docker-compose.override.yml` next to
+  `docker-compose.yml`; deploys keep that file too.
+
+### Without a reverse proxy (bundled Caddy)
+
+On a host with nothing on ports 80/443, the optional bundled Caddy gets the
+HTTPS certificate itself. Set `DOMAIN` in `.env` and start both services:
 
 ```bash
-docker compose up -d
+docker compose --profile caddy up -d
 ```
-
-Open `https://your-domain`, log in, and go to **Ajustes → Conexión con Claude**:
-it should say _Conectado con tu suscripción_.
 
 ## Connecting Claude to your subscription
 
@@ -96,13 +147,8 @@ or method 2. Usage limits reset on your subscription's schedule.
 
 ## Updating
 
-```bash
-git pull
-docker compose build
-docker compose up -d
-```
-
-Database migrations run automatically on startup.
+Commit, then run `.\scripts\deploy.ps1` from your PC (see above). Database
+migrations run automatically on startup.
 
 ## Development
 

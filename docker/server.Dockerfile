@@ -39,7 +39,9 @@ ENV NODE_ENV=production \
     CLAUDE_CONFIG_DIR=/data/claude-home
 WORKDIR /app
 COPY --from=build /out ./
-RUN mkdir -p /data/claude-home && chown -R node:node /data
+# Native modules come prebuilt: fail the build (and CI) if one does not load here.
+RUN node -e "const D=require('better-sqlite3');new D(':memory:').prepare('select 1').get();require('@napi-rs/canvas').createCanvas(1,1);require('@node-rs/argon2')" \
+ && mkdir -p /data/claude-home && chown -R node:node /data
 USER node
 VOLUME ["/data"]
 EXPOSE 3000

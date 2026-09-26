@@ -49,80 +49,47 @@
   - Settings has a download button (`/api/backup`).
   - `claude-home/` is excluded.
 
-## To do (next session)
+## Deploy tooling (done 2026-09-26)
 
-1. **`scripts/deploy.ps1`** (PowerShell 5.1 compatible):
-   - Parameters and env vars: `PCA_DEPLOY_HOST` (e.g. `root@<VPS_HOST>`,
-     required), `PCA_DEPLOY_DIR` (default `/opt/pdfclaudeassistant`),
-     `PCA_SSH_KEY` (default `$env:USERPROFILE\.ssh\id_ed25519`),
-     `PCA_APP_PORT` (default 3000, used for the health check).
-   - Steps:
-     1. Fail if the working tree is dirty, or warn.
-     2. `git archive --format=tar.gz -o $env:TEMP\pca.tgz HEAD`.
-     3. `scp` it to `/tmp`.
-     4. `ssh`:
-        - `mkdir -p $DIR`;
-        - extract into `$DIR` with `tar -xzf` **excluding** `.env` and `data`
-          (they are not in the archive anyway: `.env` and `data/*` are
-          gitignored);
-        - `cd $DIR && docker compose up -d --build server`;
-        - `docker image prune -f`.
-     5. Poll `ssh … curl -fsS http://127.0.0.1:$PORT/api/health` for up to
-        about 60 s.
-     6. Print the result.
-   - First run: if `$DIR/.env` is missing, stop with instructions (see the
-     first-time setup below).
-2. **`deploy/host-caddy.example`**: block to paste into the VPS Caddyfile:
-   ```caddyfile
-   <APP_DOMAIN> {
-   	encode zstd gzip
-   	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-   	reverse_proxy 127.0.0.1:3000
-   }
-   ```
-   Then `caddy reload` / `systemctl reload caddy`. Caddy passes WebSockets
-   through and has no body limit by default.
-   - With Cloudflare proxied, the Cloudflare SSL mode should be "Full (strict)"
-     (Caddy gets a real certificate), or use a Cloudflare origin certificate.
-     Confirm with the owner.
-3. **README**: replace "Deploying on a VPS" (it still describes bundled Caddy on
-   80/443) with:
-   - the host-Caddy flow;
-   - the optional bundled-Caddy profile;
-   - `deploy.ps1` usage;
-   - the backup cron line, e.g.
-     `0 4 * * * cd /opt/pdfclaudeassistant && docker compose exec -T server node dist/backup.js`.
-   - Keep the "Connecting Claude" section (token or interactive login).
-4. **CI** (`.github/workflows/ci.yml`, `docker` job): keep building
-   `docker/server.Dockerfile` (it now includes the web).
-   `docker/caddy.Dockerfile` is tiny now; building it is optional.
-5. Update `CLAUDE.md` "Status" and "Deployment" to match.
+- `scripts/deploy.ps1` (PowerShell 5.1, ASCII only):
+  - settings: `PCA_DEPLOY_HOST` (required), `PCA_DEPLOY_DIR` (default
+    `/opt/pdfclaudeassistant`), `PCA_SSH_KEY` (default `~\.ssh\id_ed25519`);
+  - refuses uncommitted tracked changes unless `-AllowDirty`;
+  - `git archive HEAD` → `scp` to `/tmp` together with `scripts/deploy-remote.sh`
+    (converted to LF) → `ssh … bash /tmp/pca-deploy-remote.sh <dir> <rev>`.
+- `scripts/deploy-remote.sh` (runs on the VPS):
+  - refuses a non-empty directory that is not this app (checks
+    `name: pdfclaudeassistant` in `docker-compose.yml`);
+  - unpacks aside, removes the old code, keeps `.env`, `data/` and
+    `docker-compose.override.yml`, writes `REVISION`;
+  - first deploy: creates `data/claude-home` owned by uid 1000; without `.env`
+    it stops with exit code 3 and `deploy.ps1` prints the setup steps;
+  - `docker compose build server && up -d server`, `docker image prune -f`,
+    then polls `http://127.0.0.1:$APP_PORT/api/health` (APP_PORT read from
+    `.env`) for 90 s and prints the logs on failure.
+  - Tried locally with fake `docker`/`curl` (first run, redeploy keeping
+    `.env`/`data`, refusal of a foreign directory). **Not yet run against the
+    VPS.**
+- `deploy/host-caddy.example`: block for the host Caddyfile (Cloudflare SSL mode
+  "Full (strict)").
+- README "Deploying on a VPS": host-Caddy flow, first-time setup, backups with
+  the cron line, operating notes, optional bundled Caddy.
+- The image build checks that the native modules (better-sqlite3, canvas,
+  argon2) load, so CI catches a broken prebuilt binary. CI still builds both
+  images (the caddy one is tiny).
+- `.gitattributes` keeps everything LF (shell scripts included) on any checkout.
 
-## First-time setup on the VPS (for the README / to guide the owner)
+## Next: the first deploy (with the owner)
 
-```bash
-# Docker + compose plugin installed; then:
-mkdir -p /opt/pdfclaudeassistant && cd /opt/pdfclaudeassistant
-# (first deploy.ps1 run copies the code here)
-cp .env.example .env
-mkdir -p data/claude-home && chown -R 1000:1000 data
-docker compose build server
-docker compose run --rm --no-deps server node dist/hash-password.js '<password>'
-#   -> paste APP_PASSWORD_HASH='…' (single quotes) into .env
-openssl rand -hex 32            # -> SESSION_SECRET
-# CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token` on any machine
-# APP_PORT: a free loopback port (other services already use some)
-docker compose up -d server
-curl -fsS http://127.0.0.1:${APP_PORT:-3000}/api/health
-```
+Needs from the owner (never commit them): the SSH host, a free loopback
+`APP_PORT` on the VPS, the app's domain, and confirmation that Cloudflare's SSL
+mode is "Full (strict)". Docker must be installed on the VPS.
 
-Then add the host Caddy block, reload Caddy and open `https://<APP_DOMAIN>`.
-
-**Phase 0 acceptance:**
+Steps are in the README ("First-time setup"). Then Phase 0 acceptance:
 
 - HTTPS login works.
 - Settings → Conexión con Claude says "Conectado con tu suscripción".
-- With `ANTHROPIC_…_KEY` set in `.env`, the server refuses to start. Remove it
+- With `ANTHROPIC_API_KEY` set in `.env`, the server refuses to start. Remove it
   afterwards.
 
 ## Operating notes

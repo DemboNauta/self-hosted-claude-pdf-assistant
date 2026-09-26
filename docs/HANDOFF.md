@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26 (annotation windows and drawing questions). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-26 (annotation windows, drawing questions, deploy tooling). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -46,26 +46,21 @@ Session of 2026-09-26: the owner tried the app locally (fresh clone, see
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.
 
-The **deployment** milestone was left in the middle:
+The **deployment** milestone:
 
-- Done: the server serves the built web app (`WEB_DIR`, SPA fallback,
-  `src/routes/web.ts`). The Docker image builds web + server and runs as one
-  container. Compose publishes only `127.0.0.1:${APP_PORT:-3000}`. The bundled
-  Caddy is an optional compose profile (`--profile caddy`). Committed as
-  `968c351`.
-- **Not done yet** (next steps, in order). Details in `DEPLOYMENT.md`:
-  1. `scripts/deploy.ps1`.
-  2. `deploy/host-caddy.example`.
-  3. Rewrite the README "Deploying on a VPS" section. It still describes the old
-     bundled-Caddy-only setup.
-  4. Document the backup cron (`node dist/backup.js`).
-  5. Update the CI `docker` job: the caddy image no longer builds the web.
-     Consider building only the server image, plus the caddy image as an
-     optional profile.
-  6. Try a real image build. Docker is not installed on the owner's PC, so it
-     is untested. CI builds it.
-  7. Refresh `CLAUDE.md` "Status" (it is out of date; point it to
-     `docs/FEATURES.md`).
+- Done:
+  - The server serves the built web app (`WEB_DIR`, SPA fallback,
+    `src/routes/web.ts`). The Docker image builds web + server and runs as one
+    container. Compose publishes only `127.0.0.1:${APP_PORT:-3000}`. The bundled
+    Caddy is an optional compose profile (`--profile caddy`).
+  - Deploy tooling (2026-09-26): `scripts/deploy.ps1` + `scripts/deploy-remote.sh`,
+    `deploy/host-caddy.example`, README "Deploying on a VPS" (with the backup
+    cron), `CLAUDE.md` status. Details in `DEPLOYMENT.md`.
+- **Next:** the first real deploy, together with the owner. Ask for the SSH
+  host, a free loopback `APP_PORT`, the domain (none of them go in the repo) and
+  whether Docker is installed on the VPS. The Docker image has never been built
+  on the PC (no Docker there); check the CI `docker` job after pushing, since
+  the image build now also checks that the native modules load.
 - After deployment: the owner validates Phase 0 acceptance on the VPS (HTTPS
   login, "Conectado con tu suscripción", server refuses to start with an API
   key), then real use.

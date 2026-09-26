@@ -65,9 +65,10 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 ## Status
 
 Phases 0–3 of SPEC §13 are implemented and tested (unit + Playwright with a fake
-Claude). Phase 0 is not yet accepted on the VPS, and the deployment milestone is
-in progress. Per-feature status: `docs/FEATURES.md`. Next steps:
-`docs/HANDOFF.md` and `docs/DEPLOYMENT.md`.
+Claude). The deployment tooling is ready (`scripts/deploy.ps1`,
+`deploy/host-caddy.example`) but the first deploy to the VPS, and with it the
+Phase 0 acceptance, has not happened yet. Per-feature status: `docs/FEATURES.md`.
+Next steps: `docs/HANDOFF.md` and `docs/DEPLOYMENT.md`.
 
 ## Where to look
 
@@ -83,8 +84,9 @@ in progress. Per-feature status: `docs/FEATURES.md`. Next steps:
 ## Deployment (summary)
 
 - Deploys run from the owner's Windows PC over SSH with `scripts/deploy.ps1`
-  (to be written: host from an env var, code copied with scp, never touching the
-  server's `.env` or `data/`).
+  (host from `PCA_DEPLOY_HOST`, committed code copied with scp, the server side
+  in `scripts/deploy-remote.sh`; it never touches the server's `.env`, `data/`
+  or `docker-compose.override.yml`).
 - The VPS runs its own **Caddy outside Docker**. The app container serves web,
   API and WS on `127.0.0.1:${APP_PORT}` only; the bundled Caddy is an optional
   compose profile.
