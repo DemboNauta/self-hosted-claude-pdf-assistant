@@ -15,6 +15,7 @@ import {
 } from '../annotations/integrations';
 import { ChatDock, useChatDock } from '../chat/ChatDock';
 import { MemoryPanel } from '../memory/MemoryPanel';
+import { FlashcardDialog, flashcardAction } from '../review/FlashcardDialog';
 import { useChat } from '../chat/store';
 import { libraryKey } from '../library/api';
 import { openPdf, type PDFDocumentProxy } from './pdf';
@@ -180,7 +181,8 @@ export function ReaderPage() {
         </div>
         <ChatDock />
       </div>
-      <SelectionMenu root={scroller} extra={selectionActions} />
+      <SelectionMenu root={scroller} extra={[flashcardAction(doc.id), ...selectionActions]} />
+      <FlashcardDialog />
     </div>
   );
 }

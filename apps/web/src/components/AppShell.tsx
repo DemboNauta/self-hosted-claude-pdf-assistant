@@ -1,5 +1,14 @@
 import clsx from 'clsx';
-import { BookOpen, Brain, Home, Layers, LogOut, Settings, type LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  BookOpen,
+  Brain,
+  Home,
+  Layers,
+  LogOut,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 import { Navigate, NavLink, Outlet } from 'react-router';
 import { useLogout, useSession } from '../features/auth/session';
 import { t } from '../i18n';
@@ -8,6 +17,8 @@ interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Only in the desktop sidebar (the phone bar keeps five entries). */
+  desktopOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -15,6 +26,7 @@ const NAV: NavItem[] = [
   { to: '/library', label: t.nav.library, icon: BookOpen },
   { to: '/review', label: t.nav.review, icon: Layers },
   { to: '/memory', label: t.nav.memory, icon: Brain },
+  { to: '/stats', label: t.nav.stats, icon: BarChart3, desktopOnly: true },
   { to: '/settings', label: t.nav.settings, icon: Settings },
 ];
 
@@ -70,7 +82,7 @@ export function AppShell() {
         aria-label={t.nav.mainNavigation}
         className="border-border bg-surface grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
-        {NAV.map((item) => (
+        {NAV.filter((item) => !item.desktopOnly).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

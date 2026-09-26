@@ -4,6 +4,8 @@ import { LoginPage } from './features/auth/LoginPage';
 import { HomePage } from './features/home/HomePage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { MemoryPage } from './features/memory/MemoryPage';
+import { ReviewPage } from './features/review/ReviewPage';
+import { StatsPage } from './features/stats/StatsPage';
 import { TrashPage } from './features/library/TrashPage';
 import { ReaderPage } from './features/reader/ReaderPage';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -20,6 +22,8 @@ const router = createBrowserRouter([
       { path: 'library/trash', element: <TrashPage /> },
       { path: 'read/:documentId', element: <ReaderPage /> },
       { path: 'memory', element: <MemoryPage /> },
+      { path: 'review', element: <ReviewPage /> },
+      { path: 'stats', element: <StatsPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

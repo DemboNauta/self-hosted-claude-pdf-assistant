@@ -1,6 +1,7 @@
 import type { Flashcard, ReviewQueue, ReviewRating } from '@pdfclaudeassistant/shared';
 import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
-import { createEmptyCard, fsrs, Rating, State, type Card, type Grade } from 'ts-fsrs';
+import type { State } from 'ts-fsrs';
+import { createEmptyCard, fsrs, Rating, type Card, type Grade } from 'ts-fsrs';
 import type { Db } from '../db/client.js';
 import { documents, flashcards, reviews, topics } from '../db/schema.js';
 import { notFound } from './errors.js';

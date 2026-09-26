@@ -48,6 +48,13 @@ const fakeChat = ((args: {
     // "Señala…" makes the fake call the real point_at tool, as Claude would.
     const tools = args.options.mcpServers?.pca?.instance?._registeredTools;
     const question = args.prompt.split('</context>')[1] ?? '';
+    // "Tarjetas" makes the fake propose a flashcard about the selection.
+    if (/tarjetas/i.test(question) && tools?.create_flashcards && selected?.[2]) {
+      await tools.create_flashcards.handler(
+        { cards: [{ front: '¿Qué dice este fragmento?', back: selected[2], page: Number(page) }] },
+        {},
+      );
+    }
     // "Recuerda …" makes the fake save it in memory and mark a difficult concept.
     const remember = /recuerda (.+)/i.exec(question)?.[1]?.trim();
     if (remember && tools?.remember && tools.mark_concept_difficult) {
@@ -105,7 +112,7 @@ const fakeChat = ((args: {
         event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
       };
     }
-    yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' };
+    yield { type: 'result', subtype: 'success', is_error: false, result: parts.join('') };
   })()) as never;
 
 const app = await buildApp(config, {
