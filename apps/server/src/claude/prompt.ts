@@ -28,7 +28,10 @@ Every statement about a document's content must carry a citation in exactly this
 - Code in fenced blocks with a language tag.
 
 # Acting on the document
-When the tools are available you can point at things on the page while explaining (arrows, circles, boxes, highlights, labels) and record what the student finds hard in memory. Point only when it genuinely helps to see where something is; keep marks few and precise. Prefer text anchors with a short exact quote; use rectangles (normalised 0–1 page coordinates, origin top-left) for figures.`;
+When the tools are available you can point at things on the page while explaining (arrows, circles, boxes, highlights, labels) and record what the student finds hard in memory. Point only when it genuinely helps to see where something is; keep marks few and precise. Prefer text anchors with a short exact quote; use rectangles (normalised 0–1 page coordinates, origin top-left) for figures.
+
+# Diagrams
+When the student asks for a schema, concept map or diagram (any mode), make it with create_diagram and show it with [[diagram:ID]]; to change one from this conversation use update_diagram with its id.`;
 
 const MODE_INSTRUCTIONS: Record<StudyMode, string> = {
   free: 'Answer the question.',
@@ -38,6 +41,12 @@ const MODE_INSTRUCTIONS: Record<StudyMode, string> = {
   exam: 'Mode "Exam": act as an examiner on the requested scope (default: the pages around the current one). Ask ONE question at a time — vary between multiple choice, short answer and open questions — and wait for the answer. When the student answers, evaluate it, explain mistakes with citations, record the result and any failed concept with your memory tools, then ask the next question. If the student asks to stop, give a brief summary of how it went.',
   relate:
     'Mode "Relate": find connections between this passage or topic and other documents in the library — search the same subject first, then the whole library. Cite both documents for each connection and say how they relate (same idea, example, contradiction, prerequisite…). If nothing relevant exists, say so.',
+  diagram: `Mode "Diagram": build a visual schema of the requested scope (the selection, the page range, or the whole document if nothing narrower is given).
+- Read the scope first. For a whole document, start from its outline and read the pages in batches; capture the structure and the key ideas, not every detail.
+- Pick the Mermaid type that fits the content: "mindmap" for a concept overview around one central idea, "flowchart TD" for hierarchies (topic → sections → ideas), "flowchart LR" for processes, sequences or cause and effect.
+- Mermaid rules: node labels short (at most about 8 words), in the document's language; in flowcharts write every label in double quotes, e.g. A["Label"] and edge labels as -->|"causes"|; 10 to 40 nodes; no click, style, classDef, linkStyle, %%{init}%% or HTML.
+- Save it with create_diagram (title, mermaid, fromPage/toPage), then answer with [[diagram:ID]] on its own line followed by two or three sentences on how to read it, with citations to the pages it comes from.
+- If the student asks to change a diagram from this conversation, call update_diagram with its id instead of creating a new one, and show it again with [[diagram:ID]].`,
 };
 
 const SUMMARY_FORMATS: Record<SummaryFormat, string> = {
@@ -121,6 +130,10 @@ export function buildTurnPrompt(input: {
         .filter(Boolean)
         .join('\n'),
     );
+  }
+  if (context.pageRange) {
+    const { from, to } = context.pageRange;
+    lines.push(from === to ? `Scope: page ${from}.` : `Scope: pages ${from} to ${to}.`);
   }
   lines.push(MODE_INSTRUCTIONS[mode]);
   if (mode === 'summary' && context.summaryFormat)

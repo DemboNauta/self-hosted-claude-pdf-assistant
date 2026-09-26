@@ -9,6 +9,7 @@ import { AnnotationService } from '../src/services/annotations.js';
 import { quoteRects } from '../src/services/anchoring.js';
 import { LibraryService } from '../src/services/library.js';
 import { MemoryService } from '../src/services/memory.js';
+import { DiagramService } from '../src/services/diagrams.js';
 import { ReviewService } from '../src/services/review.js';
 import { SearchService } from '../src/services/search.js';
 import { SettingsService } from '../src/services/settings.js';
@@ -171,6 +172,7 @@ describe('annotations', () => {
       settings: new SettingsService(db),
       memory: new MemoryService(db),
       review: new ReviewService(db),
+      diagrams: new DiagramService(db),
     };
     const tool = annotationTools(deps, ctx).find((t) => t.name === 'highlight_key_ideas')!;
     const result = await tool.handler(

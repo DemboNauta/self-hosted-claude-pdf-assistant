@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 import { queryClient } from '../../lib/queryClient';
 import { setPointerActions } from '../chat/ChatPanel';
 import { chatSocket, useChat } from '../chat/store';
+import { refreshDiagrams } from '../diagrams/api';
 import type { SelectionAction } from '../reader/SelectionMenu';
 import { useReader } from '../reader/store';
 import { invalidateReview } from '../review/api';
@@ -104,6 +105,7 @@ export function installAnnotationIntegrations() {
   setPointerActions((messageId) => <SavePointersButton messageId={messageId} />);
   chatSocket.subscribe((event) => {
     if (event.type === 'data_changed' && event.scope === 'flashcards') invalidateReview();
+    if (event.type === 'data_changed' && event.scope === 'diagrams') void refreshDiagrams();
     if (event.type === 'data_changed' && event.scope === 'memory') {
       void queryClient.invalidateQueries({ queryKey: ['memory'] });
     }

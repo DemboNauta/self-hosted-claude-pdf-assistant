@@ -92,6 +92,8 @@ interface ChatState {
   error: ChatError | null;
   mode: StudyMode;
   summaryFormat: SummaryFormat;
+  /** Pages of the next diagram ("Esquema visual"); null = the whole document. */
+  diagramRange: { from: number; to: number } | null;
   /** Selection attached to the next question ("Preguntar" in the selection menu). */
   attached: TextSelection | null;
   /** Area marked with drawings, attached to the next question (instead of a selection). */
@@ -111,6 +113,7 @@ interface ChatState {
   stop: () => void;
   setMode: (mode: StudyMode) => void;
   setSummaryFormat: (format: SummaryFormat) => void;
+  setDiagramRange: (range: { from: number; to: number } | null) => void;
   attach: (selection: TextSelection | null) => void;
   attachMark: (mark: DrawingMark | null) => void;
   dismissError: () => void;
@@ -132,6 +135,7 @@ export const useChat = create<ChatState>((set, get) => ({
   error: null,
   mode: 'free',
   summaryFormat: 'outline',
+  diagramRange: null,
   attached: null,
   attachedMark: null,
   pointers: [],
@@ -204,6 +208,9 @@ export const useChat = create<ChatState>((set, get) => ({
       ...(selection ? { selection } : {}),
       ...(mark && scope.kind === 'document' ? { mark } : {}),
       ...(mode === 'summary' ? { summaryFormat: get().summaryFormat } : {}),
+      ...(mode === 'diagram' && !selection && scope.kind === 'document' && get().diagramRange
+        ? { pageRange: get().diagramRange! }
+        : {}),
     };
     const optimistic: ChatMessage = {
       id: clientId,
@@ -233,6 +240,7 @@ export const useChat = create<ChatState>((set, get) => ({
 
   setMode: (mode) => set({ mode }),
   setSummaryFormat: (summaryFormat) => set({ summaryFormat }),
+  setDiagramRange: (diagramRange) => set({ diagramRange }),
   attach: (attached) => set({ attached, ...(attached ? { attachedMark: null } : {}) }),
   attachMark: (attachedMark) => set({ attachedMark, ...(attachedMark ? { attached: null } : {}) }),
   dismissError: () => set({ error: null }),

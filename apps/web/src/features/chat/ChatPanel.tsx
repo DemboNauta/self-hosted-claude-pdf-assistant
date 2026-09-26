@@ -258,6 +258,67 @@ function ModeBar() {
           )}
         </div>
       )}
+      {mode === 'diagram' && <DiagramScope />}
+    </div>
+  );
+}
+
+/** Whole PDF or a page range for the next diagram (document chats only). */
+function DiagramScope() {
+  const scope = useChat((s) => s.scope);
+  const range = useChat((s) => s.diagramRange);
+  const setRange = useChat((s) => s.setDiagramRange);
+  const pageCount = useReader((s) => s.pageCount);
+  const current = useReader((s) => s.currentPage);
+  if (scope?.kind !== 'document' || pageCount < 2) return null;
+  const clamp = (n: number) => Math.min(Math.max(1, Math.round(n) || 1), pageCount);
+  const input =
+    'bg-bg border-border w-14 rounded border px-1 py-0.5 text-center tabular-nums disabled:opacity-40';
+  return (
+    <div
+      role="group"
+      aria-label={t.chat.diagramScope.label}
+      className="text-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+    >
+      <label className="flex items-center gap-1">
+        <input type="radio" checked={!range} onChange={() => setRange(null)} />
+        {t.chat.diagramScope.whole}
+      </label>
+      <label className="flex items-center gap-1">
+        <input
+          type="radio"
+          checked={!!range}
+          onChange={() => setRange({ from: current, to: Math.min(pageCount, current + 4) })}
+        />
+        {t.chat.diagramScope.pages}
+      </label>
+      <input
+        type="number"
+        min={1}
+        max={pageCount}
+        disabled={!range}
+        aria-label={t.chat.diagramScope.from}
+        value={range?.from ?? current}
+        onChange={(e) => {
+          const from = clamp(Number(e.target.value));
+          setRange({ from, to: Math.max(from, range?.to ?? from) });
+        }}
+        className={input}
+      />
+      –
+      <input
+        type="number"
+        min={1}
+        max={pageCount}
+        disabled={!range}
+        aria-label={t.chat.diagramScope.to}
+        value={range?.to ?? Math.min(pageCount, current + 4)}
+        onChange={(e) => {
+          const to = clamp(Number(e.target.value));
+          setRange({ from: Math.min(range?.from ?? to, to), to });
+        }}
+        className={input}
+      />
     </div>
   );
 }

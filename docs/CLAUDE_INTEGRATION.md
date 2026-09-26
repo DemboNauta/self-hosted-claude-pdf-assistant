@@ -83,7 +83,9 @@ Chat failures also update the cached status (`report()`).
 
 - Modes (`STUDY_MODES`): `free`, `eli5`, `summary` (+ `prose|outline|glossary`),
   `exam` (one question at a time, uses `record_exam_result`), `relate`
-  (searches the same subject first, then all).
+  (searches the same subject first, then all), `diagram` (a Mermaid schema of
+  the selection, `context.pageRange` or the whole document, saved with
+  `create_diagram` and shown with `[[diagram:ID]]`).
 
 ## Citations
 
@@ -123,9 +125,11 @@ and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 | `update_progress`        | docId?, note                                             | Document memory, category `progress`.                                                    |
 | `record_exam_result`     | docId?, question, userAnswer, correct, concepts[], page? | Stores the result, updates concepts.                                                     |
 | `create_flashcards`      | cards[{front, back, page?, docId?}]                      | **Proposed** flashcards.                                                                 |
+| `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                              |
+| `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                              |
 
 Tools that change data emit `data_changed` (`annotations` | `memory` |
-`flashcards`) so the web invalidates its queries. Tools that need a document
+`flashcards` | `diagrams`) so the web invalidates its queries. Tools that need a document
 fail with "docId is required" in topic/subject chats.
 
 To add a tool:
@@ -159,7 +163,9 @@ and Home calls it automatically once a day.
     - "señala" → `point_at`;
     - "ideas clave" → `highlight_key_ideas`;
     - "tarjetas" → `create_flashcards`;
-    - "recuerda …" → `remember` + `mark_concept_difficult`.
+    - "recuerda …" → `remember` + `mark_concept_difficult`;
+    - diagram mode → `create_diagram` with a small mind map, answered with
+      `[[diagram:ID]]`.
   - Its `result` is the full text, used by the daily brief.
 - For a real check without touching the owner's data, run a scratch script
   (not committed):

@@ -5,3 +5,4 @@ export * from './chat.js';
 export * from './annotations.js';
 export * from './memory.js';
 export * from './review.js';
+export * from './diagrams.js';

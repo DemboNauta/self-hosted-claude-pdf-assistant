@@ -52,6 +52,11 @@ change them if he disagrees.
   - Claude gets the text inside the marked area **and an image** of that area
     with the drawing on top.
   - The drawings stay as normal annotations.
+- Visual schemas (2026-09-26): Claude picks the diagram type (mind map, tree or
+  flowchart). Scope: whole PDF, a page range or the selected text. Every
+  diagram shows in the chat and is kept in a per-PDF "Esquemas" panel and a
+  general "Esquemas" page. Changes are asked to Claude in the chat, which
+  updates the same diagram (no manual editing).
 - Deployment target (2026-09-26): the same VPS as his `garmin-ia` project. The
   app runs like the other apps there, as a **systemd service behind the shared
   Caddy, without Docker**. The subdomain follows the Cloudflare mode of his other

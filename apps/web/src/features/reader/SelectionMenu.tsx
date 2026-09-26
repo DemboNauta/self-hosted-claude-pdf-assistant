@@ -1,5 +1,12 @@
 import type { TextSelection } from '@pdfclaudeassistant/shared';
-import { HelpCircle, Lightbulb, ListTree, MessageSquare, type LucideIcon } from 'lucide-react';
+import {
+  HelpCircle,
+  Lightbulb,
+  ListTree,
+  MessageSquare,
+  Workflow,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { useChatDock } from '../chat/ChatDock';
@@ -113,6 +120,15 @@ function chatActions(): SelectionAction[] {
       run: (selection) => {
         show();
         send(t.chat.selection.quizPrompt, { mode: 'exam', selection });
+      },
+    },
+    {
+      id: 'diagram',
+      label: t.chat.selection.diagram,
+      icon: Workflow,
+      run: (selection) => {
+        show();
+        send('', { mode: 'diagram', selection });
       },
     },
   ];

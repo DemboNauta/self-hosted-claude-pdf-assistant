@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell';
 import { LoginPage } from './features/auth/LoginPage';
 import { HomePage } from './features/home/HomePage';
 import { LibraryPage } from './features/library/LibraryPage';
+import { DiagramsPage } from './features/diagrams/DiagramsPage';
 import { MemoryPage } from './features/memory/MemoryPage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { ScopeChatPage } from './features/chat/ScopeChatPage';
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: 'library/trash', element: <TrashPage /> },
       { path: 'read/:documentId', element: <ReaderPage /> },
       { path: 'memory', element: <MemoryPage /> },
+      { path: 'diagrams', element: <DiagramsPage /> },
       { path: 'review', element: <ReviewPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'chat/topic/:id', element: <ScopeChatPage kind="topic" /> },

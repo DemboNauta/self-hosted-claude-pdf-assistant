@@ -108,9 +108,27 @@ const fakeChat = ((args: {
       model: 'claude-e2e',
       apiKeySource: 'none',
     };
+    // Diagram mode: save a small mind map with the real tool and show it in the answer.
+    let diagram = '';
+    if (prompt.includes('Mode "Diagram"') && tools?.create_diagram) {
+      const range = /Scope: pages? (\d+)(?: to (\d+))?/.exec(prompt);
+      const result = JSON.stringify(
+        await tools.create_diagram.handler(
+          {
+            title: 'Esquema de prueba',
+            mermaid: 'mindmap\n  root((Fotosintesis))\n    Fase luminosa\n    Ciclo de Calvin',
+            ...(range ? { fromPage: Number(range[1]), toPage: Number(range[2] ?? range[1]) } : {}),
+          },
+          {},
+        ),
+      );
+      const id = /Saved diagram ([0-9a-z]+)/.exec(result)?.[1];
+      if (id) diagram = `[[diagram:${id}]]\n\n`;
+    }
     // A drawing mark: say whether the image of the marked area came with the question.
     const marked = /freehand marks[^\n]* on page (\d+)/.exec(prompt);
     const parts = [
+      ...(diagram ? [diagram] : []),
       ...(marked
         ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]
         : []),

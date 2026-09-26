@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Study modes (F-CHAT-03). Each one is an instruction template sent with the question. */
-export const STUDY_MODES = ['free', 'eli5', 'summary', 'exam', 'relate'] as const;
+export const STUDY_MODES = ['free', 'eli5', 'summary', 'exam', 'relate', 'diagram'] as const;
 export type StudyMode = (typeof STUDY_MODES)[number];
 
 /** Summary formats for the `summary` mode. */
@@ -44,6 +44,11 @@ export const chatContextSchema = z
     selection: selectionSchema.optional(),
     mark: markSchema.optional(),
     summaryFormat: z.enum(SUMMARY_FORMATS).optional(),
+    /** Pages the question is about (e.g. the scope of a diagram); absent = not limited. */
+    pageRange: z
+      .object({ from: z.number().int().min(1), to: z.number().int().min(1) })
+      .refine((r) => r.to >= r.from, 'to < from')
+      .optional(),
   })
   .refine((c) => [c.docId, c.topicId, c.subjectId].filter(Boolean).length === 1, {
     message: 'one scope required',
@@ -145,7 +150,11 @@ export type ServerChatEvent =
   | { type: 'tool_event'; threadId: string; messageId: string; event: ToolEvent }
   | { type: 'pointer'; threadId: string; group: PointerGroup }
   | { type: 'clear_pointers'; threadId: string }
-  | { type: 'data_changed'; threadId: string; scope: 'memory' | 'annotations' | 'flashcards' }
+  | {
+      type: 'data_changed';
+      threadId: string;
+      scope: 'memory' | 'annotations' | 'flashcards' | 'diagrams';
+    }
   | { type: 'assistant_done'; threadId: string; message: ChatMessage }
   | { type: 'error'; threadId?: string; messageId?: string; code: ChatErrorCode; message?: string };
 

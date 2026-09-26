@@ -9,6 +9,7 @@ import {
   Search,
   Settings,
   type LucideIcon,
+  Workflow,
 } from 'lucide-react';
 import { Navigate, NavLink, Outlet } from 'react-router';
 import { useLogout, useSession } from '../features/auth/session';
@@ -28,6 +29,7 @@ const NAV: NavItem[] = [
   { to: '/search', label: t.nav.search, icon: Search, desktopOnly: true },
   { to: '/review', label: t.nav.review, icon: Layers },
   { to: '/memory', label: t.nav.memory, icon: Brain },
+  { to: '/diagrams', label: t.nav.diagrams, icon: Workflow, desktopOnly: true },
   { to: '/stats', label: t.nav.stats, icon: BarChart3, desktopOnly: true },
   { to: '/settings', label: t.nav.settings, icon: Settings },
 ];

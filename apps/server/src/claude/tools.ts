@@ -16,6 +16,11 @@ import { pages } from '../db/schema.js';
 import { renderPageImage } from '../ingest/extract.js';
 import { newId } from '../services/ids.js';
 import type { AnnotationService } from '../services/annotations.js';
+import {
+  checkDiagramSource,
+  MAX_DIAGRAM_SOURCE,
+  type DiagramService,
+} from '../services/diagrams.js';
 import type { LibraryService } from '../services/library.js';
 import type { MemoryService } from '../services/memory.js';
 import type { ReviewService } from '../services/review.js';
@@ -49,6 +54,7 @@ export interface ToolDeps {
   settings: SettingsService;
   memory: MemoryService;
   review: ReviewService;
+  diagrams: DiagramService;
 }
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -646,6 +652,74 @@ export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/** Visual schemas (diagrams) of a document or part of it, stored as Mermaid. */
+export function diagramTools(deps: ToolDeps, ctx: ToolContext) {
+  const changed = () =>
+    ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'diagrams' });
+  const mermaid = z
+    .string()
+    .min(10)
+    .max(MAX_DIAGRAM_SOURCE)
+    .describe('Mermaid source: "mindmap", "flowchart TD" or "flowchart LR" on the first line');
+  const placeHint = (id: string) =>
+    `Write [[diagram:${id}]] on its own line in your answer where the diagram should appear.`;
+
+  return [
+    tool(
+      'create_diagram',
+      'Save a visual schema (Mermaid mind map, tree or flowchart) of a document, a page range or a passage. It is shown in the chat where you write [[diagram:ID]] and kept in the student\'s "Esquemas". Use update_diagram instead to change an existing one.',
+      {
+        title: z.string().min(1).max(200),
+        mermaid,
+        fromPage: z.number().int().min(1).optional(),
+        toPage: z.number().int().min(1).optional(),
+        docId: z.string().optional().describe('Default: the open document'),
+      },
+      tracked(
+        ctx,
+        'create_diagram',
+        ({ title }) => title,
+        async ({ title, mermaid: source, fromPage, toPage, docId }) => {
+          const problem = checkDiagramSource(source);
+          if (problem) return fail(problem);
+          const documentId = docId ?? ctx.docId ?? null;
+          if (documentId) deps.library.getLive(documentId);
+          const d = deps.diagrams.create({
+            documentId,
+            title,
+            source,
+            fromPage: fromPage ?? null,
+            toPage: toPage ?? fromPage ?? null,
+          });
+          changed();
+          return text(`Saved diagram ${d.id}. ${placeHint(d.id)}`);
+        },
+      ),
+    ),
+    tool(
+      'update_diagram',
+      'Replace an existing diagram (by id) when the student asks for changes: expand a branch, simplify, fix something. It keeps its place in "Esquemas".',
+      { id: z.string().min(1).max(64), mermaid, title: z.string().min(1).max(200).optional() },
+      tracked(
+        ctx,
+        'update_diagram',
+        ({ title }) => title ?? '',
+        async ({ id, mermaid: source, title }) => {
+          const problem = checkDiagramSource(source);
+          if (problem) return fail(problem);
+          try {
+            deps.diagrams.update(id, { source, ...(title ? { title } : {}) });
+          } catch {
+            return fail(`Unknown diagram ${id}.`);
+          }
+          changed();
+          return text(`Updated diagram ${id}. ${placeHint(id)}`);
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
   const tools = [
@@ -654,6 +728,7 @@ export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
     ...annotationTools(deps, ctx),
     ...memoryTools(deps, ctx),
     ...reviewTools(deps, ctx),
+    ...diagramTools(deps, ctx),
   ];
   return {
     server: createSdkMcpServer({ name: MCP_SERVER_NAME, version: '1.0.0', tools }),

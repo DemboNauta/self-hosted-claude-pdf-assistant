@@ -14,6 +14,7 @@ import {
   useSelectionAnnotationActions,
 } from '../annotations/integrations';
 import { ChatDock, useChatDock } from '../chat/ChatDock';
+import { DiagramsPanel } from '../diagrams/DiagramsPanel';
 import { MemoryPanel } from '../memory/MemoryPanel';
 import { FlashcardDialog, flashcardAction } from '../review/FlashcardDialog';
 import { useChat } from '../chat/store';
@@ -157,6 +158,7 @@ export function ReaderPage() {
         {panel === 'search' && <SearchPanel docId={doc.id} />}
         {panel === 'annotations' && <AnnotationsPanel docId={doc.id} />}
         {panel === 'memory' && <MemoryPanel docId={doc.id} />}
+        {panel === 'diagrams' && <DiagramsPanel docId={doc.id} />}
         <div className="relative min-w-0 flex-1">
           {!ready ? (
             <p className="text-text-muted p-6">{t.reader.notReady}</p>

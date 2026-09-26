@@ -25,6 +25,7 @@ To change the schema:
 | `0007_flashcards`         | `flashcards`, `reviews`                                                         |
 | `0008_thread_scopes`      | `threads.topic_id`, `threads.subject_id` (cascade)                              |
 | `0009_annotation_display` | `annotations.display_json` (note window: pinned, position, size)                |
+| `0010_diagrams`           | `diagrams`                                                                      |
 
 ## Tables (main columns)
 
@@ -60,6 +61,8 @@ author (user|claude), status (active|proposed|rejected)`;
   - `display_json` (nullable): the note window's state, `{ pinned, x, y, w, h }`.
     `x, y` are the window's top-left corner in page space (null = next to the
     annotation); `w, h` are CSS pixels (null = default / fit the content).
+- **diagrams** `document_id? (cascade), title, source (Mermaid), from_page?,
+to_page?, updated_at`.
 - **memory_items** `scope (global|document), document_id?, category, content`.
 - **concepts** `name, key (canonical name for merging), document_id?, page?,
 mastery 0–1, times_failed, last_evidence, last_seen_at`.

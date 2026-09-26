@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   type LucideIcon,
+  Workflow,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -124,6 +125,7 @@ const PANELS: { id: Exclude<SidePanel, null>; label: string; icon: LucideIcon }[
   { id: 'search', label: t.reader.search, icon: Search },
   { id: 'annotations', label: t.annotations.title, icon: Highlighter },
   { id: 'memory', label: t.memory.panel, icon: Brain },
+  { id: 'diagrams', label: t.diagrams.panel, icon: Workflow },
 ];
 
 export function ReaderToolbar({

@@ -273,3 +273,19 @@ export const reviews = sqliteTable(
   },
   (t) => [index('reviews_day_idx').on(t.day)],
 );
+
+/** Visual schemas drawn by Claude (Mermaid source), listed per PDF and on "Esquemas". */
+export const diagrams = sqliteTable(
+  'diagrams',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    source: text('source').notNull(),
+    fromPage: integer('from_page'),
+    toPage: integer('to_page'),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('diagrams_document_idx').on(t.documentId, t.createdAt)],
+);

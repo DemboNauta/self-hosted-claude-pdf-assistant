@@ -116,6 +116,21 @@ Server → client (`ServerChatEvent`):
 | POST   | `/api/annotations/delete`             | `{ ids }`                                                                                                                |
 | GET    | `/api/documents/:id/export-annotated` | Downloads a copy of the PDF with standard annotations.                                                                   |
 
+## Diagrams
+
+Mermaid schemas saved by Claude (`create_diagram` / `update_diagram`). Diagrams
+of PDFs in the trash are hidden; purging a PDF deletes them.
+
+| Method | Path                          | Notes                                 |
+| ------ | ----------------------------- | ------------------------------------- |
+| GET    | `/api/diagrams`               | `Diagram[]`, newest first (all PDFs). |
+| GET    | `/api/documents/:id/diagrams` | `Diagram[]` of one PDF.               |
+| GET    | `/api/diagrams/:id`           | `Diagram` (with `documentTitle`).     |
+| PATCH  | `/api/diagrams/:id`           | `{ title }`                           |
+| DELETE | `/api/diagrams/:id`           | 204.                                  |
+
+The chat context also accepts `pageRange: { from, to }` (the scope of a diagram).
+
 ## Memory, review, stats, settings, backup
 
 | Method | Path                                             | Notes                                                          |

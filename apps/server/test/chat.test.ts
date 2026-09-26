@@ -14,6 +14,7 @@ import type { Db } from '../src/db/client.js';
 import type { IngestService } from '../src/ingest/service.js';
 import type { LibraryService } from '../src/services/library.js';
 import { MemoryService } from '../src/services/memory.js';
+import { DiagramService } from '../src/services/diagrams.js';
 import { ReviewService } from '../src/services/review.js';
 import { SearchService } from '../src/services/search.js';
 import { makePdf } from './fixtures/pdf.js';
@@ -349,6 +350,7 @@ describe('reading tools', () => {
         settings: new SettingsService(db),
         memory: new MemoryService(db),
         review: new ReviewService(db),
+        diagrams: new DiagramService(db),
       },
       ctx,
     );

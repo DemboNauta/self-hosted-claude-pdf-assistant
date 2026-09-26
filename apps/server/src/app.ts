@@ -30,6 +30,8 @@ import { StatsService } from './services/stats.js';
 import { registerReviewRoutes } from './routes/review.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerAnnotationRoutes } from './routes/annotations.js';
+import { registerDiagramRoutes } from './routes/diagrams.js';
+import { DiagramService } from './services/diagrams.js';
 import { UploadService } from './services/uploads.js';
 
 export interface AppDeps {
@@ -120,11 +122,13 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   );
   await registerReviewRoutes(app, review, brief, new StatsService(db, library));
   await registerAnnotationRoutes(app, annotations, library, settings, db, config);
+  const diagrams = new DiagramService(db);
+  await registerDiagramRoutes(app, diagrams, library);
   const chat = new ChatService(
     config,
     threads,
     library,
-    { db, library, search, annotations, settings, memory, review },
+    { db, library, search, annotations, settings, memory, review, diagrams },
     claudeStatus,
     app.log,
     deps.claudeQuery ?? query,

@@ -1,0 +1,245 @@
+import type { Diagram } from '@pdfclaudeassistant/shared';
+import clsx from 'clsx';
+import { Download, Maximize2, Minus, Plus, Workflow, X } from 'lucide-react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
+import { Menu } from '../../components/Menu';
+import { t } from '../../i18n';
+import { CitationChip } from '../chat/CitationChip';
+import { useDiagram } from './api';
+import { renderDiagram } from './mermaid';
+
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+}
+const isDark = () => document.documentElement.dataset.theme === 'dark';
+
+/** The rendered SVG of a diagram, re-rendered when its source or the theme changes. */
+function useDiagramSvg(source: string) {
+  const dark = useSyncExternalStore(subscribeTheme, isDark);
+  const [state, setState] = useState<{ key: string; svg?: string; error?: string }>({ key: '' });
+  const key = `${dark ? 'd' : 'l'}:${source}`;
+  useEffect(() => {
+    let cancelled = false;
+    renderDiagram(source, dark).then(
+      (svg) => !cancelled && setState({ key, svg }),
+      (err: unknown) => !cancelled && setState({ key, error: String(err) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [source, dark, key]);
+  return state.key === key ? state : { key, svg: undefined, error: undefined };
+}
+
+const slug = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'esquema';
+
+/** Width Mermaid laid the diagram out at (from the SVG viewBox). */
+function naturalWidth(svg: string): number {
+  const m = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+)/.exec(svg);
+  return m ? Number(m[1]) : 800;
+}
+
+function save(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadPng(svg: string, name: string) {
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  await img.decode();
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, img.naturalWidth * scale);
+  canvas.height = Math.max(1, img.naturalHeight * scale);
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob((blob) => blob && save(blob, name), 'image/png');
+}
+
+function Pages({ diagram }: { diagram: Diagram }) {
+  if (!diagram.documentId || !diagram.fromPage) return null;
+  const label =
+    diagram.toPage && diagram.toPage !== diagram.fromPage
+      ? t.diagrams.pages(diagram.fromPage, diagram.toPage)
+      : null;
+  return (
+    <span className="text-text-muted flex items-center gap-1 text-xs">
+      <CitationChip citation={{ docId: diagram.documentId, page: diagram.fromPage }} />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * A diagram with its title and actions. "inline" is the compact view in the chat and
+ * the lists (click to enlarge); "full" fills the viewer, with zoom.
+ */
+export function DiagramView({
+  diagram,
+  variant = 'inline',
+  onExpand,
+}: {
+  diagram: Diagram;
+  variant?: 'inline' | 'full';
+  onExpand?: () => void;
+}) {
+  const { svg, error } = useDiagramSvg(diagram.source);
+  const [zoom, setZoom] = useState(1);
+  const file = slug(diagram.title);
+  const full = variant === 'full';
+
+  return (
+    <figure
+      data-testid="diagram"
+      className={clsx('flex min-h-0 flex-col', !full && 'border-border rounded-xl border')}
+    >
+      <figcaption className="flex items-center gap-2 px-3 py-2">
+        <Workflow size={14} aria-hidden className="text-text-muted shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{diagram.title}</span>
+        <Pages diagram={diagram} />
+        {full && (
+          <>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(0.4, z / 1.25))}
+              aria-label={t.diagrams.zoomOut}
+              className="text-text-muted hover:text-text rounded p-1"
+            >
+              <Minus size={16} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
+              aria-label={t.diagrams.zoomIn}
+              className="text-text-muted hover:text-text rounded p-1"
+            >
+              <Plus size={16} aria-hidden />
+            </button>
+          </>
+        )}
+        {svg && (
+          <Menu
+            label={t.diagrams.download}
+            icon={<Download size={16} aria-hidden />}
+            actions={[
+              {
+                label: t.diagrams.downloadSvg,
+                onSelect: () => save(new Blob([svg], { type: 'image/svg+xml' }), `${file}.svg`),
+              },
+              {
+                label: t.diagrams.downloadPng,
+                onSelect: () => void downloadPng(svg, `${file}.png`),
+              },
+            ]}
+          />
+        )}
+        {!full && onExpand && (
+          <button
+            type="button"
+            onClick={onExpand}
+            aria-label={t.diagrams.expand}
+            title={t.diagrams.expand}
+            className="text-text-muted hover:text-text rounded p-1"
+          >
+            <Maximize2 size={16} aria-hidden />
+          </button>
+        )}
+      </figcaption>
+      <div
+        className={clsx(
+          'min-h-0 px-3 pb-3',
+          full ? 'flex-1 overflow-auto' : 'max-h-96 cursor-zoom-in overflow-hidden',
+        )}
+        onClick={!full ? onExpand : undefined}
+      >
+        {error ? (
+          <div role="alert" className="text-danger space-y-2 text-sm">
+            <p>{t.diagrams.renderError}</p>
+            <pre className="bg-surface-muted text-text overflow-auto rounded p-2 text-xs">
+              {diagram.source}
+            </pre>
+          </div>
+        ) : svg ? (
+          <div
+            className={clsx(
+              'diagram-svg mx-auto [&_svg]:mx-auto [&_svg]:h-auto',
+              full ? '[&_svg]:w-full [&_svg]:max-w-none!' : '[&_svg]:max-w-full',
+            )}
+            // Full view: fill the width, but a small diagram grows at most 2.5×; zoom scales it.
+            style={
+              full
+                ? { width: `min(${zoom * 100}%, ${Math.round(naturalWidth(svg) * 2.5 * zoom)}px)` }
+                : undefined
+            }
+            // Mermaid's own output, sanitised by its strict security level.
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        ) : (
+          <p className="text-text-muted py-6 text-center text-sm">{t.diagrams.rendering}</p>
+        )}
+      </div>
+    </figure>
+  );
+}
+
+/** Full-screen viewer over the whole app. */
+export function DiagramDialog({ diagram, onClose }: { diagram: Diagram; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={diagram.title}
+      className="bg-bg fixed inset-0 z-[60] flex flex-col"
+    >
+      <div className="absolute top-2 right-2 z-10">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t.diagrams.close}
+          className="bg-surface border-border text-text-muted hover:text-text rounded-lg border p-1.5"
+        >
+          <X size={18} aria-hidden />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col pt-1 pr-12">
+        <DiagramView diagram={diagram} variant="full" />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** `[[diagram:ID]]` in a chat answer. */
+export function DiagramEmbed({ id }: { id: string }) {
+  const { data, isError } = useDiagram(id);
+  const [open, setOpen] = useState(false);
+  if (isError) return <p className="text-text-muted my-2 text-xs italic">{t.diagrams.gone}</p>;
+  if (!data) return <p className="text-text-muted my-2 text-xs">{t.diagrams.rendering}</p>;
+  return (
+    <div className="my-2">
+      <DiagramView diagram={data} onExpand={() => setOpen(true)} />
+      {open && <DiagramDialog diagram={data} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}

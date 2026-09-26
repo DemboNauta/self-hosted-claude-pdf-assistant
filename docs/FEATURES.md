@@ -102,6 +102,12 @@ server, not against real Claude yet.
 | F-UX-04 | ✅     | Argon2 password, 90-day sliding session, rate limit.                |
 | F-UX-05 | ✅     | Manifest, icons, service worker (production only).                  |
 
+## Beyond the SPEC (owner requests)
+
+| Feature        | Status  | Where / notes                                                                                                                                                                                                                                             |
+| -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visual schemas | ✅ fake | "Esquema visual" chat mode (whole PDF or pages) and selection action; Claude picks mind map / tree / flowchart (Mermaid, `features/diagrams`). Shown in the chat, the reader's "Esquemas" panel and the `/diagrams` page. Not yet tried with real Claude. |
+
 ## SPEC §11–12 (ops/security)
 
 | Item                                   | Status | Notes                                                    |
