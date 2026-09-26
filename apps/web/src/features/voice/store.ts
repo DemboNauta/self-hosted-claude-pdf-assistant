@@ -35,6 +35,10 @@ interface VoiceState {
   stop: () => void;
   /** Pause button: stop talking (keeping the place) or carry on from there. */
   togglePause: () => void;
+  /** "Preguntar" button: cut Claude short to ask something (it resumes afterwards). */
+  cutIn: () => void;
+  /** The microphone rests while Claude talks (Android): interrupting is a tap. */
+  halfDuplex: boolean;
   read: (message: ChatMessage) => Promise<void>;
   stopReading: () => void;
 }
@@ -409,6 +413,14 @@ export const useVoice = create<VoiceState>(() => ({
   canResume: false,
   debugLines: [],
   debug: false,
+  halfDuplex: false,
+
+  cutIn: () => {
+    const { phase } = get();
+    if (phase !== 'speaking' && phase !== 'thinking') return;
+    clearTimeout(continueTimer);
+    interrupt();
+  },
 
   start: async () => {
     if (get().active) return;
@@ -448,6 +460,7 @@ export const useVoice = create<VoiceState>(() => ({
       onDebug: debugLine,
     });
     listener.start();
+    set({ halfDuplex: listener.halfDuplex });
     debugLine(`inicio · ${navigator.userAgent.includes('Android') ? 'Android' : 'escritorio'}`);
     await loadSettings();
     debugLine(`voz del servidor: ${player.serverVoices ? 'sí' : 'no'}`);
@@ -500,3 +513,10 @@ export const useVoice = create<VoiceState>(() => ({
     set({ readingId: null });
   },
 }));
+
+// Half-duplex (Android): the microphone rests while Claude's voice plays.
+useVoice.subscribe((s, prev) => {
+  if (!listener?.halfDuplex || s.phase === prev.phase) return;
+  if (s.phase === 'speaking') listener.suspend();
+  else listener.resume();
+});

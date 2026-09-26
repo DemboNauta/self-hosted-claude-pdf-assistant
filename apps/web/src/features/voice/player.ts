@@ -26,6 +26,8 @@ export class VoicePlayer {
   private queue: Queued[] = [];
   private current: Chunk | null = null;
   private generation = 0;
+  /** Ends the sentence playing now (used by `stop()`). */
+  private finishCurrent: (() => void) | null = null;
   serverVoices = true;
   settings: VoiceSettings = { voice: 'sharvard-f', rate: 1 };
 
@@ -73,8 +75,11 @@ export class VoicePlayer {
     for (const q of this.queue) q.abort.abort();
     this.queue = [];
     this.current = null;
+    const finish = this.finishCurrent;
+    this.finishCurrent = null;
     this.el.pause();
     this.el.removeAttribute('src');
+    finish?.();
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     return was;
   }
@@ -124,20 +129,39 @@ export class VoicePlayer {
     if (gen === this.generation) void this.next();
   }
 
+  /**
+   * Plays one sentence to its end. Pauses we did not ask for (on Android the speech
+   * recognition takes the audio focus for a moment) resume the same sentence instead
+   * of skipping it; only `stop()` cuts it short.
+   */
   private playUrl(url: string) {
     return new Promise<void>((resolve) => {
       const el = this.el;
+      let retries = 0;
       const done = () => {
         el.onended = el.onerror = el.onpause = null;
+        if (this.finishCurrent === done) this.finishCurrent = null;
         resolve();
       };
+      this.finishCurrent = done;
       el.onended = done;
       el.onerror = done;
-      el.onpause = done;
+      el.onpause = () => {
+        if (this.finishCurrent !== done || el.ended) return;
+        if (++retries > 20) return done();
+        setTimeout(() => {
+          if (this.finishCurrent === done && el.paused) el.play().catch(() => {});
+        }, 250);
+      };
       el.src = url;
       el.playbackRate = this.settings.rate;
       el.preservesPitch = true;
-      el.play().catch(done);
+      el.play().catch(() => {
+        // Autoplay refused: try again shortly (after a focus change), else give up.
+        setTimeout(() => {
+          if (this.finishCurrent === done) el.play().catch(done);
+        }, 400);
+      });
     });
   }
 

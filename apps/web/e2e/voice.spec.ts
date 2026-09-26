@@ -105,7 +105,9 @@ test('talk to Claude, interrupt it and let it carry on', async ({ page }, info) 
   // (Right after a question, what the microphone hears is still its tail: wait.)
   await page.waitForTimeout(1600);
   await expect(phase).toContainText('Hablando');
-  await say(page, 'espera qué es la clorofila', false);
+  // Android rests the microphone while Claude talks: there the student taps.
+  if (info.project.name === 'mobile') await page.getByTestId('voice-cut-in').click();
+  else await say(page, 'espera qué es la clorofila', false);
   await expect(phase).toHaveText('Te escucho…');
   await say(page, 'espera qué es la clorofila');
   await expect(chat.getByTestId('assistant-message').last()).toContainText(
@@ -147,7 +149,7 @@ test('voice mode recovers on a phone that cannot share the microphone', async ({
     await page.getByRole('button', { name: 'Abrir chat con Claude' }).click();
   }
   await chat.getByTestId('voice-toggle').click();
-  await expect(page.getByTestId('voice-debug')).toContainText('micro: plain');
+  await expect(page.getByTestId('voice-debug')).toContainText(/micro:? plain/);
   await expect(page.getByTestId('voice-bar').getByRole('alert')).toHaveCount(0);
 
   await say(page, 'Explícame esta página');

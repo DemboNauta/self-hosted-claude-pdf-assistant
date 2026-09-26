@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { AudioLines, Pause, Play, X } from 'lucide-react';
+import { AudioLines, Hand, Pause, Play, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { t } from '../../i18n';
 import { Listener } from './listener';
@@ -36,8 +36,8 @@ export function useEndVoiceOnLeave() {
 
 /** Status of the conversation by voice, above the composer while voice mode is on. */
 export function VoiceBar() {
-  const { active, phase, heard, error, canResume, debug, debugLines } = useVoice();
-  const { stop, togglePause } = useVoice.getState();
+  const { active, phase, heard, error, canResume, debug, debugLines, halfDuplex } = useVoice();
+  const { stop, togglePause, cutIn } = useVoice.getState();
 
   if (!active && !error) return null;
   if (!active)
@@ -64,8 +64,20 @@ export function VoiceBar() {
           )}
         />
         <p className="min-w-0 flex-1 font-medium" aria-live="polite" data-testid="voice-phase">
-          {t.voice.phases[phase]}
+          {phase === 'speaking' && halfDuplex ? t.voice.speakingTap : t.voice.phases[phase]}
         </p>
+        {(phase === 'speaking' || phase === 'thinking') && (
+          <button
+            type="button"
+            onClick={cutIn}
+            title={t.voice.cutInHint}
+            data-testid="voice-cut-in"
+            className="bg-accent text-accent-contrast flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium"
+          >
+            <Hand size={12} aria-hidden />
+            {t.voice.cutIn}
+          </button>
+        )}
         {pausable && (
           <button
             type="button"

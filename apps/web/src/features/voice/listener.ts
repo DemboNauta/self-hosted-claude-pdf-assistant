@@ -72,7 +72,14 @@ export class Listener {
   private meter: ReturnType<typeof setInterval> | undefined;
   private readonly gate = new LevelGate();
   private voiceWithoutResult = 0;
+  private suspended = false;
   mode: MicMode = 'track';
+  /**
+   * Android: the recognition takes the audio focus each time it starts, pausing
+   * Claude's voice, and phones hear their own speaker. There the microphone rests
+   * while Claude talks (`suspend`/`resume`) and the student cuts in with a tap.
+   */
+  readonly halfDuplex = isAndroid();
   /** A recognition session is running (diagnostics). */
   get listening() {
     return this.rec !== null;
@@ -97,19 +104,40 @@ export class Listener {
   /** Listens at once; moves to the echo-cancelled microphone once the browser grants it. */
   start() {
     this.running = true;
+    this.suspended = false;
     this.failures = 0;
-    this.mode = 'track';
-    // Created inside the tap: on phones an audio context made later stays suspended.
+    // Phones do their own echo cancellation and cannot share the microphone.
+    this.mode = this.halfDuplex ? 'plain' : 'track';
+    this.open();
+    if (this.mode === 'plain') return;
+    // Created inside the tap: an audio context made later can stay suspended.
     try {
       this.ctx = new AudioContext();
     } catch {
       this.ctx = null;
     }
-    this.open();
     void this.openMicrophone().then(() => {
       // Restart the session on the cleaned track (onend opens it again).
       if (this.running && this.stream) this.rec?.stop();
     });
+  }
+
+  /** Stops listening for a while (Claude is talking, half-duplex). */
+  suspend() {
+    if (this.suspended || !this.running) return;
+    this.suspended = true;
+    clearTimeout(this.restartTimer);
+    const rec = this.rec;
+    this.rec = null;
+    rec?.stop();
+    this.debug('micro en pausa (habla Claude)');
+  }
+
+  resume() {
+    if (!this.suspended || !this.running) return;
+    this.suspended = false;
+    this.debug('micro escuchando');
+    this.open();
   }
 
   stop() {
@@ -190,7 +218,7 @@ export class Listener {
 
   private open() {
     const Ctor = recognitionCtor();
-    if (!Ctor || !this.running || this.rec) return;
+    if (!Ctor || !this.running || this.suspended || this.rec) return;
     const rec = new Ctor();
     rec.lang = navigator.language?.toLowerCase().startsWith('es') ? navigator.language : 'es-ES';
     rec.continuous = !isAndroid();
@@ -214,14 +242,16 @@ export class Listener {
         return;
       }
       this.failures++;
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        this.running = false;
-      }
+      const denied = e.error === 'not-allowed' || e.error === 'service-not-allowed';
+      // A single refusal can be a hiccup (a restart outside a tap): only give up
+      // after several in a row.
+      if (denied && this.failures < 3) return;
+      if (denied) this.running = false;
       this.handlers.onError(e.error);
     };
     rec.onend = () => {
       if (this.rec === rec) this.rec = null;
-      if (!this.running) return;
+      if (!this.running || this.suspended) return;
       // Straight back to listening; slower after repeated failures (e.g. no network).
       const delay = this.failures ? Math.min(5000, 300 * 2 ** this.failures) : 100;
       this.restartTimer = setTimeout(() => this.open(), delay);

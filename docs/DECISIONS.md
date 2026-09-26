@@ -49,6 +49,12 @@ change them if he disagrees.
     Claude closes the topic with `[[voice-end]]` (hidden, not spoken).
   - The screen stays on while voice mode runs (Wake Lock): a locked phone would
     cut the microphone.
+  - **Android is half-duplex** (after the owner's first phone tests): each start of
+    the recognition took the audio focus and paused Claude's voice (heard as
+    skipped sentences), and the extra echo-cancelled microphone blocked the
+    recognition. On Android the microphone rests while Claude talks and the
+    student cuts in with the "Preguntar" button (also shown on desktop); no second
+    microphone is opened there.
 
 - Deleting a subject or topic that still has PDFs moves those PDFs to the trash
   for 30 days. Restoring asks for a destination topic.
