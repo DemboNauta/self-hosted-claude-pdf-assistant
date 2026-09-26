@@ -60,6 +60,21 @@ export const es = {
       docs > 0
         ? `¿Borrar el tema «${name}»? Sus ${docs} PDF irán a la papelera durante 30 días.`
         : `¿Borrar el tema «${name}»?`,
+    importUrl: {
+      button: 'Desde URL',
+      title: 'Importar PDF desde una URL',
+      label: 'Dirección del PDF',
+      submit: 'Importar',
+      errors: {
+        url_not_allowed: 'Esa dirección no está permitida (red local o privada).',
+        invalid_url: 'La dirección no es válida.',
+        invalid_request: 'La dirección no es válida.',
+        not_a_pdf: 'La dirección no apunta a un PDF.',
+        file_too_large: 'El PDF es demasiado grande.',
+        url_fetch_failed: 'No se ha podido descargar.',
+        url_timeout: 'La descarga ha tardado demasiado.',
+      } as Record<string, string>,
+    },
     upload: {
       button: 'Subir PDF',
       dropHere: 'Suelta aquí tus PDF',
@@ -287,6 +302,7 @@ export const es = {
     title: 'Ajustes',
     theme: {
       title: 'Tema',
+      darkPdf: 'Oscurecer también las páginas del PDF en modo oscuro',
       system: 'Sistema',
       light: 'Claro',
       dark: 'Oscuro',

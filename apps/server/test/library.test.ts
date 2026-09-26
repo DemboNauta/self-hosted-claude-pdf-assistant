@@ -102,6 +102,26 @@ describe('library', () => {
       lastOpenedAt: string;
     };
     expect(detail).toMatchObject({ lastPage: 3, lastScroll: 0.25 });
+    await req('PUT', `/api/documents/${docId}/position`, {
+      page: 3,
+      scroll: 0.3,
+      seconds: 40,
+      day: '2026-09-26',
+    });
+    await req('PUT', `/api/documents/${docId}/position`, {
+      page: 3,
+      scroll: 0.3,
+      seconds: 20,
+      day: '2026-09-26',
+    });
+    const db = (
+      app as unknown as {
+        pcaDb: { $client: { prepare(q: string): { get(...a: unknown[]): unknown } } };
+      }
+    ).pcaDb;
+    expect(
+      db.$client.prepare('SELECT seconds FROM study_sessions WHERE document_id = ?').get(docId),
+    ).toEqual({ seconds: 60 });
     expect(detail.lastOpenedAt).toBeTruthy();
 
     expect((await req('DELETE', `/api/topics/${t2.id}`)).status).toBe(204);

@@ -1,6 +1,7 @@
 import type { DocumentDetail } from '@pdfclaudeassistant/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useReadingTimer } from './readingTimer';
 import { useParams, useSearchParams } from 'react-router';
 import { MessageSquare, PenTool } from 'lucide-react';
 import { t } from '../../i18n';
@@ -80,8 +81,12 @@ export function ReaderPage() {
     if (pdf && citedPage) useReader.getState().goTo(citedPage, citedQuote);
   }, [pdf, citedPage, citedQuote]);
 
+  const reading = useReadingTimer();
+  const lastPos = useRef<ReadingPositionUpdate | null>(null);
   const savePosition = useCallback(
-    (pos: ReadingPositionUpdate) => {
+    (update: ReadingPositionUpdate) => {
+      lastPos.current = update;
+      const pos = { ...update, ...reading.take() };
       void fetch(`/api/documents/${documentId}/position`, {
         method: 'PUT',
         credentials: 'same-origin',
@@ -91,8 +96,17 @@ export function ReaderPage() {
         keepalive: true,
       }).then(() => qc.invalidateQueries({ queryKey: libraryKey }));
     },
-    [documentId, qc],
+    [documentId, qc, reading],
   );
+
+  // Flush reading time every minute even without scrolling (long pages, formulas…).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (lastPos.current && reading.pending() >= 30)
+        savePosition({ ...lastPos.current, viewed: [] });
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [savePosition, reading]);
 
   if (detail.isPending) return <p className="text-text-muted p-6">{t.common.loading}</p>;
   if (detail.isError) return <p className="text-danger p-6">{t.common.error}</p>;

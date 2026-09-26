@@ -17,7 +17,7 @@ import type {
 import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { documents, pages, subjects, topics } from '../db/schema.js';
+import { documents, pages, studySessions, subjects, topics } from '../db/schema.js';
 import { HttpError, notFound } from './errors.js';
 import { newId } from './ids.js';
 
@@ -304,6 +304,15 @@ export class LibraryService {
           ),
         )
         .run();
+      if (pos.seconds && pos.day) {
+        tx.insert(studySessions)
+          .values({ documentId: id, day: pos.day, seconds: pos.seconds, updatedAt: now })
+          .onConflictDoUpdate({
+            target: [studySessions.documentId, studySessions.day],
+            set: { seconds: sql`${studySessions.seconds} + ${pos.seconds}`, updatedAt: now },
+          })
+          .run();
+      }
     });
   }
 
@@ -385,6 +394,8 @@ export class LibraryService {
 
   private removeFiles(row: DocumentRow) {
     fs.rmSync(row.filePath, { force: true });
+    // Pre-OCR original, when OCR replaced the served file.
+    fs.rmSync(row.filePath.replace(/\.pdf$/, '.orig.pdf'), { force: true });
     fs.rmSync(this.coverPath(row.id), { force: true });
   }
 

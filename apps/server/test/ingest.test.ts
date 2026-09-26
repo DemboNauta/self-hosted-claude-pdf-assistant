@@ -217,3 +217,35 @@ describe('upload and ingestion', () => {
     expect(titleFromFilename('.pdf')).toBe('Documento sin título');
   });
 });
+
+describe('OCR of scanned pages', () => {
+  it('runs OCR when pages have no text and re-indexes the result', async () => {
+    const { authedApp: build, seedDocument: seed, tempDataDir: tmp } = await import('./helpers.js');
+    const calls: string[] = [];
+    const recognised = await makePdf([
+      ['Texto reconocido por OCR.'],
+      ['Segunda página escaneada.'],
+    ]);
+    const ocr = async (input: string, output: string) => {
+      calls.push(input);
+      fs.writeFileSync(output, recognised);
+    };
+    const dirs = tmp('pca-ocr-');
+    const { app: a, headers: h } = await build(dirs, { ocr });
+    try {
+      const { docId } = await seed(a, h, [[], []]);
+      const detail = (
+        await a.inject({ url: `/api/documents/${docId}`, headers: h })
+      ).json<DocumentDetail>();
+      expect(detail).toMatchObject({ status: 'ready', pageCount: 2 });
+      expect(calls).toHaveLength(1);
+      const hits = (
+        await a.inject({ url: `/api/search?q=reconocido&scope=doc&id=${docId}`, headers: h })
+      ).json();
+      expect(hits).toHaveLength(1);
+      expect(fs.existsSync(path.join(dirs.pdfDir, `${docId}.orig.pdf`))).toBe(true);
+    } finally {
+      await a.close();
+    }
+  });
+});

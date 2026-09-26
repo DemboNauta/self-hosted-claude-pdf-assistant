@@ -6,6 +6,7 @@ import type { AppConfig } from '../config.js';
 import { HttpError, notFound } from './errors.js';
 import { newId } from './ids.js';
 import type { LibraryService } from './library.js';
+import { DEFAULT_URL_LIMIT, downloadPdf } from './url-import.js';
 
 /** 32 MiB: well under Cloudflare's 100 MB request limit, small enough to retry cheaply. */
 export const CHUNK_SIZE = 32 * 1024 * 1024;
@@ -43,6 +44,7 @@ export class UploadService {
     private readonly config: AppConfig,
     private readonly library: LibraryService,
     private readonly onCreated: (docId: string) => void,
+    private readonly allowPrivateUrls = false,
   ) {
     this.dir = path.join(config.dataDir, 'uploads');
     fs.mkdirSync(this.dir, { recursive: true });
@@ -128,6 +130,35 @@ export class UploadService {
       title: titleFromFilename(meta.filename),
       filePath: finalPath,
       fileSize: meta.size,
+    });
+    this.onCreated(id);
+    return doc;
+  }
+
+  /** Downloads a PDF from a URL into a topic (F-ING-02). */
+  async importUrl(topicId: string, url: string): Promise<DocumentSummary> {
+    this.library.getTopicOrThrow(topicId);
+    const id = newId();
+    const tmp = path.join(this.dir, `${id}.url.part`);
+    const { filename, size } = await downloadPdf(
+      url,
+      tmp,
+      this.config.maxUploadBytes ?? DEFAULT_URL_LIMIT,
+      { allowPrivate: this.allowPrivateUrls },
+    );
+    if (!(await startsWithPdfMagic(tmp))) {
+      await fs.promises.rm(tmp, { force: true });
+      throw new HttpError(415, 'not_a_pdf');
+    }
+    const finalPath = path.join(this.config.pdfDir, `${id}.pdf`);
+    await fs.promises.rename(tmp, finalPath);
+    const doc = this.library.createDocument({
+      id,
+      topicId,
+      title: titleFromFilename(filename),
+      filePath: finalPath,
+      fileSize: size,
+      sourceUrl: url,
     });
     this.onCreated(id);
     return doc;

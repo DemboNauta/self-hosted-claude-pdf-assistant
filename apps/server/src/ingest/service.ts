@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { Worker } from 'node:worker_threads';
 import { eq, inArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
@@ -5,6 +6,7 @@ import type { Db } from '../db/client.js';
 import { documents, pages } from '../db/schema.js';
 import type { LibraryService } from '../services/library.js';
 import type { ExtractResult } from './extract.js';
+import type { OcrRunner } from './ocr.js';
 import type { WorkerInput, WorkerMessage } from './worker.js';
 
 /**
@@ -35,6 +37,8 @@ export class IngestService {
     private readonly db: Db,
     private readonly library: LibraryService,
     private readonly log: FastifyBaseLogger,
+    /** OCR for pages without text (F-ING-03); null when ocrmypdf is not installed. */
+    private readonly ocr: OcrRunner | null = null,
   ) {}
 
   /** Re-queues documents interrupted by a restart. */
@@ -79,10 +83,16 @@ export class IngestService {
     this.db.delete(pages).where(eq(pages.documentId, id)).run();
 
     try {
-      const result = await this.runWorker(
-        { filePath: row.filePath, coverPath: this.library.coverPath(id) },
-        id,
-      );
+      const input = { filePath: row.filePath, coverPath: this.library.coverPath(id) };
+      let result = await this.runWorker(input, id);
+      let hasOcr = row.hasOcr;
+      if (result.pagesWithoutText > 0 && this.ocr && !row.hasOcr) {
+        hasOcr = await this.runOcr(id, row.filePath);
+        if (hasOcr) {
+          this.db.delete(pages).where(eq(pages.documentId, id)).run();
+          result = await this.runWorker(input, id);
+        }
+      }
       this.db
         .update(documents)
         .set({
@@ -90,6 +100,7 @@ export class IngestService {
           error: null,
           pageCount: result.pageCount,
           hasCover: true,
+          hasOcr,
           outlineJson: JSON.stringify(result.outline),
         })
         .where(eq(documents.id, id))
@@ -106,6 +117,31 @@ export class IngestService {
         .set({ status: 'error', error: message.slice(0, 500) })
         .where(eq(documents.id, id))
         .run();
+    }
+  }
+
+  /**
+   * Replaces the served file with an OCR'd copy (text layer added to scanned pages).
+   * The original is kept next to it as `<id>.orig.pdf`. Failures leave the document
+   * indexed without OCR.
+   */
+  private async runOcr(id: string, filePath: string): Promise<boolean> {
+    this.db.update(documents).set({ status: 'ocr' }).where(eq(documents.id, id)).run();
+    const out = `${filePath}.ocr.part`;
+    try {
+      await this.ocr!(filePath, out);
+      await fs.promises.copyFile(filePath, filePath.replace(/\.pdf$/, '.orig.pdf'));
+      await fs.promises.rename(out, filePath);
+      this.db.update(documents).set({ status: 'indexing' }).where(eq(documents.id, id)).run();
+      return true;
+    } catch (err) {
+      await fs.promises.rm(out, { force: true });
+      this.log.warn(
+        { docId: id, err: err instanceof Error ? err.message : String(err) },
+        'OCR failed',
+      );
+      this.db.update(documents).set({ status: 'indexing' }).where(eq(documents.id, id)).run();
+      return false;
     }
   }
 

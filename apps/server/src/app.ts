@@ -11,6 +11,7 @@ import { openDb, type Db } from './db/client.js';
 import { loggerOptions } from './log.js';
 import { registerChatRoutes } from './routes/chat.js';
 import { registerClaudeRoutes } from './routes/claude.js';
+import { detectOcr, type OcrRunner } from './ingest/ocr.js';
 import { IngestService } from './ingest/service.js';
 import { registerLibraryRoutes } from './routes/library.js';
 import { registerPdfjsAssets } from './routes/pdfjs-assets.js';
@@ -32,6 +33,10 @@ export interface AppDeps {
   logger?: boolean;
   /** Only the e2e server raises this: its tests log in many times per minute. */
   loginAttemptsPerMinute?: number;
+  /** Tests only: allow URL imports from local addresses. */
+  allowPrivateUrls?: boolean;
+  /** OCR runner; defaults to ocrmypdf when installed (tests inject a fake). */
+  ocr?: OcrRunner | null;
   /** Replaces the Agent SDK `query` (tests and the e2e server use a fake Claude). */
   claudeQuery?: typeof query;
 }
@@ -74,9 +79,16 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   const search = new SearchService(db);
   await registerLibraryRoutes(app, library, search);
   await registerPdfjsAssets(app);
-  const ingest = new IngestService(db, library, app.log);
+  const ocr = deps.ocr !== undefined ? deps.ocr : await detectOcr(config.ocrLangs);
+  if (!ocr) app.log.info('ocrmypdf not found: scanned PDFs will be indexed without OCR');
+  const ingest = new IngestService(db, library, app.log, ocr);
   app.decorate('pcaIngest', ingest);
-  const uploads = new UploadService(config, library, (docId) => ingest.enqueue(docId));
+  const uploads = new UploadService(
+    config,
+    library,
+    (docId) => ingest.enqueue(docId),
+    deps.allowPrivateUrls,
+  );
   await registerUploadRoutes(app, uploads);
   ingest.resume();
   const purgeUploads = () => {

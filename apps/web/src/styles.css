@@ -204,3 +204,11 @@ body {
     animation-duration: 1ms;
   }
 }
+
+/* Dark PDF pages (F-VIS-04): invert and soften the canvas, keep hues. */
+[data-theme='dark'][data-dark-pdf='on'] [data-page] {
+  background: #1c1c1b;
+  & canvas {
+    filter: invert(0.88) hue-rotate(180deg) contrast(0.95);
+  }
+}

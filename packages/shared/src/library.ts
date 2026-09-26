@@ -91,6 +91,12 @@ export const readingPositionSchema = z.object({
   scroll: z.number().min(0).max(1),
   /** Other pages read since the last save (counted for reading progress). */
   viewed: z.array(z.number().int().min(1)).max(200).optional(),
+  /** Active reading time since the last save (F-VIS-05), on the reader's local day. */
+  seconds: z.number().int().min(0).max(3600).optional(),
+  day: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export type CreateSubject = z.infer<typeof createSubjectSchema>;
@@ -141,3 +147,8 @@ export const searchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
+
+export const importUrlSchema = z.object({
+  topicId: id,
+  url: z.string().trim().url().max(2000),
+});

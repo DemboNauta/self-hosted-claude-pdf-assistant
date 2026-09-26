@@ -7,7 +7,7 @@ import { ClaudeConnection } from './ClaudeConnection';
 const THEMES: ThemePreference[] = ['system', 'light', 'dark'];
 
 export function SettingsPage() {
-  const { preference, setPreference } = useThemeStore();
+  const { preference, setPreference, darkPdf, setDarkPdf } = useThemeStore();
   return (
     <Page title={t.settings.title}>
       <div className="space-y-12">
@@ -36,6 +36,15 @@ export function SettingsPage() {
               </button>
             ))}
           </div>
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={darkPdf}
+              onChange={(e) => setDarkPdf(e.target.checked)}
+              className="size-4"
+            />
+            {t.settings.theme.darkPdf}
+          </label>
         </section>
         <ClaudeConnection />
       </div>

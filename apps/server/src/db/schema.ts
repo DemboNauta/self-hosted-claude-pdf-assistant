@@ -211,3 +211,17 @@ export const examResults = sqliteTable(
   },
   (t) => [index('exam_results_document_idx').on(t.documentId, t.createdAt)],
 );
+
+/** Reading time per document and day (F-VIS-05, statistics). */
+export const studySessions = sqliteTable(
+  'study_sessions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    /** Local calendar day, YYYY-MM-DD. */
+    day: text('day').notNull(),
+    seconds: integer('seconds').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('study_sessions_doc_day_idx').on(t.documentId, t.day)],
+);

@@ -6,12 +6,14 @@ import type {
   TopicNode,
 } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, Link2, Upload } from 'lucide-react';
 import { useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router';
 import { Dialog, NameDialog } from '../../components/Dialog';
 import { t } from '../../i18n';
-import { useTrashDocument, useUpdateDocument } from './api';
+import { api, ApiError } from '../../lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { libraryKey, useTrashDocument, useUpdateDocument } from './api';
 import { dndId } from './dnd';
 import { DocumentCard } from './DocumentCard';
 import { TopicSelect } from './TopicSelect';
@@ -19,6 +21,7 @@ import { UploadList } from './UploadList';
 import { useUploads } from './uploads';
 
 type DialogState =
+  | { kind: 'importUrl' }
   | { kind: 'rename'; doc: DocumentSummary }
   | { kind: 'move'; doc: DocumentSummary }
   | { kind: 'trash'; doc: DocumentSummary };
@@ -93,14 +96,24 @@ export function TopicView({
             {topic.name}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => fileInput.current?.click()}
-          className="bg-accent text-accent-contrast flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium"
-        >
-          <Upload size={16} aria-hidden />
-          {t.library.upload.button}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setDialog({ kind: 'importUrl' })}
+            className="border-border hover:bg-surface-muted flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+          >
+            <Link2 size={16} aria-hidden />
+            {t.library.importUrl.button}
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            className="bg-accent text-accent-contrast flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+          >
+            <Upload size={16} aria-hidden />
+            {t.library.upload.button}
+          </button>
+        </div>
         <input
           ref={fileInput}
           type="file"
@@ -158,6 +171,7 @@ export function TopicView({
         </div>
       )}
 
+      {dialog?.kind === 'importUrl' && <ImportUrlDialog topicId={topic.id} onClose={close} />}
       {dialog?.kind === 'rename' && (
         <NameDialog
           title={t.library.rename}
@@ -219,5 +233,79 @@ function MoveDialog({
         exclude={doc.topicId}
       />
     </Dialog>
+  );
+}
+
+function ImportUrlDialog({ topicId, onClose }: { topicId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api('/documents/import-url', { method: 'POST', json: { topicId, url: url.trim() } });
+      await qc.invalidateQueries({ queryKey: libraryKey });
+      onClose();
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : 'url_fetch_failed';
+      setError(t.library.importUrl.errors[code] ?? t.library.importUrl.errors.url_fetch_failed!);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-url-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+    >
+      <form
+        onSubmit={submit}
+        className="bg-surface w-full max-w-md space-y-4 rounded-xl p-5 shadow-xl"
+      >
+        <h2 id="import-url-title" className="font-serif text-xl">
+          {t.library.importUrl.title}
+        </h2>
+        <label className="block space-y-2">
+          <span className="text-sm font-medium">{t.library.importUrl.label}</span>
+          <input
+            type="url"
+            required
+            autoFocus
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://…/documento.pdf"
+            className="border-border bg-bg w-full rounded-lg border px-3 py-2 text-base"
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-danger text-sm">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-text-muted rounded-lg px-3 py-2 text-sm"
+          >
+            {t.library.cancel}
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="bg-accent text-accent-contrast rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {busy ? t.common.loading : t.library.importUrl.submit}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

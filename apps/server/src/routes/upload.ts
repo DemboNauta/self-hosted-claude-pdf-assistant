@@ -1,5 +1,9 @@
 import type { Readable } from 'node:stream';
-import { createUploadSchema, uploadChunkQuerySchema } from '@pdfclaudeassistant/shared';
+import {
+  createUploadSchema,
+  importUrlSchema,
+  uploadChunkQuerySchema,
+} from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { OffsetMismatch, type UploadService } from '../services/uploads.js';
@@ -36,6 +40,10 @@ export async function registerUploadRoutes(app: FastifyInstance, uploads: Upload
     scope.post('/api/uploads/:id/complete', async (req, reply) =>
       reply.code(201).send(await uploads.complete(id(req.params))),
     );
+    scope.post('/api/documents/import-url', async (req, reply) => {
+      const { topicId, url } = parse(importUrlSchema, req.body);
+      return reply.code(201).send(await uploads.importUrl(topicId, url));
+    });
     scope.delete('/api/uploads/:id', async (req, reply) => {
       await uploads.cancel(id(req.params));
       return reply.code(204).send();
