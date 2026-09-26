@@ -1,0 +1,33 @@
+# systemd unit for PdfClaudeAssistant (installed by scripts/deploy-remote.sh, which
+# replaces @DIR@ with the deploy directory). Settings come from @DIR@/.env; the
+# values below win over it because Node's --env-file never overrides the environment.
+[Unit]
+Description=PdfClaudeAssistant (study assistant with Claude)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pdfclaude
+Group=pdfclaude
+WorkingDirectory=@DIR@/app
+Environment=NODE_ENV=production
+# Only reachable through the host's Caddy.
+Environment=HOST=127.0.0.1
+Environment=DATA_DIR=@DIR@/data
+Environment=WEB_DIR=@DIR@/app/public
+Environment=CLAUDE_CONFIG_DIR=@DIR@/data/claude-home
+Environment=PATH=@DIR@/runtime/node/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@DIR@/runtime/node/bin/node --env-file=@DIR@/.env --enable-source-maps dist/main.js
+Restart=on-failure
+RestartSec=5
+# Uploads, OCR and page renders can use a fair amount of memory on a small VPS.
+MemoryMax=1500M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=@DIR@/data
+
+[Install]
+WantedBy=multi-user.target
