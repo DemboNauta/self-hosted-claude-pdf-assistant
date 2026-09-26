@@ -225,3 +225,42 @@ export const studySessions = sqliteTable(
   },
   (t) => [uniqueIndex('study_sessions_doc_day_idx').on(t.documentId, t.day)],
 );
+
+/** Flashcards with FSRS scheduling state (F-REV-01/02). */
+export const flashcards = sqliteTable(
+  'flashcards',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    page: integer('page'),
+    conceptId: text('concept_id').references(() => concepts.id, { onDelete: 'set null' }),
+    front: text('front').notNull(),
+    back: text('back').notNull(),
+    author: text('author', { enum: ['user', 'claude'] }).notNull(),
+    status: text('status', { enum: ['active', 'proposed', 'rejected'] })
+      .notNull()
+      .default('active'),
+    /** ts-fsrs Card, JSON (dates as ISO strings). */
+    fsrsJson: text('fsrs_json').notNull(),
+    dueAt: text('due_at').notNull(),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('flashcards_due_idx').on(t.status, t.dueAt)],
+);
+
+export const reviews = sqliteTable(
+  'reviews',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    flashcardId: text('flashcard_id')
+      .notNull()
+      .references(() => flashcards.id, { onDelete: 'cascade' }),
+    /** 1 again, 2 hard, 3 good, 4 easy. */
+    rating: integer('rating').notNull(),
+    reviewedAt: text('reviewed_at').notNull(),
+    /** Local calendar day, for streaks. */
+    day: text('day').notNull(),
+  },
+  (t) => [index('reviews_day_idx').on(t.day)],
+);

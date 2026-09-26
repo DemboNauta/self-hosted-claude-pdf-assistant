@@ -17,6 +17,7 @@ import { newId } from '../services/ids.js';
 import type { AnnotationService } from '../services/annotations.js';
 import type { LibraryService } from '../services/library.js';
 import type { MemoryService } from '../services/memory.js';
+import type { ReviewService } from '../services/review.js';
 import type { SearchService } from '../services/search.js';
 import type { SettingsService } from '../services/settings.js';
 
@@ -44,6 +45,7 @@ export interface ToolDeps {
   annotations: AnnotationService;
   settings: SettingsService;
   memory: MemoryService;
+  review: ReviewService;
 }
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -590,6 +592,48 @@ export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/** Flashcards proposed by Claude (F-REV-01), accepted by the student in Repaso. */
+export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
+  return [
+    tool(
+      'create_flashcards',
+      'Propose flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are shown as proposals the student accepts in the review screen.',
+      {
+        cards: z
+          .array(
+            z.object({
+              front: z.string().min(3).max(1000),
+              back: z.string().min(1).max(2000),
+              page: z.number().int().min(1).optional(),
+              docId: z.string().optional(),
+            }),
+          )
+          .min(1)
+          .max(40),
+      },
+      tracked(
+        ctx,
+        'create_flashcards',
+        ({ cards }) => `(${cards.length})`,
+        async ({ cards }) => {
+          const created = deps.review.create(
+            cards.map((c) => ({
+              front: c.front,
+              back: c.back,
+              page: c.page ?? null,
+              documentId: c.docId ?? ctx.docId,
+            })),
+            'claude',
+            'proposed',
+          );
+          ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'flashcards' });
+          return text(`Proposed ${created.length} flashcard(s).`);
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
   const tools = [
@@ -597,6 +641,7 @@ export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
     ...pointerTools(deps, ctx),
     ...annotationTools(deps, ctx),
     ...memoryTools(deps, ctx),
+    ...reviewTools(deps, ctx),
   ];
   return {
     server: createSdkMcpServer({ name: MCP_SERVER_NAME, version: '1.0.0', tools }),

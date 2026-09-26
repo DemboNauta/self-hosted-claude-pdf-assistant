@@ -23,6 +23,10 @@ import { ThreadService } from './services/threads.js';
 import { AnnotationService } from './services/annotations.js';
 import { SettingsService } from './services/settings.js';
 import { MemoryService } from './services/memory.js';
+import { ReviewService } from './services/review.js';
+import { BriefService } from './services/brief.js';
+import { StatsService } from './services/stats.js';
+import { registerReviewRoutes } from './routes/review.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerAnnotationRoutes } from './routes/annotations.js';
 import { UploadService } from './services/uploads.js';
@@ -103,12 +107,23 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   const settings = new SettingsService(db);
   const memory = new MemoryService(db);
   await registerMemoryRoutes(app, memory);
+  const review = new ReviewService(db);
+  const brief = new BriefService(
+    db,
+    config,
+    review,
+    memory,
+    library,
+    settings,
+    deps.claudeQuery ?? query,
+  );
+  await registerReviewRoutes(app, review, brief, new StatsService(db, library));
   await registerAnnotationRoutes(app, annotations, library, settings);
   const chat = new ChatService(
     config,
     threads,
     library,
-    { db, library, search, annotations, settings, memory },
+    { db, library, search, annotations, settings, memory, review },
     claudeStatus,
     app.log,
     deps.claudeQuery ?? query,
