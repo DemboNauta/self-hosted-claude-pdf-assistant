@@ -14,141 +14,116 @@ Single user, runs on your own VPS. See [`SPEC.md`](SPEC.md) for the full product
 
 ## Deploying on a VPS
 
-The app runs as **one container** (`pdfclaudeassistant-server`) that serves the web
-app, the API and the chat WebSocket. It listens only on `127.0.0.1:${APP_PORT}`; a
-reverse proxy on the host publishes it over HTTPS.
+The app runs as a **systemd service** (`pdfclaudeassistant`, user `pdfclaude`)
+listening only on `127.0.0.1:PORT`, behind the Caddy that already runs on the
+host. It uses its own Node 22 under `/opt/pdfclaudeassistant/runtime`, so the
+system Node of other services is left alone.
 
-Requirements on the VPS: Docker with the Compose plugin, a reverse proxy (the
-host's own Caddy is assumed below; see [bundled Caddy](#without-a-reverse-proxy-bundled-caddy)
-otherwise) and a DNS name pointing at the VPS.
+Requirements on the VPS: Ubuntu/Debian with Caddy, `curl` and `openssl`. The
+first deploy installs the rest (`ocrmypdf`, Tesseract `spa`/`eng`, Node 22).
 
 ### Deploying from your PC (`scripts/deploy.ps1`)
 
 Deploys run from a Windows PC over SSH. The script packs the **committed** code
-(`git archive HEAD`), copies it with `scp`, swaps it into the deploy directory,
-rebuilds and restarts the container, and waits for `/api/health`. It never
-touches the server's `.env` or `data/`.
+(`git archive HEAD`), copies it with `scp` and runs `scripts/deploy-remote.sh`
+on the VPS, which:
+
+1. builds the release there (pnpm install, web and server builds) and checks
+   that the native modules load;
+2. swaps it into `/opt/pdfclaudeassistant/app`, keeping the previous one until
+   the new one passes `/api/health`, and **rolls back** if it does not;
+3. keeps this app's own block in the shared `/etc/caddy/Caddyfile` (between
+   `# >>> PDFCLAUDEASSISTANT BEGIN/END <<<` markers), validating it before
+   reloading and restoring the backup if it does not validate.
+
+It never touches `.env` or `data/` after creating them.
 
 ```powershell
-$env:PCA_DEPLOY_HOST = 'root@<VPS_HOST>'   # required
-# optional: $env:PCA_DEPLOY_DIR (default /opt/pdfclaudeassistant)
-#           $env:PCA_SSH_KEY    (default $env:USERPROFILE\.ssh\id_ed25519)
+$env:PCA_DEPLOY_HOST = 'root@<VPS_HOST>'      # required
+$env:PCA_DOMAIN = 'http://<APP_DOMAIN>'       # http:// prefix: Cloudflare in Flexible mode
+# optional: PCA_APP_PORT (only for the first .env, default 8004),
+#           PCA_DEPLOY_DIR (default /opt/pdfclaudeassistant), PCA_SSH_KEY
 .\scripts\deploy.ps1
 ```
 
-It refuses to run with uncommitted changes (pass `-AllowDirty` to deploy `HEAD`
+It refuses to run with uncommitted changes (`-AllowDirty` deploys `HEAD`
 anyway). Database migrations run automatically when the server starts.
 
 ### First-time setup
 
-1. Install Docker and the Compose plugin on the VPS.
-2. Run `.\scripts\deploy.ps1` once. It copies the code to
-   `/opt/pdfclaudeassistant`, creates `data/` (owned by uid 1000, the container
-   user) and stops because `.env` does not exist yet.
-3. On the VPS, create `.env`:
+1. `.\scripts\deploy.ps1`: installs everything, creates the `pdfclaude` user,
+   `/opt/pdfclaudeassistant/.env` (with a random `SESSION_SECRET`) and `data/`,
+   and publishes the Caddy block. It stops before starting the app because
+   there is no login password yet.
+2. `.\scripts\deploy.ps1 -SetPassword`: asks for the password on your PC and
+   stores its argon2 hash in `.env` (the password travels over SSH stdin and is
+   never written to disk). This starts the app.
+3. Connect Claude (next section): run `claude setup-token` on your PC, then
+   `.\scripts\deploy.ps1 -SetClaudeToken` and paste the token.
+4. Open `https://<APP_DOMAIN>`, log in and check **Ajustes → Conexión con
+   Claude**: it should say _Conectado con tu suscripción_.
 
-   ```bash
-   cd /opt/pdfclaudeassistant
-   cp .env.example .env
-   docker compose build server
-   docker compose run --rm --no-deps server node dist/hash-password.js 'your password'
-   # -> APP_PASSWORD_HASH='$argon2id$v=19$...'   paste this line into .env
-   ```
-
-   | Variable                  | Value                                                                     |
-   | ------------------------- | ------------------------------------------------------------------------- |
-   | `APP_PORT`                | A free loopback port on the host (the proxy points here). Default 3000.   |
-   | `APP_PASSWORD_HASH`       | Output of the command above, **inside single quotes** (the hash has `$`). |
-   | `SESSION_SECRET`          | `openssl rand -hex 32`                                                    |
-   | `CLAUDE_CODE_OAUTH_TOKEN` | Subscription token (method 1 below). Leave empty for method 2.            |
-   | `CLAUDE_MODEL`            | Optional model alias/ID. Empty uses Claude Code's default.                |
-   | `MAX_UPLOAD_MB`           | `0` = no limit.                                                           |
-   | `OCR_LANGS`               | Tesseract languages, default `spa+eng`.                                   |
-
-4. Run `.\scripts\deploy.ps1` again: it builds, starts and health-checks the app.
-5. Add the site to the host Caddy: copy the block from
-   [`deploy/host-caddy.example`](deploy/host-caddy.example) into the Caddyfile
-   (your domain, and your `APP_PORT` if it is not 3000), then
-   `systemctl reload caddy`. Behind Cloudflare (proxied), use SSL/TLS mode
-   **Full (strict)**; uploads go in 32 MiB chunks, below Cloudflare's body limit.
-6. Open `https://your-domain`, log in and check **Ajustes → Conexión con Claude**:
-   it should say _Conectado con tu suscripción_.
+Other settings (`CLAUDE_MODEL`, `MAX_UPLOAD_MB`, `OCR_LANGS`) are edited in
+`/opt/pdfclaudeassistant/.env`, followed by `systemctl restart pdfclaudeassistant`.
 
 ### Backups
 
-`docker compose exec -T server node dist/backup.js` writes
-`data/backups/pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz` (database snapshot,
-PDFs and covers; the Claude session in `data/claude-home` is left out).
-**Ajustes** also has a download button. A daily backup at 04:00 with cron
-(`crontab -e` on the VPS):
+`cd /opt/pdfclaudeassistant/app && runuser -u pdfclaude -- env DATA_DIR=/opt/pdfclaudeassistant/data ../runtime/node/bin/node --env-file=../.env dist/backup.js`
+writes `data/backups/pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz` (database
+snapshot, PDFs and covers; the Claude session is left out). **Ajustes** also has
+a download button. A daily backup at 04:00 (`crontab -e` as root):
 
 ```cron
-0 4 * * * cd /opt/pdfclaudeassistant && docker compose exec -T server node dist/backup.js >> data/backups/cron.log 2>&1
+0 4 * * * cd /opt/pdfclaudeassistant/app && runuser -u pdfclaude -- env DATA_DIR=/opt/pdfclaudeassistant/data ../runtime/node/bin/node --env-file=../.env dist/backup.js >> /var/log/pdfclaudeassistant-backup.log 2>&1
 ```
 
-Copy `data/backups/` somewhere off the VPS from time to time, and delete old
-archives when they pile up.
+Copy `data/backups/` off the VPS from time to time and prune old archives.
 
 ### Operating
 
-- Logs: `docker compose logs -f server` (lines prefixed `[PdfClaudeAssistant]`).
-- Deployed revision: `cat /opt/pdfclaudeassistant/REVISION`.
-- Everything that matters lives in `data/` (SQLite, PDFs, covers, Claude
-  session). Deploys keep it; never delete it.
-- Host-specific compose tweaks go in `docker-compose.override.yml` next to
-  `docker-compose.yml`; deploys keep that file too.
+- Logs: `journalctl -u pdfclaudeassistant -f` (lines prefixed
+  `[PdfClaudeAssistant]`).
+- Restart: `systemctl restart pdfclaudeassistant`. Deployed revision:
+  `cat /opt/pdfclaudeassistant/app/REVISION`.
+- Everything that matters lives in `/opt/pdfclaudeassistant/data` (SQLite, PDFs,
+  covers, Claude session). Deploys keep it; never delete it.
 
-### Without a reverse proxy (bundled Caddy)
+### Alternative: Docker
 
-On a host with nothing on ports 80/443, the optional bundled Caddy gets the
-HTTPS certificate itself. Set `DOMAIN` in `.env` and start both services:
-
-```bash
-docker compose --profile caddy up -d
-```
+`docker/server.Dockerfile` and `docker-compose.yml` still work on a host with
+Docker: the container publishes only `127.0.0.1:${APP_PORT}`, and
+`docker compose --profile caddy up -d` adds a bundled Caddy for hosts without a
+proxy (`DOMAIN` in `.env`). Create `.env` from `.env.example`; the hash comes from
+`docker compose run --rm --no-deps server node dist/hash-password.js 'password'`.
 
 ## Connecting Claude to your subscription
 
-Two supported methods. Either way the credentials stay on the server and never
-reach the browser.
+The server uses a long-lived subscription token. It stays on the server (in
+`.env`) and never reaches the browser.
 
-### Method 1 — long-lived token (recommended)
-
-1. On any machine with Claude Code installed, run:
-   ```bash
-   claude setup-token
+1. On any machine with Claude Code installed, run `claude setup-token` and sign
+   in with your Claude account in the browser window it opens.
+2. From your PC, store the token it prints on the VPS (it restarts the app):
+   ```powershell
+   .\scripts\deploy.ps1 -SetClaudeToken
    ```
-2. Sign in with your Claude account in the browser window it opens.
-3. Copy the token it prints into `.env`:
-   ```bash
-   CLAUDE_CODE_OAUTH_TOKEN=...
-   ```
-4. Apply it: `docker compose up -d` (recreates the server with the new env).
 
-### Method 2 — interactive login inside the container
-
-1. Start the stack: `docker compose up -d`
-2. Open Claude Code in the server container:
-   ```bash
-   docker compose exec server claude
-   ```
-3. Type `/login`, choose your Claude subscription account and follow the link.
-4. Exit Claude Code (`/exit`).
-
-Credentials are stored in `./data/claude-home` (mounted as the container's
-Claude config dir), so they survive restarts and image updates. This directory is
-excluded from downloadable backups.
+With the Docker alternative, put it in `.env` as `CLAUDE_CODE_OAUTH_TOKEN=...`
+and run `docker compose up -d`; there you can also log in interactively with
+`docker compose exec server claude` → `/login` (the session is kept in
+`data/claude-home`, which downloadable backups leave out).
 
 ### When the session expires or you hit a limit
 
 **Ajustes → Conexión con Claude** shows one of: connected, session expired, usage
-limit reached. For an expired session repeat method 1 (new token, `docker compose up -d`)
-or method 2. Usage limits reset on your subscription's schedule.
+limit reached. For an expired session create a new token and run
+`-SetClaudeToken` again. Usage limits reset on your subscription's schedule.
 
 ## Updating
 
 Commit, then run `.\scripts\deploy.ps1` from your PC (see above). Database
-migrations run automatically on startup.
+migrations run automatically on startup; a release that fails its health check
+is rolled back.
 
 ## Development
 

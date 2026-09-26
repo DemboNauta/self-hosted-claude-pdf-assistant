@@ -1,16 +1,16 @@
-# PdfClaudeAssistant behind the Caddy that already runs on the VPS (outside Docker).
-# Paste this block into the host Caddyfile (usually /etc/caddy/Caddyfile), replace
-# <APP_DOMAIN> and, if APP_PORT in .env is not 3000, the port. Then reload Caddy:
-#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+# Reference only: scripts/deploy-remote.sh writes this block into the host's shared
+# /etc/caddy/Caddyfile itself (between PDFCLAUDEASSISTANT markers) when PCA_DOMAIN is
+# set, validates the file and reloads Caddy. Never overwrite the shared Caddyfile.
 #
-# - Everything (web app, API and the /ws/chat WebSocket) goes to the one container,
-#   which listens only on 127.0.0.1:APP_PORT.
+# - Everything (web app, API and the /ws/chat WebSocket) goes to the app, which
+#   listens only on 127.0.0.1:PORT (8004 by default).
 # - Caddy keeps the Host header, which the WebSocket origin check relies on, passes
 #   WebSockets through and sets no request body limit (uploads come in 32 MiB chunks).
-# - Behind Cloudflare (proxied), use SSL/TLS mode "Full (strict)": Caddy still gets a
-#   real certificate for <APP_DOMAIN>.
+# - Behind Cloudflare in Flexible mode, prefix the site with http:// (Cloudflare
+#   terminates HTTPS); with "Full (strict)" or no Cloudflare, leave it out and Caddy
+#   gets a certificate.
 
-<APP_DOMAIN> {
+http://<APP_DOMAIN> {
 	encode zstd gzip
 
 	header {
@@ -18,5 +18,5 @@
 		-Server
 	}
 
-	reverse_proxy 127.0.0.1:3000
+	reverse_proxy 127.0.0.1:8004
 }

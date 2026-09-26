@@ -53,14 +53,15 @@ The **deployment** milestone:
     `src/routes/web.ts`). The Docker image builds web + server and runs as one
     container. Compose publishes only `127.0.0.1:${APP_PORT:-3000}`. The bundled
     Caddy is an optional compose profile (`--profile caddy`).
-  - Deploy tooling (2026-09-26): `scripts/deploy.ps1` + `scripts/deploy-remote.sh`,
-    `deploy/host-caddy.example`, README "Deploying on a VPS" (with the backup
-    cron), `CLAUDE.md` status. Details in `DEPLOYMENT.md`.
-- **Next:** the first real deploy, together with the owner. Ask for the SSH
-  host, a free loopback `APP_PORT`, the domain (none of them go in the repo) and
-  whether Docker is installed on the VPS. The Docker image has never been built
-  on the PC (no Docker there); check the CI `docker` job after pushing, since
-  the image build now also checks that the native modules load.
+  - Native deploy (2026-09-26): the VPS (same as `garmin-ia`) has no Docker,
+    so the app runs as a systemd service behind the shared Caddy.
+    `scripts/deploy.ps1` + `scripts/deploy-remote.sh`; details in
+    `DEPLOYMENT.md`. The first deploy is done: release installed, unit enabled,
+    Caddy block live.
+- **Next:** the owner runs `.\scripts\deploy.ps1 -SetPassword` and
+  `-SetClaudeToken` (Claude must not type these secrets). Then check the site,
+  Phase 0 acceptance and the backup cron (README). Commits are still unpushed;
+  the Docker image (alternative) is only built by CI.
 - After deployment: the owner validates Phase 0 acceptance on the VPS (HTTPS
   login, "Conectado con tu suscripción", server refuses to start with an API
   key), then real use.

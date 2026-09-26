@@ -52,6 +52,10 @@ change them if he disagrees.
   - Claude gets the text inside the marked area **and an image** of that area
     with the drawing on top.
   - The drawings stay as normal annotations.
+- Deployment target (2026-09-26): the same VPS as his `garmin-ia` project. The
+  app runs like the other apps there, as a **systemd service behind the shared
+  Caddy, without Docker**. The subdomain follows the Cloudflare mode of his other
+  subdomains (Flexible). See `DEPLOYMENT.md`.
 - Reopening a document must resume at the page where the reading stopped, also
   when navigating inside the app (bug fixed 2026-09-26).
 
