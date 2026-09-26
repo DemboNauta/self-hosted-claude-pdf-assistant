@@ -67,8 +67,10 @@ $remoteScript = Join-Path $tmp 'pca-deploy-remote.sh'
 $sh = [IO.File]::ReadAllText((Join-Path $root 'scripts\deploy-remote.sh')) -replace "`r`n", "`n"
 [IO.File]::WriteAllText($remoteScript, $sh, (New-Object System.Text.UTF8Encoding $false))
 
-function Invoke-Remote([string]$Arguments, [string]$Stdin = $null) {
+function Invoke-Remote([string]$Arguments, $Stdin = $null) {
   $cmd = "bash /tmp/pca-deploy-remote.sh $Arguments; code=`$?; rm -f /tmp/pca-deploy-remote.sh; exit `$code"
+  # Remote stderr (apt, pnpm warnings) must not abort the script: only the exit code counts.
+  $ErrorActionPreference = 'Continue'
   if ($null -ne $Stdin) {
     # Secrets go through stdin (not the command line) as UTF-8.
     $prev = $OutputEncoding
@@ -116,7 +118,7 @@ try {
     throw "Uncommitted changes (only committed code is deployed). Commit them or pass -AllowDirty.`n$($dirty -join "`n")"
   }
   $rev = (git rev-parse --short HEAD).Trim()
-  Write-Step "Deploying revision $rev to ${DeployHost}:$Dir"
+  Write-Step "Deploying revision $rev to $Dir on the VPS"
   $archive = Join-Path $tmp 'pca-release.tgz'
   git archive --format=tar.gz -o $archive HEAD
   if ($LASTEXITCODE -ne 0) { throw 'git archive failed.' }

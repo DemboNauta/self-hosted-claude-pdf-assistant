@@ -73,7 +73,7 @@ ensure_packages() {
   if ((${#missing[@]})); then
     log "Installing ${missing[*]}..."
     DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}" >/dev/null
   fi
 }
 
