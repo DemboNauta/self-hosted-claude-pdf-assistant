@@ -1,10 +1,11 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26 (diagram viewer, study timer; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-26 (multi-user merged into `main`, not deployed yet; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
-- Single owner, **Edgar**, Spanish speaker. Talk to him in Spanish. Code,
+- Owner and admin, **Edgar**, Spanish speaker (the app is multi-user since
+  2026-09-26; he is the admin). Talk to him in Spanish. Code,
   comments, commits and docs are in English; UI text is in Spanish
   (`apps/web/src/i18n/es.ts`).
 - Standing instruction from the owner (latest): **keep going through the phases
@@ -66,6 +67,22 @@ for a better viewer: the full-screen viewer is now a canvas with free zoom and p
 (wheel or trackpad pinch around the pointer, drag, two-finger pinch on touch,
 double click, keyboard), no scrollbars (`features/diagrams/PanZoom.tsx`).
 
+Then **multi-user** (built in a cloud session on branch
+`claude/nifty-noether-7b2tc8`). The owner decided: each user brings their own
+Claude token, accounts come from the admin or single-use invitation links, data is
+fully isolated, and the existing data goes to the admin (`DECISIONS.md`).
+
+- Server:
+  - migration `0012` (users, invitations, `user_settings`, `user_id` everywhere);
+  - per-user services (`services/scope.ts`), `UserService`, `SecretBox`
+    (encrypted tokens);
+  - `claude/credentials.ts`: whose subscription a turn uses; per-user status.
+- Web: login with username, `/invite/:token`, Ajustes → Tu cuenta and «Tu token
+  de Claude», `/admin` (accounts and invitations; sidebar "Usuarios" for the admin).
+- **Before deploying**, tell the owner: after the deploy he logs in as **`admin`**
+  with his current password. He can rename the account in Ajustes. Not tried yet
+  with real Claude for a second user (needs a second subscription's token).
+
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.
 
@@ -89,11 +106,12 @@ The **deployment** milestone:
 
 ## Verification done so far
 
-- `apps/server`: 63 unit/integration tests pass (`vitest`).
+- `apps/server`: 72 unit/integration tests pass (`vitest`), 9 of them for
+  multi-user isolation, invitations, admin rights and per-user Claude
+  (`test/users.test.ts`).
 - `apps/web`: 9 unit tests pass (citations, relative time, timer engine). The
-  Playwright suite has 36 tests over desktop and mobile projects: 31 pass and 5
+  Playwright suite has 38 tests over desktop and mobile projects: 33 pass and 5
   are skipped on mobile by design (pointer drag, drawing, keyboard shortcuts).
-  The old library drag-and-drop flake is fixed. CI is green.
 - Real Claude, run through the owner's subscription with a temp data dir and
   generated PDFs:
   - A document question: Claude used `get_pages`, answered with correct

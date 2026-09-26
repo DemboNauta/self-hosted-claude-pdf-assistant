@@ -75,7 +75,8 @@ export const clientChatEventSchema = z.discriminatedUnion('type', [
 ]);
 export type ClientChatEvent = z.infer<typeof clientChatEventSchema>;
 
-export type ChatErrorCode = 'rate_limited' | 'auth_expired' | 'busy' | 'internal';
+export type ChatErrorCode =
+  'rate_limited' | 'auth_expired' | 'not_configured' | 'busy' | 'internal';
 
 /** A tool Claude used while answering, shown as a small status line in the chat. */
 export interface ToolEvent {

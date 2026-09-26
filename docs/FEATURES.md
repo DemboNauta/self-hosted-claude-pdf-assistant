@@ -95,13 +95,13 @@ server, not against real Claude yet.
 
 ## 3.9 General UX
 
-| ID      | Status | Where / notes                                                       |
-| ------- | ------ | ------------------------------------------------------------------- |
-| F-UX-01 | ✅     | Desktop, tablet and phone layouts; e2e runs on desktop and Pixel 7. |
-| F-UX-02 | ✅     | Light, dark and system themes.                                      |
-| F-UX-03 | ✅     | Reader and review shortcuts, "?" help, list in Settings.            |
-| F-UX-04 | ✅     | Argon2 password, 90-day sliding session, rate limit.                |
-| F-UX-05 | ✅     | Manifest, icons, service worker (production only).                  |
+| ID      | Status | Where / notes                                                                  |
+| ------- | ------ | ------------------------------------------------------------------------------ |
+| F-UX-01 | ✅     | Desktop, tablet and phone layouts; e2e runs on desktop and Pixel 7.            |
+| F-UX-02 | ✅     | Light, dark and system themes.                                                 |
+| F-UX-03 | ✅     | Reader and review shortcuts, "?" help, list in Settings.                       |
+| F-UX-04 | ✅     | Argon2 password, 90-day sliding session, rate limit. Now per user (see below). |
+| F-UX-05 | ✅     | Manifest, icons, service worker (production only).                             |
 
 ## Beyond the SPEC (owner requests)
 
@@ -109,6 +109,8 @@ server, not against real Claude yet.
 | -------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Visual schemas | ✅ fake | "Esquema visual" chat mode (whole PDF or pages) and selection action; Claude picks mind map / tree / flowchart (Mermaid, `features/diagrams`). Shown in the chat, the reader's "Esquemas" panel and the `/diagrams` page; full-screen canvas with free zoom and pan (wheel, drag, pinch). Not yet tried with real Claude. |
 | Study timer    | ✅      | F-FOCUS-01..03 (`features/timer`): floating, draggable widget on every page (sidebar, reader toolbar, phone page headers). Pomodoro 25/5 (long 15 every 4), 50/10, 52/17, 90/20 and custom. Chime, break screen, completed blocks in the stats.                                                                           |
+
+| Multi-user | ✅ | Accounts with username + password; the admin (the server owner, who keeps the pre-existing data) creates accounts or single-use invitation links (`/admin`, `/invite/:token`). Every user's data is isolated; each connects their own Claude token in Settings (encrypted). Account settings: name, username, password. Server tests `test/users.test.ts`, e2e `users.spec.ts`. |
 
 ## SPEC §11–12 (ops/security)
 

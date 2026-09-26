@@ -1,5 +1,5 @@
 /**
- * How Claude Code authenticated against the owner's subscription.
+ * How Claude Code authenticated against the user's subscription.
  * `other` = the probe succeeded with credentials the app did not recognise
  * (e.g. managed by the host environment).
  */
@@ -11,8 +11,10 @@ export type ClaudeAuthMethod = 'oauth_token' | 'interactive_login' | 'other' | '
  * - auth_expired: no credentials, or they were rejected.
  * - rate_limited: the subscription hit its usage limit.
  * - error: anything else (CLI missing, network, ...).
+ * - not_configured: the user has not saved a Claude token yet (multi-user).
  */
-export type ClaudeConnectionState = 'connected' | 'auth_expired' | 'rate_limited' | 'error';
+export type ClaudeConnectionState =
+  'connected' | 'auth_expired' | 'rate_limited' | 'error' | 'not_configured';
 
 export interface ClaudeStatus {
   state: ClaudeConnectionState;

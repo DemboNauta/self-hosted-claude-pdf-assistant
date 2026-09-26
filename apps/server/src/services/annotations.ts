@@ -42,16 +42,21 @@ const now = () => new Date().toISOString();
 
 /** Permanent annotations (F-ANN-01..08) and Claude's proposals (F-ANN-04). */
 export class AnnotationService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
 
   list(documentId: string, { includeRejected = false } = {}): Annotation[] {
     return this.db
       .select()
       .from(annotations)
       .where(
-        includeRejected
-          ? eq(annotations.documentId, documentId)
-          : and(eq(annotations.documentId, documentId), ne(annotations.status, 'rejected')),
+        and(
+          eq(annotations.userId, this.userId),
+          eq(annotations.documentId, documentId),
+          includeRejected ? undefined : ne(annotations.status, 'rejected'),
+        ),
       )
       .orderBy(asc(annotations.page), asc(annotations.createdAt))
       .all()
@@ -59,7 +64,7 @@ export class AnnotationService {
   }
 
   get(id: string): Annotation {
-    const row = this.db.select().from(annotations).where(eq(annotations.id, id)).get();
+    const row = this.db.select().from(annotations).where(this.own(id)).get();
     if (!row) throw notFound();
     return toDto(row);
   }
@@ -74,6 +79,7 @@ export class AnnotationService {
     const ts = now();
     const rows = items.map((item, i) => ({
       id: opts.ids?.[i] ?? newId(),
+      userId: this.userId,
       documentId,
       page: item.page,
       type: item.type,
@@ -89,7 +95,12 @@ export class AnnotationService {
       for (const r of rows) {
         tx.insert(annotations)
           .values(r)
-          .onConflictDoUpdate({ target: annotations.id, set: { ...r } })
+          // Undo restores by id; another user's id is left alone (and then not found).
+          .onConflictDoUpdate({
+            target: annotations.id,
+            set: { ...r },
+            setWhere: eq(annotations.userId, this.userId),
+          })
           .run();
       }
     });
@@ -109,7 +120,7 @@ export class AnnotationService {
       if (!parsed.success) throw new HttpError(400, 'invalid_request');
       set.anchorJson = JSON.stringify(parsed.data);
     }
-    this.db.update(annotations).set(set).where(eq(annotations.id, id)).run();
+    this.db.update(annotations).set(set).where(this.own(id)).run();
     return this.get(id);
   }
 
@@ -117,12 +128,19 @@ export class AnnotationService {
     this.db
       .update(annotations)
       .set({ status, updatedAt: now() })
-      .where(inArray(annotations.id, ids))
+      .where(and(eq(annotations.userId, this.userId), inArray(annotations.id, ids)))
       .run();
   }
 
   delete(ids: string[]) {
-    this.db.delete(annotations).where(inArray(annotations.id, ids)).run();
+    this.db
+      .delete(annotations)
+      .where(and(eq(annotations.userId, this.userId), inArray(annotations.id, ids)))
+      .run();
+  }
+
+  private own(id: string) {
+    return and(eq(annotations.id, id), eq(annotations.userId, this.userId));
   }
 
   /** Quote-only anchors get rectangles from the stored text layer (for export and Claude). */

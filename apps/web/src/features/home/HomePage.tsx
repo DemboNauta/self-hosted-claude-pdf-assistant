@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { Page } from '../../components/Page';
 import { t } from '../../i18n';
 import { Markdown } from '../chat/Markdown';
+import { canUseClaude, useCurrentUser } from '../auth/session';
 import { generateBrief, useBrief, useStats } from '../review/api';
 
 /** Home: "Repaso de hoy", continue reading and brief stats (F-REV-03, SPEC §4). */
@@ -13,6 +14,7 @@ export function HomePage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(false);
   const asked = useRef(false);
+  const claude = canUseClaude(useCurrentUser());
 
   const generate = async () => {
     setGenerating(true);
@@ -32,11 +34,11 @@ export function HomePage() {
     data && (data.dueCount || data.concepts.length || data.continueReading),
   );
   useEffect(() => {
-    if (data && !data.text && hasContent && !asked.current) {
+    if (claude && data && !data.text && hasContent && !asked.current) {
       asked.current = true;
       void generate();
     }
-  }, [data, hasContent]);
+  }, [claude, data, hasContent]);
 
   const todaySeconds = stats.data?.days.at(-1)?.seconds ?? 0;
 

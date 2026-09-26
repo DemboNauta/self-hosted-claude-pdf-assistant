@@ -35,9 +35,10 @@ export function tinyPdf(pagesOrText: string | string[][]): Buffer {
   return Buffer.from(pdf, 'latin1');
 }
 
-export async function login(page: Page) {
+export async function login(page: Page, username = 'admin', password = 'e2e-password') {
   await page.goto('/login');
-  await page.getByLabel('Contraseña').fill('e2e-password');
+  await page.getByLabel('Usuario').fill(username);
+  await page.getByLabel('Contraseña').fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByRole('heading', { name: 'Inicio' })).toBeVisible();
 }

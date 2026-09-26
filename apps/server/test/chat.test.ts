@@ -11,15 +11,9 @@ import type {
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readingTools, type ToolContext } from '../src/claude/tools.js';
-import type { Db } from '../src/db/client.js';
 import type { IngestService } from '../src/ingest/service.js';
-import type { LibraryService } from '../src/services/library.js';
-import { MemoryService } from '../src/services/memory.js';
-import { DiagramService } from '../src/services/diagrams.js';
-import { ReviewService } from '../src/services/review.js';
-import { SearchService } from '../src/services/search.js';
 import { makePdf } from './fixtures/pdf.js';
-import { authedApp } from './helpers.js';
+import { authedApp, servicesOf } from './helpers.js';
 
 interface FakeCall {
   prompt: string;
@@ -366,9 +360,6 @@ describe('chat', () => {
 
 describe('reading tools', () => {
   const run = async (name: string, args: Record<string, unknown>) => {
-    const db = (app as unknown as { pcaDb: Db }).pcaDb;
-    const { LibraryService } = await import('../src/services/library.js');
-    const library = new LibraryService(db, {} as never) as LibraryService;
     const seen: unknown[] = [];
     const ctx: ToolContext = {
       threadId: 't',
@@ -378,21 +369,7 @@ describe('reading tools', () => {
       emit: (e) => seen.push(e),
       record: () => {},
     };
-    const { AnnotationService } = await import('../src/services/annotations.js');
-    const { SettingsService } = await import('../src/services/settings.js');
-    const tools = readingTools(
-      {
-        db,
-        library,
-        search: new SearchService(db),
-        annotations: new AnnotationService(db),
-        settings: new SettingsService(db),
-        memory: new MemoryService(db),
-        review: new ReviewService(db),
-        diagrams: new DiagramService(db),
-      },
-      ctx,
-    );
+    const tools = readingTools(servicesOf(app), ctx);
     const t = tools.find((x) => x.name === name)!;
     const result = await t.handler(args as never, {});
     return { result, seen };

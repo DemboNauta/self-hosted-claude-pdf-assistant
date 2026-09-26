@@ -8,6 +8,7 @@ import {
   LogOut,
   Search,
   Settings,
+  Users,
   type LucideIcon,
   Workflow,
 } from 'lucide-react';
@@ -35,6 +36,8 @@ const NAV: NavItem[] = [
   { to: '/stats', label: t.nav.stats, icon: BarChart3, desktopOnly: true },
   { to: '/settings', label: t.nav.settings, icon: Settings },
 ];
+/** Only for the admin, in the sidebar (on phones it is reached from Ajustes). */
+const ADMIN_NAV: NavItem = { to: '/admin', label: t.nav.admin, icon: Users, desktopOnly: true };
 
 /** Authenticated layout: sidebar on desktop, bottom bar on mobile (SPEC §4). */
 export function AppShell() {
@@ -43,6 +46,8 @@ export function AppShell() {
 
   if (session.isPending) return <p className="p-6 text-text-muted">{t.common.loading}</p>;
   if (!session.data?.authenticated) return <Navigate to="/login" replace />;
+  const user = session.data.user;
+  const nav = user?.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV;
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
@@ -52,7 +57,7 @@ export function AppShell() {
       >
         <p className="mb-6 px-3 font-serif text-lg">{t.appName}</p>
         <ul className="flex-1 space-y-1">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <li key={item.to}>
               <NavLink
                 to={item.to}
@@ -71,6 +76,11 @@ export function AppShell() {
           ))}
         </ul>
         <TimerToggle nav />
+        {user && (
+          <p className="text-text-muted truncate px-3 pt-2 text-xs" title={`@${user.username}`}>
+            {user.displayName}
+          </p>
+        )}
         <button
           type="button"
           onClick={() => logout.mutate()}

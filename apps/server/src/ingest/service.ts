@@ -4,7 +4,8 @@ import { eq, inArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from '../db/client.js';
 import { documents, pages } from '../db/schema.js';
-import type { LibraryService } from '../services/library.js';
+import type { AppConfig } from '../config.js';
+import { coverPath } from '../services/library.js';
 import type { ExtractResult } from './extract.js';
 import type { OcrRunner } from './ocr.js';
 import type { WorkerInput, WorkerMessage } from './worker.js';
@@ -35,7 +36,7 @@ export class IngestService {
 
   constructor(
     private readonly db: Db,
-    private readonly library: LibraryService,
+    private readonly config: AppConfig,
     private readonly log: FastifyBaseLogger,
     /** OCR for pages without text (F-ING-03); null when ocrmypdf is not installed. */
     private readonly ocr: OcrRunner | null = null,
@@ -83,7 +84,7 @@ export class IngestService {
     this.db.delete(pages).where(eq(pages.documentId, id)).run();
 
     try {
-      const input = { filePath: row.filePath, coverPath: this.library.coverPath(id) };
+      const input = { filePath: row.filePath, coverPath: coverPath(this.config, id) };
       let result = await this.runWorker(input, id);
       let hasOcr = row.hasOcr;
       if (result.pagesWithoutText > 0 && this.ocr && !row.hasOcr) {

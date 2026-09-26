@@ -13,28 +13,39 @@
     from the Claude Code env.
   - Every turn checks that `init.apiKeySource` is not an API key.
   - `test/no-api-key.test.ts` scans the repo.
+- **One subscription per user** (multi-user, `claude/credentials.ts`):
+  - the admin (the server owner, user id `owner`) uses the server's credentials
+    above, or a personal token if they save one;
+  - every other user must save their own `claude setup-token` token in Settings
+    (stored encrypted, `users.claude_token_enc`). Their turns get it as
+    `CLAUDE_CODE_OAUTH_TOKEN` and their own `CLAUDE_CONFIG_DIR`
+    (`DATA_DIR/claude-users/<id>`), so they never reach the admin's login or
+    sessions. Without a token, chat turns fail with `not_configured` before any
+    query, the brief returns `409 claude_not_configured` and the status says
+    `not_configured`.
 - Verify SDK details against the installed package types
   (`node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts`, currently 0.3.x) rather
   than from memory.
 
 ## Sandbox (`claude/options.ts`)
 
-`baseAgentOptions(config)` sets:
+`baseAgentOptions(config, auth)` sets:
 
 - `tools: []`: no Bash, Read, Write or WebFetch.
 - `allowedTools: []`, then the caller adds its MCP tools explicitly.
 - `permissionMode: 'dontAsk'`, `settingSources: []`, `strictMcpConfig: true`.
 - `cwd` = an empty `DATA_DIR/agent-cwd`.
-- The filtered `env`.
+- The filtered `env`, plus the user's token and config dir (`ClaudeAuth`).
 - `model` from `CLAUDE_MODEL`. The Settings override (`settings.claude_model`)
   is applied in `chat.ts` and `brief.ts`.
 
 ## Connection status (`claude/status.ts`)
 
-`GET /api/claude/status[?refresh=1]` runs a tiny real query ("Reply with ok"),
-cached for 10 minutes. It reports:
+`GET /api/claude/status[?refresh=1]` runs a tiny real query ("Reply with ok")
+with the logged-in user's credentials, cached for 10 minutes per user. It reports:
 
-- the state: `connected`, `auth_expired`, `rate_limited` or `error`;
+- the state: `connected`, `auth_expired`, `rate_limited`, `error` or
+  `not_configured` (no token saved);
 - the model;
 - the auth method (OAuth token / interactive login / other / none).
 
@@ -113,7 +124,8 @@ quote is optional). `CITATION_RE` and `parseCitation` live in
 ## MCP tools (`claude/tools.ts`)
 
 A new in-process server (`createSdkMcpServer`, name `pca`) is built **per turn**
-with a `ToolContext`: thread id, message id, optional `docId`, `scope`, `emit`
+with the turn owner's services (`ToolDeps`, so tools only see that user's data and
+reject foreign ids) and a `ToolContext`: thread id, message id, optional `docId`, `scope`, `emit`
 and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 `tracked()`, which emits `tool_event` running/done/error (shown in the chat as
 "Leyendo p. 3–5") and stores it with the message.

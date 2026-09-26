@@ -3,6 +3,7 @@ import { Page } from '../../components/Page';
 import { t } from '../../i18n';
 import { useThemeStore, type ThemePreference } from '../../lib/theme';
 import { SHORTCUTS } from '../reader/shortcuts';
+import { AccountSettings } from './AccountSettings';
 import { ClaudeConnection } from './ClaudeConnection';
 import { StudySettings } from './StudySettings';
 
@@ -13,6 +14,7 @@ export function SettingsPage() {
   return (
     <Page title={t.settings.title}>
       <div className="space-y-12">
+        <AccountSettings />
         <section aria-labelledby="theme" className="space-y-4">
           <h2 id="theme" className="text-lg font-medium">
             {t.settings.theme.title}

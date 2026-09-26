@@ -77,8 +77,16 @@ follows the same pattern:
 
 ## Operating notes
 
+- **Multi-user (after deploying the accounts commit):** migration `0012` runs on
+  boot and gives all existing data to the admin account. Log in with user
+  **`admin`** and the same password as before (it still comes from
+  `APP_PASSWORD_HASH`; `-SetPassword` keeps working and overrides a password
+  changed in the app). The username and display name can be changed in Ajustes →
+  Tu cuenta. `-SetClaudeToken` is the admin's Claude; other users paste their own
+  token in Ajustes. Their Claude Code state lives in `data/claude-users/`.
 - Logs: `journalctl -u pdfclaudeassistant -f` (prefix `[PdfClaudeAssistant]`).
 - Renewing Claude: `claude setup-token` on the PC, then
-  `.\scripts\deploy.ps1 -SetClaudeToken`.
+  `.\scripts\deploy.ps1 -SetClaudeToken` (the admin's; other users renew their own
+  token in Ajustes).
 - Data lives in `/opt/pdfclaudeassistant/data` (SQLite, PDFs, covers, Claude
   session). Back it up; never delete it.

@@ -7,20 +7,21 @@ import { useLogin, useSession } from './session';
 export function LoginPage() {
   const session = useSession();
   const login = useLogin();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   if (session.data?.authenticated) return <Navigate to="/" replace />;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    login.mutate(password);
+    login.mutate({ username, password });
   };
 
   const error =
     login.error instanceof ApiError
       ? login.error.status === 429
         ? t.auth.tooManyAttempts
-        : t.auth.invalidPassword
+        : t.auth.invalidCredentials
       : login.error
         ? t.common.error
         : null;
@@ -33,6 +34,23 @@ export function LoginPage() {
           <p className="text-text-muted">{t.auth.subtitle}</p>
         </header>
         <div className="space-y-2">
+          <label htmlFor="username" className="block text-sm font-medium">
+            {t.auth.username}
+          </label>
+          <input
+            id="username"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="border-border bg-surface w-full rounded-lg border px-3 py-2.5 text-base"
+          />
+        </div>
+        <div className="space-y-2">
           <label htmlFor="password" className="block text-sm font-medium">
             {t.auth.password}
           </label>
@@ -40,7 +58,6 @@ export function LoginPage() {
             id="password"
             type="password"
             autoComplete="current-password"
-            autoFocus
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

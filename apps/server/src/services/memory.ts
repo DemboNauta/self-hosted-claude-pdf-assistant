@@ -43,7 +43,21 @@ const clamp = (n: number) => Math.min(1, Math.max(0, n));
  * de-duplicated on write, plus difficult concepts with a mastery level.
  */
 export class MemoryService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
+
+  /** Documents named by Claude must be the user's own. */
+  private requireDocument(id: string | null | undefined) {
+    if (!id) return;
+    const doc = this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.userId, this.userId)))
+      .get();
+    if (!doc) throw notFound();
+  }
 
   /** Adds a memory item, or updates a near-duplicate / the given one instead. */
   remember(input: {
@@ -55,11 +69,13 @@ export class MemoryService {
   }): { id: string; action: 'created' | 'updated' } {
     const scope = input.scope === 'document' && !input.documentId ? 'global' : input.scope;
     const documentId = scope === 'document' ? (input.documentId ?? null) : null;
+    this.requireDocument(documentId);
     const existing = this.db
       .select()
       .from(memoryItems)
       .where(
         and(
+          eq(memoryItems.userId, this.userId),
           eq(memoryItems.scope, scope),
           documentId ? eq(memoryItems.documentId, documentId) : isNull(memoryItems.documentId),
         ),
@@ -83,6 +99,7 @@ export class MemoryService {
       .insert(memoryItems)
       .values({
         id,
+        userId: this.userId,
         scope: input.scope,
         documentId,
         category: input.category,
@@ -100,8 +117,9 @@ export class MemoryService {
     page?: number | null;
     evidence: string;
   }) {
+    this.requireDocument(input.documentId);
     const key = conceptKey(input.concept);
-    const found = this.db.select().from(concepts).where(eq(concepts.key, key)).get();
+    const found = this.findConcept(key);
     if (found) {
       this.db
         .update(concepts)
@@ -122,6 +140,7 @@ export class MemoryService {
       .insert(concepts)
       .values({
         id,
+        userId: this.userId,
         name: input.concept.trim(),
         key,
         documentId: input.documentId ?? null,
@@ -136,7 +155,11 @@ export class MemoryService {
   }
 
   updateMastery(id: string, delta: number, evidence: string) {
-    const c = this.db.select().from(concepts).where(eq(concepts.id, id)).get();
+    const c = this.db
+      .select()
+      .from(concepts)
+      .where(and(eq(concepts.id, id), eq(concepts.userId, this.userId)))
+      .get();
     if (!c) throw notFound();
     this.db
       .update(concepts)
@@ -155,10 +178,12 @@ export class MemoryService {
     concepts: string[];
     page?: number | null;
   }) {
+    this.requireDocument(input.documentId);
     this.db
       .insert(examResults)
       .values({
         id: newId(),
+        userId: this.userId,
         documentId: input.documentId,
         question: input.question,
         userAnswer: input.userAnswer,
@@ -175,11 +200,7 @@ export class MemoryService {
           evidence: `Fallo en examen: ${input.question}`,
         });
       } else {
-        const found = this.db
-          .select()
-          .from(concepts)
-          .where(eq(concepts.key, conceptKey(name)))
-          .get();
+        const found = this.findConcept(conceptKey(name));
         if (found) this.updateMastery(found.id, 0.1, `Acierto en examen: ${input.question}`);
       }
     }
@@ -190,6 +211,7 @@ export class MemoryService {
       .select({ m: memoryItems, title: documents.title })
       .from(memoryItems)
       .leftJoin(documents, eq(documents.id, memoryItems.documentId))
+      .where(eq(memoryItems.userId, this.userId))
       .orderBy(desc(memoryItems.updatedAt))
       .all()
       .map(({ m, title }) => this.item(m, title));
@@ -205,7 +227,12 @@ export class MemoryService {
       .select({ c: concepts, title: documents.title })
       .from(concepts)
       .leftJoin(documents, eq(documents.id, concepts.documentId))
-      .where(opts.documentId ? eq(concepts.documentId, opts.documentId) : undefined)
+      .where(
+        and(
+          eq(concepts.userId, this.userId),
+          opts.documentId ? eq(concepts.documentId, opts.documentId) : undefined,
+        ),
+      )
       .orderBy(asc(concepts.mastery), desc(concepts.lastSeenAt))
       .limit(opts.limit ?? 500)
       .all()
@@ -231,9 +258,12 @@ export class MemoryService {
       .select()
       .from(memoryItems)
       .where(
-        documentId
-          ? or(eq(memoryItems.scope, 'global'), eq(memoryItems.documentId, documentId))
-          : eq(memoryItems.scope, 'global'),
+        and(
+          eq(memoryItems.userId, this.userId),
+          documentId
+            ? or(eq(memoryItems.scope, 'global'), eq(memoryItems.documentId, documentId))
+            : eq(memoryItems.scope, 'global'),
+        ),
       )
       .orderBy(desc(memoryItems.updatedAt))
       .limit(80)
@@ -241,7 +271,7 @@ export class MemoryService {
     const weak = this.db
       .select()
       .from(concepts)
-      .where(sql`${concepts.mastery} < 0.7`)
+      .where(and(eq(concepts.userId, this.userId), sql`${concepts.mastery} < 0.7`))
       .orderBy(
         sql`CASE WHEN ${concepts.documentId} = ${documentId ?? ''} THEN 0 ELSE 1 END`,
         asc(concepts.mastery),
@@ -270,6 +300,14 @@ export class MemoryService {
     let out = lines.join('\n');
     if (out.length > maxChars) out = `${out.slice(0, maxChars)}\n…`;
     return out;
+  }
+
+  private findConcept(key: string) {
+    return this.db
+      .select()
+      .from(concepts)
+      .where(and(eq(concepts.userId, this.userId), eq(concepts.key, key)))
+      .get();
   }
 
   private item(m: typeof memoryItems.$inferSelect, title: string | null): MemoryItem {

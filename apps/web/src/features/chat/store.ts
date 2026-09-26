@@ -68,8 +68,10 @@ class ChatSocket {
     };
   }
 
+  /** Closes the socket for good (logout): it belongs to the account that opened it. */
   close() {
     this.closedByUs = true;
+    this.queue = [];
     this.ws?.close();
   }
 }

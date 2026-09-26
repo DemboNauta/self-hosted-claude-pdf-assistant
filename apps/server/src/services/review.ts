@@ -42,7 +42,10 @@ export interface CardFilter {
 
 /** Flashcards and FSRS spaced repetition (F-REV-01/02/05). */
 export class ReviewService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
 
   create(
     cards: {
@@ -57,12 +60,22 @@ export class ReviewService {
   ): Flashcard[] {
     const now = new Date();
     const card = createEmptyCard(now);
+    const docIds = [...new Set(cards.map((c) => c.documentId).filter((d): d is string => !!d))];
+    if (docIds.length) {
+      const own = this.db
+        .select({ id: documents.id })
+        .from(documents)
+        .where(and(inArray(documents.id, docIds), eq(documents.userId, this.userId)))
+        .all();
+      if (own.length !== docIds.length) throw notFound();
+    }
     const ids = cards.map((c) => {
       const id = newId();
       this.db
         .insert(flashcards)
         .values({
           id,
+          userId: this.userId,
           documentId: c.documentId ?? null,
           page: c.page ?? null,
           conceptId: c.conceptId ?? null,
@@ -90,14 +103,14 @@ export class ReviewService {
     const res = this.db
       .update(flashcards)
       .set({ ...patch, updatedAt: new Date().toISOString() })
-      .where(eq(flashcards.id, id))
+      .where(this.own(id))
       .run();
     if (res.changes === 0) throw notFound();
     return this.get(id);
   }
 
   delete(id: string) {
-    const res = this.db.delete(flashcards).where(eq(flashcards.id, id)).run();
+    const res = this.db.delete(flashcards).where(this.own(id)).run();
     if (res.changes === 0) throw notFound();
   }
 
@@ -130,7 +143,7 @@ export class ReviewService {
 
   /** Applies a rating (Otra vez / Difícil / Bien / Fácil) and reschedules the card. */
   review(id: string, rating: ReviewRating, day: string, now = new Date()): Flashcard {
-    const row = this.db.select().from(flashcards).where(eq(flashcards.id, id)).get();
+    const row = this.db.select().from(flashcards).where(this.own(id)).get();
     if (!row) throw notFound();
     const grade = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy][rating - 1] as Grade;
     const { card } = scheduler.next(parseCard(row.fsrsJson), now, grade);
@@ -144,7 +157,13 @@ export class ReviewService {
         .where(eq(flashcards.id, id))
         .run();
       tx.insert(reviews)
-        .values({ flashcardId: id, rating, reviewedAt: now.toISOString(), day })
+        .values({
+          userId: this.userId,
+          flashcardId: id,
+          rating,
+          reviewedAt: now.toISOString(),
+          day,
+        })
         .run();
     });
     return this.get(id);
@@ -155,7 +174,13 @@ export class ReviewService {
       this.db
         .select({ n: sql<number>`count(*)` })
         .from(flashcards)
-        .where(and(eq(flashcards.status, 'active'), lte(flashcards.dueAt, now.toISOString())))
+        .where(
+          and(
+            eq(flashcards.userId, this.userId),
+            eq(flashcards.status, 'active'),
+            lte(flashcards.dueAt, now.toISOString()),
+          ),
+        )
         .get()?.n ?? 0
     );
   }
@@ -166,7 +191,7 @@ export class ReviewService {
       .select({ f: flashcards, title: documents.title })
       .from(flashcards)
       .leftJoin(documents, eq(documents.id, flashcards.documentId))
-      .where(inArray(flashcards.id, ids))
+      .where(and(eq(flashcards.userId, this.userId), inArray(flashcards.id, ids)))
       .all();
     const map = new Map(rows.map((r) => [r.f.id, this.toDto(r.f, r.title)]));
     return ids.map((i) => map.get(i)).filter((c): c is Flashcard => Boolean(c));
@@ -176,7 +201,7 @@ export class ReviewService {
     filter: CardFilter,
     opts: { statuses: Row['status'][]; dueBefore?: Date },
   ): Flashcard[] {
-    const conds = [inArray(flashcards.status, opts.statuses)];
+    const conds = [eq(flashcards.userId, this.userId), inArray(flashcards.status, opts.statuses)];
     if (opts.dueBefore) conds.push(lte(flashcards.dueAt, opts.dueBefore.toISOString()));
     if (filter.documentId) conds.push(eq(flashcards.documentId, filter.documentId));
     if (filter.topicId) conds.push(eq(documents.topicId, filter.topicId));
@@ -190,6 +215,10 @@ export class ReviewService {
       .orderBy(asc(flashcards.dueAt), asc(flashcards.createdAt))
       .all()
       .map((r) => this.toDto(r.f, r.title));
+  }
+
+  private own(id: string) {
+    return and(eq(flashcards.id, id), eq(flashcards.userId, this.userId));
   }
 
   private toDto(f: Row, title: string | null): Flashcard {

@@ -17,6 +17,7 @@ export const es = {
     stats: 'Estadísticas',
     diagrams: 'Esquemas',
     settings: 'Ajustes',
+    admin: 'Usuarios',
     timer: 'Temporizador',
     logout: 'Cerrar sesión',
     mainNavigation: 'Navegación principal',
@@ -24,11 +25,104 @@ export const es = {
   auth: {
     title: 'Entrar',
     subtitle: 'Tu asistente de estudio personal.',
+    username: 'Usuario',
     password: 'Contraseña',
     submit: 'Entrar',
     submitting: 'Entrando…',
-    invalidPassword: 'Contraseña incorrecta.',
+    invalidCredentials: 'Usuario o contraseña incorrectos.',
     tooManyAttempts: 'Demasiados intentos. Espera un minuto.',
+    signup: {
+      title: 'Crear tu cuenta',
+      subtitle: 'Te han invitado a PdfClaudeAssistant.',
+      displayName: 'Tu nombre',
+      username: 'Usuario (para entrar)',
+      usernameHelp: 'De 3 a 32 caracteres: letras minúsculas, números, punto, guion o guion bajo.',
+      password: 'Contraseña',
+      passwordHelp: 'Al menos 8 caracteres.',
+      submit: 'Crear cuenta',
+      submitting: 'Creando…',
+      checking: 'Comprobando la invitación…',
+      invalid:
+        'Esta invitación no es válida: ya se usó, ha caducado o se ha revocado. Pide otra a quien te la envió.',
+      toLogin: 'Ir a entrar',
+    },
+    errors: {
+      username_taken: 'Ese nombre de usuario ya existe.',
+      invalid_request: 'Revisa los datos: el usuario o la contraseña no cumplen el formato.',
+      invitation_invalid: 'Esta invitación ya no es válida.',
+    } as Record<string, string>,
+  },
+  account: {
+    title: 'Tu cuenta',
+    manageUsers: 'Gestionar usuarios e invitaciones',
+    displayName: 'Nombre',
+    username: 'Usuario',
+    saveProfile: 'Guardar',
+    saved: 'Guardado',
+    password: {
+      title: 'Cambiar contraseña',
+      current: 'Contraseña actual',
+      next: 'Contraseña nueva',
+      submit: 'Cambiar contraseña',
+      done: 'Contraseña cambiada. Se ha cerrado la sesión en los demás dispositivos.',
+    },
+    errors: {
+      username_taken: 'Ese nombre de usuario ya existe.',
+      wrong_password: 'La contraseña actual no es correcta.',
+      invalid_request:
+        'Revisa el formato (usuario de 3 a 32 caracteres; contraseña de al menos 8).',
+    } as Record<string, string>,
+  },
+  admin: {
+    title: 'Usuarios',
+    intro:
+      'Cada usuario tiene su propia biblioteca, anotaciones, chats, memoria y tarjetas. Nadie ve los datos de otro, tampoco el administrador. Cada uno conecta su propia suscripción de Claude en Ajustes.',
+    users: 'Cuentas',
+    you: 'tú',
+    adminRole: 'administrador',
+    disabled: 'desactivada',
+    documents: (n: number) => (n === 1 ? '1 PDF' : `${n} PDF`),
+    claudeYes: 'Claude conectado',
+    claudeNo: 'Sin token de Claude',
+    lastLogin: (d: string) => `Última entrada: ${d}`,
+    neverLoggedIn: 'Aún no ha entrado',
+    disable: 'Desactivar',
+    enable: 'Activar',
+    resetPassword: 'Nueva contraseña',
+    resetPasswordPrompt: (name: string) => `Nueva contraseña para ${name} (mínimo 8 caracteres)`,
+    resetDone: 'Contraseña cambiada. Sus sesiones abiertas se han cerrado.',
+    delete: 'Borrar',
+    deleteConfirm: (name: string) =>
+      `¿Borrar la cuenta de ${name}? Se borrarán para siempre sus PDF, anotaciones, chats, memoria y tarjetas.`,
+    create: {
+      title: 'Crear una cuenta',
+      displayName: 'Nombre',
+      username: 'Usuario',
+      password: 'Contraseña inicial',
+      submit: 'Crear cuenta',
+      done: (u: string) => `Cuenta «${u}» creada. Pásale su usuario y contraseña.`,
+    },
+    invitations: {
+      title: 'Invitaciones',
+      help: 'Un enlace de un solo uso para que la persona cree su propia cuenta. Caduca a los 7 días.',
+      note: 'Para quién es (opcional)',
+      create: 'Crear enlace',
+      created: 'Copia este enlace y envíaselo. Solo se muestra ahora.',
+      copy: 'Copiar enlace',
+      copied: 'Copiado',
+      empty: 'No hay invitaciones.',
+      pending: (d: string) => `Pendiente · caduca el ${d}`,
+      expired: 'Caducada',
+      usedBy: (u: string) => `Usada por ${u}`,
+      revoke: 'Revocar',
+    },
+    errors: {
+      username_taken: 'Ese nombre de usuario ya existe.',
+      invalid_request:
+        'Revisa el formato (usuario de 3 a 32 caracteres; contraseña de al menos 8).',
+      cannot_delete_admin: 'La cuenta de administrador no se puede borrar.',
+      cannot_disable_admin: 'La cuenta de administrador no se puede desactivar.',
+    } as Record<string, string>,
   },
   library: {
     title: 'Biblioteca',
@@ -463,6 +557,8 @@ export const es = {
         'Has alcanzado el límite de uso de tu suscripción de Claude. Vuelve a intentarlo cuando se renueve.',
       auth_expired:
         'La sesión de Claude ha caducado o no está iniciada. Revisa Ajustes → Conexión con Claude.',
+      not_configured:
+        'Aún no has conectado tu cuenta de Claude. Pega tu token en Ajustes → Conexión con Claude.',
       busy: 'Claude todavía está respondiendo en esta conversación.',
       internal: 'Algo ha fallado al hablar con Claude. Inténtalo de nuevo.',
     },
@@ -541,7 +637,7 @@ export const es = {
     },
     backup: {
       title: 'Copia de seguridad',
-      help: 'Descarga tu base de datos y tus PDF en un .tar.gz. No incluye las credenciales de Claude.',
+      help: 'Descarga la base de datos y los PDF de todos los usuarios en un .tar.gz. No incluye las credenciales de Claude. Solo la ve el administrador.',
       download: 'Descargar copia',
     },
     theme: {
@@ -565,6 +661,7 @@ export const es = {
         auth_expired: 'Sesión caducada o sin iniciar',
         rate_limited: 'Límite de uso alcanzado',
         error: 'Error de conexión',
+        not_configured: 'Sin conectar',
       },
       methods: {
         oauth_token: 'Token OAuth (CLAUDE_CODE_OAUTH_TOKEN)',
@@ -577,6 +674,21 @@ export const es = {
         'Opción recomendada: en cualquier equipo con Claude Code ejecuta «claude setup-token», copia el token en CLAUDE_CODE_OAUTH_TOKEN del .env del servidor y reinicia con «docker compose up -d».',
       renewLogin:
         'Alternativa: ejecuta «docker compose exec server claude», escribe /login e inicia sesión con tu cuenta.',
+      token: {
+        title: 'Tu token de Claude',
+        help: 'Cada usuario usa su propia suscripción de Claude (Pro o Max). En un equipo con Claude Code ejecuta «claude setup-token», inicia sesión con tu cuenta y pega aquí el token que te da. Se guarda cifrado y solo se usa para tus preguntas.',
+        adminHelp:
+          'Como administrador usas las credenciales de Claude configuradas en el servidor. Si prefieres usar otra cuenta, pega aquí su token.',
+        label: 'Token (CLAUDE_CODE_OAUTH_TOKEN)',
+        saved: 'Token guardado',
+        none: 'Sin token guardado',
+        save: 'Guardar token',
+        replace: 'Cambiar token',
+        remove: 'Quitar token',
+        invalid: 'Eso no parece un token de «claude setup-token».',
+      },
+      renewOwnToken:
+        'Tu token ha caducado o no es válido: genera uno nuevo con «claude setup-token» y pégalo arriba.',
       rateLimitedHelp:
         'La app consume de los mismos límites que Claude Code y claude.ai. Vuelve a intentarlo cuando se renueve tu cuota.',
     },

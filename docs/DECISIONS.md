@@ -64,7 +64,34 @@ change them if he disagrees.
 - Reopening a document must resume at the page where the reading stopped, also
   when navigating inside the app (bug fixed 2026-09-26).
 
+- **Multi-user (2026-09-26).** The owner asked for several users and chose:
+  - each user connects **their own Claude subscription** (a `claude setup-token`
+    token pasted in Settings, stored encrypted). Sharing the owner's subscription
+    would go against its personal-use terms (SPEC §6.1). Without a token a user can
+    read, annotate and review, but not use Claude;
+  - accounts are created **by the admin** (username + initial password) **and by
+    single-use invitation links**; no open registration;
+  - **full isolation**: nobody sees anyone else's library, annotations, chats,
+    memory, cards or stats, not even the admin;
+  - the existing production data **goes to the admin account**.
+
 ## Provisional product choices (Claude, "don't ask until deploy")
+
+- **Multi-user details** (choices Claude made while implementing the owner's
+  decisions above):
+  - The admin is the existing owner: username `admin` (changeable in Ajustes),
+    password from `APP_PASSWORD_HASH`. The app keeps a password changed in
+    Ajustes until that variable changes (so `deploy.ps1 -SetPassword` still works).
+  - There is one admin, and nobody can be promoted. Only the admin may use the
+    server's Claude credentials (`CLAUDE_CODE_OAUTH_TOKEN` / interactive login).
+    The admin can also save a personal token instead.
+  - Invitation links expire after 7 days, work once and can be revoked. The admin
+    sees only name, username, PDF count, whether Claude is connected and last
+    login. They can disable, re-enable, reset the password or delete (with all data).
+  - The backup download (Settings) is admin-only, because it contains every user's
+    data. The admin already owns the server, so it is not a new exposure.
+  - Changing your password logs out your other sessions. An admin reset or
+    disabling logs the user out everywhere.
 
 - **Pointer marks jump the viewer** to the page Claude points at (F-POINT-05
   offered "jump or show a notice"). The chat also shows "Claude ha señalado en la

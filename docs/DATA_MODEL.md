@@ -13,25 +13,54 @@ To change the schema:
    `ON DELETE cascade`, add it by hand (done in `0008`).
 4. Commit the SQL and the `meta/` snapshot.
 
-| Migration                 | Adds                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------- |
-| `0000_init`               | `settings`, `auth_sessions`                                                     |
-| `0001_library`            | `subjects`, `topics`, `documents`, `pages`                                      |
-| `0002_pages_fts`          | FTS5 `pages_fts` (external content, `unicode61 remove_diacritics 2`) + triggers |
-| `0003_chat`               | `threads`, `messages`                                                           |
-| `0004_annotations`        | `annotations`                                                                   |
-| `0005_memory`             | `memory_items`, `concepts`, `exam_results`                                      |
-| `0006_study_sessions`     | `study_sessions`                                                                |
-| `0007_flashcards`         | `flashcards`, `reviews`                                                         |
-| `0008_thread_scopes`      | `threads.topic_id`, `threads.subject_id` (cascade)                              |
-| `0009_annotation_display` | `annotations.display_json` (note window: pinned, position, size)                |
-| `0010_diagrams`           | `diagrams`                                                                      |
-| `0011_focus_sessions`     | `focus_sessions`                                                                |
+| Migration                 | Adds                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `0000_init`               | `settings`, `auth_sessions`                                                                      |
+| `0001_library`            | `subjects`, `topics`, `documents`, `pages`                                                       |
+| `0002_pages_fts`          | FTS5 `pages_fts` (external content, `unicode61 remove_diacritics 2`) + triggers                  |
+| `0003_chat`               | `threads`, `messages`                                                                            |
+| `0004_annotations`        | `annotations`                                                                                    |
+| `0005_memory`             | `memory_items`, `concepts`, `exam_results`                                                       |
+| `0006_study_sessions`     | `study_sessions`                                                                                 |
+| `0007_flashcards`         | `flashcards`, `reviews`                                                                          |
+| `0008_thread_scopes`      | `threads.topic_id`, `threads.subject_id` (cascade)                                               |
+| `0009_annotation_display` | `annotations.display_json` (note window: pinned, position, size)                                 |
+| `0010_diagrams`           | `diagrams`                                                                                       |
+| `0011_focus_sessions`     | `focus_sessions`                                                                                 |
+| `0012_users`              | `users`, `invitations`, `user_settings`; `user_id` on every owned table (hand-edited, see below) |
+
+## Users and ownership (multi-user, `0012`)
+
+- **users** `id, username (unique, lower case), display_name, password_hash
+(argon2), role (admin|user), claude_token_enc (AES-256-GCM, key derived from
+SESSION_SECRET, see services/secrets.ts), disabled_at, last_login_at`.
+  The migration inserts the admin with the fixed id `owner` and username `admin`,
+  and an empty password hash that `UserService.syncAdminPassword()` fills from
+  `APP_PASSWORD_HASH` on boot (again whenever that variable changes; the applied
+  hash is remembered in `settings.admin_password_env`).
+- **invitations** `token_hash (SHA-256), note, created_by, expires_at (7 days),
+used_at, used_by`.
+- **user_settings** `(user_id, key) → value (JSON)`: what `settings` used to hold
+  (`palette`, `claude_model`, `study_timer`, `daily_brief`). `settings` now keeps
+  only server-wide values.
+- `user_id` (FK users, cascade) on `auth_sessions`, `subjects`, `topics`,
+  `documents`, `threads`, `annotations`, `memory_items`, `concepts`,
+  `exam_results`, `study_sessions`, `flashcards`, `reviews`, `diagrams` and
+  `focus_sessions`. Pages and messages are reached through their document/thread.
+  Every service is built per user (`services/scope.ts`) and filters on it.
+- To add the column to tables with rows, `0012` uses `DEFAULT 'owner'` (all
+  existing data becomes the admin's). SQLite only allows a REFERENCES column with a
+  default while foreign keys are off, so `openDb` migrates with them off and runs
+  `foreign_key_check` afterwards. `schema.ts` declares no default, so TypeScript
+  requires `userId` on every insert.
+- Deleting a user cascades through all those tables; `UserService.delete` then
+  removes their PDFs, covers and `claude-users/<id>/`.
 
 ## Tables (main columns)
 
-- **settings** `key, value(JSON)`: `palette`, `claude_model`, `daily_brief`
-  (`{day, text, generatedAt}`).
+- **settings** `key, value(JSON)`: server-wide, `admin_password_env`.
+- **user_settings** `user_id, key, value(JSON)`: `palette`, `claude_model`,
+  `study_timer`, `daily_brief` (`{day, text, generatedAt}`).
 - **auth_sessions** stores only the SHA-256 of the cookie token, with
   last-seen and expiry (sliding 90 days).
 - **subjects** `id, name, color, position` → **topics** `id, subject_id
@@ -73,7 +102,7 @@ concepts_json`.
 - **study_sessions** `document_id, day (local), seconds` (unique per doc+day).
 - **focus_sessions** study-timer blocks: `id` (client-generated, so a block is recorded
   once), `document_id?` (set null on delete), `day (local), seconds, completed, method`.
-  Settings key `study_timer` holds the timer options.
+  User settings key `study_timer` holds the timer options.
 - **flashcards**:
   - content and links: `document_id?, page?, concept_id?, front, back`;
   - `author, status (active|proposed|rejected)`;
@@ -104,7 +133,8 @@ pdfs/<id>.orig.pdf      original before OCR (only if OCR ran)
 covers/<id>.webp
 uploads/<id>.json|.part in-progress chunked uploads (purged after 24 h)
 agent-cwd/              empty cwd for Claude Code
-claude-home/            Claude Code config/session (Docker: CLAUDE_CONFIG_DIR). Never backed up.
+claude-home/            Claude Code config/session of the admin (CLAUDE_CONFIG_DIR). Never backed up.
+claude-users/<userId>/  Claude Code config/sessions of every other user. Never backed up.
 backups/                output of `node dist/backup.js`
 ```
 

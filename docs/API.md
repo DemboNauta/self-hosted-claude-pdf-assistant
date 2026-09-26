@@ -1,20 +1,50 @@
 # API reference
 
 Everything under `/api` and `/ws` needs the session cookie, except
-`POST /api/auth/login`, `GET /api/auth/session` and `GET /api/health`. Request
+`POST /api/auth/login`, `GET /api/auth/session`, `GET /api/auth/invitations/:token`,
+`POST /api/auth/signup` and `GET /api/health`. `/api/admin/*` also needs the admin
+role (`403 forbidden` otherwise).
+
+Every route runs as the logged-in user and only sees that user's rows: an id that
+belongs to someone else answers as if it did not exist (`404`, or `400
+unknown_topic`/`unknown_subject` where the route validates a parent). Request
 bodies are validated with Zod schemas from `packages/shared/src/*`; invalid input
 returns `400 { error: 'invalid_request' }`. Errors are always `{ error: code }`.
 Ids are 10-char base36 strings.
 
 ## Auth and status
 
-| Method | Path                           | Notes                                                                               |
-| ------ | ------------------------------ | ----------------------------------------------------------------------------------- |
-| POST   | `/api/auth/login`              | `{ password }`. Limited to 5 attempts per minute (the e2e server raises the limit). |
-| POST   | `/api/auth/logout`             |                                                                                     |
-| GET    | `/api/auth/session`            | `{ authenticated }`                                                                 |
-| GET    | `/api/health`                  | `{ ok: true }`                                                                      |
-| GET    | `/api/claude/status?refresh=1` | `ClaudeStatus` (cached 10 min unless refresh).                                      |
+| Method | Path                           | Notes                                                                                                                         |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/auth/login`              | `{ username, password }` → `SessionInfo`. 5 attempts per minute per IP (the e2e server raises it); `401 invalid_credentials`. |
+| POST   | `/api/auth/logout`             |                                                                                                                               |
+| GET    | `/api/auth/session`            | `{ authenticated, user?: CurrentUser }`                                                                                       |
+| GET    | `/api/auth/invitations/:token` | `{ valid }` (rate limited).                                                                                                   |
+| POST   | `/api/auth/signup`             | `{ token, username, displayName, password }` → 201 `SessionInfo`, logged in. `410 invitation_invalid`, `409 username_taken`.  |
+| GET    | `/api/health`                  | `{ ok: true }`                                                                                                                |
+| GET    | `/api/claude/status?refresh=1` | The user's own `ClaudeStatus` (cached 10 min per user unless refresh). `not_configured` without a token (admin excepted).     |
+
+## Own account
+
+| Method | Path                        | Notes                                                                                        |
+| ------ | --------------------------- | -------------------------------------------------------------------------------------------- |
+| GET    | `/api/account`              | `CurrentUser`                                                                                |
+| PATCH  | `/api/account`              | `{ displayName?, username? }` → `CurrentUser`; `409 username_taken`.                         |
+| POST   | `/api/account/password`     | `{ currentPassword, newPassword }` → 204; logs out the other sessions; `403 wrong_password`. |
+| PUT    | `/api/account/claude-token` | `{ token }` (`claude setup-token` output), stored encrypted → `CurrentUser`.                 |
+| DELETE | `/api/account/claude-token` | → `CurrentUser`                                                                              |
+
+## Administration (admin only)
+
+| Method | Path                         | Notes                                                                                             |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| GET    | `/api/admin/users`           | `AdminUser[]` (no user data beyond name, PDF count, token yes/no, last login).                    |
+| POST   | `/api/admin/users`           | `{ username, displayName, password }` → 201 `AdminUser`.                                          |
+| PATCH  | `/api/admin/users/:id`       | `{ disabled?, password? }`; both log the user out. The admin cannot be disabled (`409`).          |
+| DELETE | `/api/admin/users/:id`       | Deletes the account, its rows (cascade) and files. Not the admin (`409 cannot_delete_admin`).     |
+| GET    | `/api/admin/invitations`     | `Invitation[]`, newest first.                                                                     |
+| POST   | `/api/admin/invitations`     | `{ note? }` → 201 `CreatedInvitation` with the one-time `token` (link `/invite/<token>`, 7 days). |
+| DELETE | `/api/admin/invitations/:id` | Revokes it.                                                                                       |
 
 ## Library
 
@@ -149,7 +179,7 @@ The chat context also accepts `pageRange: { from, to }` (the scope of a diagram)
 | GET    | `/api/settings`                                  | `{ palette, claudeModel, studyTimer }`                                                            |
 | PATCH  | `/api/settings`                                  | `{ palette?, claudeModel?, studyTimer? }`                                                         |
 | POST   | `/api/focus-sessions`                            | Study-timer block `{ id, documentId, day, seconds, completed, method }`; idempotent by `id`, 204. |
-| GET    | `/api/backup`                                    | `pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz`                                                     |
+| GET    | `/api/backup`                                    | `pdfclaudeassistant-backup-YYYY-MM-DD.tar.gz` with every user's data: admin only (`403`).         |
 
 With `WEB_DIR` set, any other GET outside `/api` and `/ws` returns `index.html`
 (SPA fallback), and unknown `/api/*` paths return `404 { error: 'not_found' }`.

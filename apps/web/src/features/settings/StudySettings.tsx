@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { t } from '../../i18n';
+import { useCurrentUser } from '../auth/session';
 import { api } from '../../lib/api';
 import { settingsKey, useSettings } from '../annotations/api';
 
@@ -19,6 +20,8 @@ function StudySettingsForm({ initial }: { initial: AppSettings }) {
   const [palette, setPalette] = useState<PaletteEntry[]>(initial.palette);
   const [model, setModel] = useState<string>(initial.claudeModel ?? '');
   const [saved, setSaved] = useState(false);
+  // The backup holds every user's data: only the admin downloads it.
+  const isAdmin = useCurrentUser()?.role === 'admin';
 
   const save = async (patch: Partial<AppSettings>) => {
     const next = await api<AppSettings>('/settings', { method: 'PATCH', json: patch });
@@ -115,20 +118,22 @@ function StudySettingsForm({ initial }: { initial: AppSettings }) {
         </p>
       )}
 
-      <section aria-labelledby="backup" className="space-y-3">
-        <h2 id="backup" className="text-lg font-medium">
-          {t.settings.backup.title}
-        </h2>
-        <p className="text-text-muted text-sm">{t.settings.backup.help}</p>
-        <a
-          href="/api/backup"
-          download
-          className="border-border hover:bg-surface-muted inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
-        >
-          <Download size={16} aria-hidden />
-          {t.settings.backup.download}
-        </a>
-      </section>
+      {isAdmin && (
+        <section aria-labelledby="backup" className="space-y-3">
+          <h2 id="backup" className="text-lg font-medium">
+            {t.settings.backup.title}
+          </h2>
+          <p className="text-text-muted text-sm">{t.settings.backup.help}</p>
+          <a
+            href="/api/backup"
+            download
+            className="border-border hover:bg-surface-muted inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+          >
+            <Download size={16} aria-hidden />
+            {t.settings.backup.download}
+          </a>
+        </section>
+      )}
     </>
   );
 }

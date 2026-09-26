@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { t } from '../../i18n';
 import { api } from '../../lib/api';
+import { useCurrentUser } from '../auth/session';
+import { ClaudeToken } from './ClaudeToken';
 
 const statusKey = ['claude-status'] as const;
 
@@ -11,11 +13,13 @@ const STATE_COLOR: Record<ClaudeStatus['state'], string> = {
   auth_expired: 'bg-danger',
   rate_limited: 'bg-warn',
   error: 'bg-danger',
+  not_configured: 'bg-warn',
 };
 
 /** Settings → "Conexión con Claude" (SPEC §6.3). */
 export function ClaudeConnection() {
   const qc = useQueryClient();
+  const user = useCurrentUser();
   const status = useQuery({
     queryKey: statusKey,
     queryFn: () => api<ClaudeStatus>('/claude/status'),
@@ -60,7 +64,12 @@ export function ClaudeConnection() {
               <dt>{t.settings.claude.lastChecked}</dt>
               <dd>{new Date(s.checkedAt).toLocaleString('es')}</dd>
             </dl>
-            {s.state === 'auth_expired' && (
+            {s.state === 'auth_expired' && user?.hasClaudeToken && (
+              <p className="bg-surface-muted rounded-md p-3 text-sm">
+                {t.settings.claude.renewOwnToken}
+              </p>
+            )}
+            {s.state === 'auth_expired' && !user?.hasClaudeToken && (
               <div className="bg-surface-muted space-y-2 rounded-md p-3 text-sm">
                 <p className="font-medium">{t.settings.claude.renewTitle}</p>
                 <p>{t.settings.claude.renewToken}</p>
@@ -83,6 +92,7 @@ export function ClaudeConnection() {
           {busy ? t.settings.claude.checking : t.settings.claude.check}
         </button>
       </div>
+      <ClaudeToken onChange={() => void refresh()} />
     </section>
   );
 }

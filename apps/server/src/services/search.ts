@@ -29,7 +29,10 @@ interface Row {
 
 /** Full-text search over page text (F-VIS-02, F-SRC-01, `search_library`). */
 export class SearchService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly userId: string,
+  ) {}
 
   search({ q, scope, id, limit }: SearchQuery): SearchHit[] {
     const match = toFtsQuery(q);
@@ -49,13 +52,14 @@ export class SearchService {
            FROM pages_fts
            JOIN pages p ON p.id = pages_fts.rowid
            JOIN documents d ON d.id = p.document_id
-          WHERE pages_fts MATCH @match AND d.deleted_at IS NULL ${filter}
+          WHERE pages_fts MATCH @match AND d.user_id = @userId AND d.deleted_at IS NULL ${filter}
           ORDER BY ${scope === 'doc' ? 'p.page_number' : 'rank'}
           LIMIT @limit`,
       )
       .all({
         match,
         limit,
+        userId: this.userId,
         start: SEARCH_MARK_START,
         end: SEARCH_MARK_END,
         ...(scope === 'all' ? {} : { id }),

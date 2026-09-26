@@ -1,10 +1,11 @@
 import type { query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { DailyBrief } from '@pdfclaudeassistant/shared';
-import { and, desc, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
+import type { ClaudeCredentials } from '../claude/credentials.js';
 import { baseAgentOptions } from '../claude/options.js';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { documents, settings as settingsTable } from '../db/schema.js';
+import { documents } from '../db/schema.js';
 import type { LibraryService } from './library.js';
 import type { MemoryService } from './memory.js';
 import type { ReviewService } from './review.js';
@@ -35,6 +36,8 @@ export class BriefService {
     private readonly library: LibraryService,
     private readonly settings: SettingsService,
     private readonly runQuery: QueryFn,
+    private readonly credentials: ClaudeCredentials,
+    private readonly userId: string,
   ) {}
 
   today(day: string): DailyBrief {
@@ -62,6 +65,8 @@ export class BriefService {
 
   /** Asks Claude for today's note (one short request per day, cached). */
   async generate(day: string): Promise<DailyBrief> {
+    const auth = this.credentials.forUser(this.userId);
+    if (!auth) throw new HttpError(409, 'claude_not_configured');
     const brief = this.today(day);
     const memory = brief.continueReading
       ? this.memory.contextFor(brief.continueReading.id)
@@ -81,7 +86,7 @@ export class BriefService {
     const q = this.runQuery({
       prompt: facts,
       options: {
-        ...baseAgentOptions(this.config),
+        ...baseAgentOptions(this.config, auth),
         ...(this.settings.claudeModel() ? { model: this.settings.claudeModel()! } : {}),
         systemPrompt: BRIEF_PROMPT,
         maxTurns: 1,
@@ -96,28 +101,25 @@ export class BriefService {
     }
     if (!text) throw new HttpError(502, 'claude_failed');
     const stored: Stored = { day, text, generatedAt: new Date().toISOString() };
-    this.db
-      .insert(settingsTable)
-      .values({ key: 'daily_brief', value: JSON.stringify(stored) })
-      .onConflictDoUpdate({ target: settingsTable.key, set: { value: JSON.stringify(stored) } })
-      .run();
+    this.settings.write('daily_brief', stored);
     return this.today(day);
   }
 
   private stored(): Stored | null {
-    const row = this.db
-      .select()
-      .from(settingsTable)
-      .where(sql`${settingsTable.key} = 'daily_brief'`)
-      .get();
-    return row ? (JSON.parse(row.value) as Stored) : null;
+    return this.settings.read<Stored>('daily_brief') ?? null;
   }
 
   private continueReading(): DailyBrief['continueReading'] {
     const row = this.db
       .select({ id: documents.id })
       .from(documents)
-      .where(and(isNull(documents.deletedAt), isNotNull(documents.lastOpenedAt)))
+      .where(
+        and(
+          eq(documents.userId, this.userId),
+          isNull(documents.deletedAt),
+          isNotNull(documents.lastOpenedAt),
+        ),
+      )
       .orderBy(desc(documents.lastOpenedAt))
       .limit(1)
       .get();

@@ -29,21 +29,33 @@ const SUBJECT_COLORS = ['#4f6d7a', '#8a5a44', '#5b7553', '#7a5c8a', '#a0793d', '
 
 type DocumentRow = typeof documents.$inferSelect;
 
+/** Everything in the library belongs to one user; every method is scoped to `userId`. */
 export class LibraryService {
   constructor(
     private readonly db: Db,
     private readonly config: AppConfig,
+    readonly userId: string,
   ) {}
 
   // ---- tree -------------------------------------------------------------
 
   tree(): LibraryTree {
-    const subjectRows = this.db.select().from(subjects).orderBy(asc(subjects.position)).all();
-    const topicRows = this.db.select().from(topics).orderBy(asc(topics.position)).all();
+    const subjectRows = this.db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.userId, this.userId))
+      .orderBy(asc(subjects.position))
+      .all();
+    const topicRows = this.db
+      .select()
+      .from(topics)
+      .where(eq(topics.userId, this.userId))
+      .orderBy(asc(topics.position))
+      .all();
     const docRows = this.db
       .select()
       .from(documents)
-      .where(isNull(documents.deletedAt))
+      .where(and(eq(documents.userId, this.userId), isNull(documents.deletedAt)))
       .orderBy(asc(documents.position), asc(documents.createdAt))
       .all();
     const viewed = this.viewedCounts(docRows.map((d) => d.id));
@@ -85,19 +97,21 @@ export class LibraryService {
       this.db
         .select({ n: sql<number>`count(*)` })
         .from(subjects)
+        .where(eq(subjects.userId, this.userId))
         .get()?.n ?? 0;
     const row = {
       id: newId(),
+      userId: this.userId,
       name: input.name,
       color: input.color ?? SUBJECT_COLORS[count % SUBJECT_COLORS.length]!,
-      position: this.nextPosition(subjects.position, subjects),
+      position: this.nextPosition(subjects.position, subjects, eq(subjects.userId, this.userId)),
     };
     this.db.insert(subjects).values(row).run();
     return row;
   }
 
   updateSubject(id: string, input: UpdateSubject) {
-    const res = this.db.update(subjects).set(input).where(eq(subjects.id, id)).run();
+    const res = this.db.update(subjects).set(input).where(this.ownSubject(id)).run();
     if (res.changes === 0) throw notFound();
   }
 
@@ -107,11 +121,11 @@ export class LibraryService {
       const topicIds = tx
         .select({ id: topics.id })
         .from(topics)
-        .where(eq(topics.subjectId, id))
+        .where(and(eq(topics.subjectId, id), eq(topics.userId, this.userId)))
         .all()
         .map((t) => t.id);
       if (topicIds.length) this.trashDocumentsOfTopics(tx, topicIds);
-      const res = tx.delete(subjects).where(eq(subjects.id, id)).run();
+      const res = tx.delete(subjects).where(this.ownSubject(id)).run();
       if (res.changes === 0) throw notFound();
     });
   }
@@ -119,7 +133,7 @@ export class LibraryService {
   reorderSubjects(ids: string[]) {
     this.db.transaction((tx) => {
       ids.forEach((id, position) =>
-        tx.update(subjects).set({ position }).where(eq(subjects.id, id)).run(),
+        tx.update(subjects).set({ position }).where(this.ownSubject(id)).run(),
       );
     });
   }
@@ -130,6 +144,7 @@ export class LibraryService {
     this.requireSubject(input.subjectId);
     const row = {
       id: newId(),
+      userId: this.userId,
       subjectId: input.subjectId,
       name: input.name,
       position: this.nextPosition(topics.position, topics, eq(topics.subjectId, input.subjectId)),
@@ -151,14 +166,17 @@ export class LibraryService {
       );
     }
     if (Object.keys(patch).length === 0) return;
-    const res = this.db.update(topics).set(patch).where(eq(topics.id, id)).run();
+    const res = this.db.update(topics).set(patch).where(this.ownTopic(id)).run();
     if (res.changes === 0) throw notFound();
   }
 
   deleteTopic(id: string) {
     this.db.transaction((tx) => {
+      if (!tx.select({ id: topics.id }).from(topics).where(this.ownTopic(id)).get()) {
+        throw notFound();
+      }
       this.trashDocumentsOfTopics(tx, [id]);
-      const res = tx.delete(topics).where(eq(topics.id, id)).run();
+      const res = tx.delete(topics).where(this.ownTopic(id)).run();
       if (res.changes === 0) throw notFound();
     });
   }
@@ -169,13 +187,13 @@ export class LibraryService {
       const rows = tx
         .select({ subjectId: topics.subjectId })
         .from(topics)
-        .where(inArray(topics.id, ids))
+        .where(and(inArray(topics.id, ids), eq(topics.userId, this.userId)))
         .all();
       if (rows.length !== ids.length || new Set(rows.map((r) => r.subjectId)).size !== 1) {
         throw new HttpError(400, 'invalid_reorder');
       }
       ids.forEach((id, position) =>
-        tx.update(topics).set({ position }).where(eq(topics.id, id)).run(),
+        tx.update(topics).set({ position }).where(this.ownTopic(id)).run(),
       );
     });
   }
@@ -196,6 +214,7 @@ export class LibraryService {
       .insert(documents)
       .values({
         ...input,
+        userId: this.userId,
         position: this.nextPosition(
           documents.position,
           documents,
@@ -207,7 +226,7 @@ export class LibraryService {
   }
 
   getRow(id: string): DocumentRow {
-    const row = this.db.select().from(documents).where(eq(documents.id, id)).get();
+    const row = this.db.select().from(documents).where(this.ownDocument(id)).get();
     if (!row) throw notFound();
     return row;
   }
@@ -273,7 +292,7 @@ export class LibraryService {
       const rows = tx
         .select({ topicId: documents.topicId })
         .from(documents)
-        .where(inArray(documents.id, ids))
+        .where(and(inArray(documents.id, ids), eq(documents.userId, this.userId)))
         .all();
       if (rows.length !== ids.length || new Set(rows.map((r) => r.topicId)).size !== 1) {
         throw new HttpError(400, 'invalid_reorder');
@@ -306,7 +325,13 @@ export class LibraryService {
         .run();
       if (pos.seconds && pos.day) {
         tx.insert(studySessions)
-          .values({ documentId: id, day: pos.day, seconds: pos.seconds, updatedAt: now })
+          .values({
+            userId: this.userId,
+            documentId: id,
+            day: pos.day,
+            seconds: pos.seconds,
+            updatedAt: now,
+          })
           .onConflictDoUpdate({
             target: [studySessions.documentId, studySessions.day],
             set: { seconds: sql`${studySessions.seconds} + ${pos.seconds}`, updatedAt: now },
@@ -331,13 +356,14 @@ export class LibraryService {
     const rows = this.db
       .select()
       .from(documents)
-      .where(isNotNull(documents.deletedAt))
+      .where(and(eq(documents.userId, this.userId), isNotNull(documents.deletedAt)))
       .orderBy(asc(documents.deletedAt))
       .all();
     const liveTopics = new Set(
       this.db
         .select({ id: topics.id })
         .from(topics)
+        .where(eq(topics.userId, this.userId))
         .all()
         .map((t) => t.id),
     );
@@ -367,46 +393,44 @@ export class LibraryService {
       .run();
   }
 
-  /** Permanently deletes a trashed document and its files. */
   /** Deletes every document in the trash for good (F-LIB-05). */
   emptyTrash(): number {
-    const rows = this.db.select().from(documents).where(isNotNull(documents.deletedAt)).all();
+    const rows = this.db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.userId, this.userId), isNotNull(documents.deletedAt)))
+      .all();
     for (const row of rows) {
       this.db.delete(documents).where(eq(documents.id, row.id)).run();
-      this.removeFiles(row);
+      removeDocumentFiles(this.config, row);
     }
     return rows.length;
   }
 
+  /** Permanently deletes a trashed document and its files. */
   purgeDocument(id: string) {
     const row = this.getRow(id);
     if (!row.deletedAt) throw new HttpError(409, 'not_in_trash');
     this.db.delete(documents).where(eq(documents.id, id)).run();
-    this.removeFiles(row);
-  }
-
-  /** Purges documents that have been in the trash longer than the retention period. */
-  purgeExpiredTrash(now = new Date()): number {
-    const cutoff = new Date(now.getTime() - TRASH_RETENTION_MS).toISOString();
-    const expired = this.db.select().from(documents).where(lt(documents.deletedAt, cutoff)).all();
-    for (const row of expired) {
-      this.db.delete(documents).where(eq(documents.id, row.id)).run();
-      this.removeFiles(row);
-    }
-    return expired.length;
+    removeDocumentFiles(this.config, row);
   }
 
   coverPath(id: string) {
-    return path.join(this.config.coverDir, `${id}.webp`);
+    return coverPath(this.config, id);
   }
 
   // ---- helpers ----------------------------------------------------------
 
-  private removeFiles(row: DocumentRow) {
-    fs.rmSync(row.filePath, { force: true });
-    // Pre-OCR original, when OCR replaced the served file.
-    fs.rmSync(row.filePath.replace(/\.pdf$/, '.orig.pdf'), { force: true });
-    fs.rmSync(this.coverPath(row.id), { force: true });
+  private ownSubject(id: string) {
+    return and(eq(subjects.id, id), eq(subjects.userId, this.userId));
+  }
+
+  private ownTopic(id: string) {
+    return and(eq(topics.id, id), eq(topics.userId, this.userId));
+  }
+
+  private ownDocument(id: string) {
+    return and(eq(documents.id, id), eq(documents.userId, this.userId));
   }
 
   private trashDocumentsOfTopics(
@@ -436,7 +460,7 @@ export class LibraryService {
   private nextPosition(
     column: typeof subjects.position | typeof topics.position | typeof documents.position,
     table: typeof subjects | typeof topics | typeof documents,
-    where?: ReturnType<typeof eq>,
+    where?: ReturnType<typeof and>,
   ): number {
     const q = this.db.select({ max: sql<number | null>`max(${column})` }).from(table);
     const row = (where ? q.where(where) : q).get();
@@ -444,7 +468,7 @@ export class LibraryService {
   }
 
   private requireSubject(id: string) {
-    if (!this.db.select({ id: subjects.id }).from(subjects).where(eq(subjects.id, id)).get()) {
+    if (!this.db.select({ id: subjects.id }).from(subjects).where(this.ownSubject(id)).get()) {
       throw new HttpError(400, 'unknown_subject');
     }
   }
@@ -458,10 +482,32 @@ export class LibraryService {
   }
 
   private requireTopic(id: string) {
-    if (!this.db.select({ id: topics.id }).from(topics).where(eq(topics.id, id)).get()) {
+    if (!this.db.select({ id: topics.id }).from(topics).where(this.ownTopic(id)).get()) {
       throw new HttpError(400, 'unknown_topic');
     }
   }
+}
+
+export function coverPath(config: AppConfig, docId: string) {
+  return path.join(config.coverDir, `${docId}.webp`);
+}
+
+function removeDocumentFiles(config: AppConfig, row: DocumentRow) {
+  fs.rmSync(row.filePath, { force: true });
+  // Pre-OCR original, when OCR replaced the served file.
+  fs.rmSync(row.filePath.replace(/\.pdf$/, '.orig.pdf'), { force: true });
+  fs.rmSync(coverPath(config, row.id), { force: true });
+}
+
+/** Purges every user's documents that stayed in the trash past the retention period. */
+export function purgeExpiredTrash(db: Db, config: AppConfig, now = new Date()): number {
+  const cutoff = new Date(now.getTime() - TRASH_RETENTION_MS).toISOString();
+  const expired = db.select().from(documents).where(lt(documents.deletedAt, cutoff)).all();
+  for (const row of expired) {
+    db.delete(documents).where(eq(documents.id, row.id)).run();
+    removeDocumentFiles(config, row);
+  }
+  return expired.length;
 }
 
 function toSummary(d: DocumentRow, viewedPages: number): DocumentSummary {
