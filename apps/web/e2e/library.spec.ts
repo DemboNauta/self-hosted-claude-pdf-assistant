@@ -96,7 +96,9 @@ test('drag and drop: reorder subjects by keyboard and move a PDF onto a topic', 
   page,
 }, info) => {
   test.skip(info.project.name !== 'desktop', 'pointer drag onto the tree needs both panes');
-  const [a, b] = ['Arrastre A', 'Arrastre B'];
+  // Unique per run: a retry reuses the server, and older subjects would break the order check.
+  const tag = `Arrastre ${Date.now() % 1_000_000}`;
+  const [a, b] = [`${tag} A`, `${tag} B`];
   await login(page);
   await page.goto('/library');
   for (const name of [a, b]) {
@@ -108,9 +110,7 @@ test('drag and drop: reorder subjects by keyboard and move a PDF onto a topic', 
       .getByRole('list', { name: 'Asignaturas' })
       .locator(':scope > li')
       .allInnerTexts()
-      .then((texts) =>
-        texts.map((x) => x.split('\n')[0]!.trim()).filter((x) => x.startsWith('Arrastre')),
-      );
+      .then((texts) => texts.map((x) => x.split('\n')[0]!.trim()).filter((x) => x.startsWith(tag)));
   expect(await subjectNames()).toEqual([a, b]);
 
   // Keyboard sorting (accessibility): Space to lift, ArrowDown, Space to drop.
@@ -141,17 +141,24 @@ test('drag and drop: reorder subjects by keyboard and move a PDF onto a topic', 
 
   // Move a PDF by dragging its card onto another topic in the tree.
   await menu(page, a, 'Nuevo tema');
-  await fillDialog(page, 'Origen', 'Crear');
+  await fillDialog(page, `${tag} Origen`, 'Crear');
   await menu(page, a, 'Nuevo tema');
-  await fillDialog(page, 'Destino', 'Crear');
-  await page.getByRole('link', { name: 'Origen' }).click();
+  await fillDialog(page, `${tag} Destino`, 'Crear');
+  await page.getByRole('link', { name: `${tag} Origen` }).click();
+  // Creating a topic opens it: upload only once "Origen" is shown, or the PDF lands in "Destino".
+  await expect(page.getByRole('heading', { name: `${tag} Origen` })).toBeVisible();
   await page.getByTestId('upload-input').setInputFiles({
     name: 'arrastrado.pdf',
     mimeType: 'application/pdf',
     buffer: tinyPdf('Arrastrado'),
   });
+  // Drag only once the PDF is processed: until then the card re-renders and is not stable.
+  const card = page.getByTestId('document-card').filter({ hasText: 'arrastrado' });
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByRole('status')).toHaveCount(0, { timeout: 20_000 });
   const handle = page.getByRole('button', { name: 'Arrastrar para reordenar: arrastrado' });
-  const target = page.getByRole('link', { name: 'Destino' });
+  const target = page.getByRole('link', { name: `${tag} Destino` });
+  await target.scrollIntoViewIfNeeded();
   await handle.hover();
   await page.mouse.down();
   const box = (await target.boundingBox())!;

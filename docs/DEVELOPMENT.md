@@ -117,9 +117,10 @@ pane:
 - **Agent SDK with an image:** the prompt is an `AsyncIterable<SDKUserMessage>`
   with an image block plus the text (`withImage` in `claude/chat.ts`). Checked
   against the real subscription on 2026-09-26.
-- **e2e flake:** `library.spec.ts` "drag and drop … move a PDF onto a topic"
-  sometimes times out on `handle.hover()` (the card re-renders while the PDF is
-  processed). It fails the same way on the code before 2026-09-26 changes.
+- **e2e races (fixed 2026-09-26 in `library.spec.ts`):** creating a topic opens
+  it, so wait for the new view's heading before uploading; wait for a card's
+  processing status to clear before dragging it; use run-unique names (retries
+  share the server).
 - **TanStack mutations:** `onSettled` returns the invalidation promise, so
   per-call `onSuccess` (e.g. navigating to a new topic) sees fresh data.
 - **Chat socket:** errors without `messageId` end an exchange in tests (see
