@@ -30,22 +30,25 @@ export async function registerChatRoutes(
 ) {
   const id = (params: unknown) => parse(idParams, params).id;
 
-  app.get('/api/documents/:id/threads', async (req) => {
-    const docId = id(req.params);
-    library.getLive(docId);
-    return threads.listForDocument(docId);
-  });
-  /** The document's active thread (created on first use). */
-  app.get('/api/documents/:id/threads/active', async (req) => {
-    const docId = id(req.params);
-    library.getLive(docId);
-    return threads.active(docId);
-  });
-  app.post('/api/documents/:id/threads', async (req, reply) => {
-    const docId = id(req.params);
-    library.getLive(docId);
-    return reply.code(201).send(threads.create(docId));
-  });
+  // Threads per document, topic or subject (F-CHAT-07/08).
+  const scopes = [
+    { path: 'documents', kind: 'document', check: (i: string) => library.getLive(i) },
+    { path: 'topics', kind: 'topic', check: (i: string) => library.getTopicOrThrow(i) },
+    { path: 'subjects', kind: 'subject', check: (i: string) => library.getSubjectOrThrow(i) },
+  ] as const;
+  for (const { path, kind, check } of scopes) {
+    const scope = (params: unknown) => {
+      const scopeId = id(params);
+      check(scopeId);
+      return { kind, id: scopeId };
+    };
+    app.get(`/api/${path}/:id/threads`, async (req) => threads.list(scope(req.params)));
+    /** The active thread (created on first use). */
+    app.get(`/api/${path}/:id/threads/active`, async (req) => threads.active(scope(req.params)));
+    app.post(`/api/${path}/:id/threads`, async (req, reply) =>
+      reply.code(201).send(threads.create(scope(req.params))),
+    );
+  }
   app.get('/api/threads/:id/messages', async (req) => {
     const threadId = id(req.params);
     return { running: chat.isRunning(threadId), messages: threads.messages(threadId) };

@@ -120,6 +120,7 @@ describe('annotations', () => {
       threadId: 't',
       messageId: 'm',
       docId,
+      scope: { kind: 'document', id: docId },
       emit: (e) => events.push(e),
       record: () => {},
     };

@@ -5,6 +5,7 @@ import { HomePage } from './features/home/HomePage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { MemoryPage } from './features/memory/MemoryPage';
 import { ReviewPage } from './features/review/ReviewPage';
+import { ScopeChatPage } from './features/chat/ScopeChatPage';
 import { SearchPage } from './features/search/SearchPage';
 import { StatsPage } from './features/stats/StatsPage';
 import { TrashPage } from './features/library/TrashPage';
@@ -25,6 +26,8 @@ const router = createBrowserRouter([
       { path: 'memory', element: <MemoryPage /> },
       { path: 'review', element: <ReviewPage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'chat/topic/:id', element: <ScopeChatPage kind="topic" /> },
+      { path: 'chat/subject/:id', element: <ScopeChatPage kind="subject" /> },
       { path: 'stats', element: <StatsPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],

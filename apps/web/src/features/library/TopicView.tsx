@@ -6,7 +6,7 @@ import type {
   TopicNode,
 } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { ArrowLeft, Link2, Upload } from 'lucide-react';
+import { ArrowLeft, Link2, MessagesSquare, Upload } from 'lucide-react';
 import { useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router';
 import { Dialog, NameDialog } from '../../components/Dialog';
@@ -96,7 +96,14 @@ export function TopicView({
             {topic.name}
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to={`/chat/topic/${topic.id}`}
+            className="border-border hover:bg-surface-muted flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+          >
+            <MessagesSquare size={16} aria-hidden />
+            {t.chat.scope.topicAction}
+          </Link>
           <button
             type="button"
             onClick={() => setDialog({ kind: 'importUrl' })}

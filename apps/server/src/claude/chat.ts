@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   ServerChatEvent,
   StudyMode,
+  ThreadScope,
   ToolEvent,
 } from '@pdfclaudeassistant/shared';
 import type { FastifyBaseLogger } from 'fastify';
@@ -15,7 +16,8 @@ import type { LibraryService } from '../services/library.js';
 import type { ThreadService } from '../services/threads.js';
 import { classifyAssistantError, classifyErrorText } from './errors.js';
 import { baseAgentOptions } from './options.js';
-import { buildTurnPrompt, SYSTEM_PROMPT } from './prompt.js';
+import { scopeOf } from '../services/threads.js';
+import { buildTurnPrompt, documentScope, groupScope, SYSTEM_PROMPT } from './prompt.js';
 import type { ClaudeStatusService } from './status.js';
 import { buildStudyServer, type ToolDeps } from './tools.js';
 
@@ -33,7 +35,7 @@ export interface TurnInput {
 }
 
 /** Extra per-turn context (memory) supplied by later features. */
-export type MemoryProvider = (docId: string) => string | undefined;
+export type MemoryProvider = (docId: string | null) => string | undefined;
 
 class TurnError extends Error {
   constructor(
@@ -76,12 +78,17 @@ export class ChatService {
 
   async send(input: TurnInput, emit: (event: ServerChatEvent) => void): Promise<void> {
     const thread = this.threads.get(input.threadId);
-    if (thread.documentId !== input.context.docId) throw new HttpError(400, 'invalid_request');
+    const scope = scopeOf(thread);
+    const ctx = input.context;
+    const scopeId =
+      scope.kind === 'document' ? ctx.docId : scope.kind === 'topic' ? ctx.topicId : ctx.subjectId;
+    if (scopeId !== scope.id) throw new HttpError(400, 'invalid_request');
     if (this.running.has(thread.id)) {
       emit({ type: 'error', threadId: thread.id, code: 'busy' });
       return;
     }
-    const doc = this.library.detail(input.context.docId);
+    const docId = scope.kind === 'document' ? scope.id : null;
+    const scopeLines = this.describeScope(scope, ctx.currentPage);
 
     const abort = new AbortController();
     this.running.set(thread.id, abort);
@@ -120,8 +127,8 @@ export class ChatService {
           text: input.text,
           mode: input.mode,
           context: input.context,
-          document: doc,
-          memory: this.memory(doc.id),
+          scope: scopeLines,
+          memory: this.memory(docId),
           recoveredTranscript,
         });
       const run = (resume: string | null, recovered?: string) =>
@@ -131,7 +138,8 @@ export class ChatService {
           abort,
           threadId: thread.id,
           messageId: assistant.id,
-          docId: doc.id,
+          docId: docId ?? undefined,
+          scope,
           emit,
           onText: turn.emitDelta,
           onTool: (e) => toolEvents.push(e),
@@ -174,13 +182,36 @@ export class ChatService {
     }
   }
 
+  /** Context lines describing what the conversation is about. */
+  private describeScope(scope: ThreadScope, currentPage?: number): string[] {
+    if (scope.kind === 'document') return documentScope(this.library.detail(scope.id), currentPage);
+    const tree = this.library.tree();
+    if (scope.kind === 'topic') {
+      for (const s of tree.subjects) {
+        const topic = s.topics.find((t) => t.id === scope.id);
+        if (topic)
+          return groupScope('topic', `${topic.name}" (subject "${s.name}`, topic.documents);
+      }
+    } else {
+      const subject = tree.subjects.find((s) => s.id === scope.id);
+      if (subject) {
+        const docs = subject.topics.flatMap((t) =>
+          t.documents.map((d) => ({ ...d, topicName: t.name })),
+        );
+        return groupScope('subject', subject.name, docs);
+      }
+    }
+    throw new HttpError(404, 'not_found');
+  }
+
   private async runTurn(t: {
     prompt: string;
     resume: string | null;
     abort: AbortController;
     threadId: string;
     messageId: string;
-    docId: string;
+    docId?: string;
+    scope: ThreadScope;
     emit: (event: ServerChatEvent) => void;
     onText: (text: string) => void;
     onTool: (event: ToolEvent) => void;
@@ -189,6 +220,7 @@ export class ChatService {
       threadId: t.threadId,
       messageId: t.messageId,
       docId: t.docId,
+      scope: t.scope,
       emit: t.emit,
       record: t.onTool,
     });

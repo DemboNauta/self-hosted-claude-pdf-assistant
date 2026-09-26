@@ -53,13 +53,14 @@ export class MemoryService {
     content: string;
     replaceId?: string;
   }): { id: string; action: 'created' | 'updated' } {
-    const documentId = input.scope === 'document' ? (input.documentId ?? null) : null;
+    const scope = input.scope === 'document' && !input.documentId ? 'global' : input.scope;
+    const documentId = scope === 'document' ? (input.documentId ?? null) : null;
     const existing = this.db
       .select()
       .from(memoryItems)
       .where(
         and(
-          eq(memoryItems.scope, input.scope),
+          eq(memoryItems.scope, scope),
           documentId ? eq(memoryItems.documentId, documentId) : isNull(memoryItems.documentId),
         ),
       )
@@ -225,11 +226,15 @@ export class MemoryService {
    * Memory injected with each turn (F-MEM-04): global items, the document's items
    * and the weakest concepts (this document's first). Ids let Claude update items.
    */
-  contextFor(documentId: string, maxChars = 3500): string | undefined {
+  contextFor(documentId: string | null, maxChars = 3500): string | undefined {
     const rows = this.db
       .select()
       .from(memoryItems)
-      .where(or(eq(memoryItems.scope, 'global'), eq(memoryItems.documentId, documentId)))
+      .where(
+        documentId
+          ? or(eq(memoryItems.scope, 'global'), eq(memoryItems.documentId, documentId))
+          : eq(memoryItems.scope, 'global'),
+      )
       .orderBy(desc(memoryItems.updatedAt))
       .limit(80)
       .all();
@@ -238,7 +243,7 @@ export class MemoryService {
       .from(concepts)
       .where(sql`${concepts.mastery} < 0.7`)
       .orderBy(
-        sql`CASE WHEN ${concepts.documentId} = ${documentId} THEN 0 ELSE 1 END`,
+        sql`CASE WHEN ${concepts.documentId} = ${documentId ?? ''} THEN 0 ELSE 1 END`,
         asc(concepts.mastery),
       )
       .limit(12)

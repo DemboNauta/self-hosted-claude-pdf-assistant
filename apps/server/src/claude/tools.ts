@@ -6,6 +6,7 @@ import {
   SEARCH_MARK_START,
   type OutlineEntry,
   type ServerChatEvent,
+  type ThreadScope,
   type ToolEvent,
 } from '@pdfclaudeassistant/shared';
 import { and, asc, between, eq } from 'drizzle-orm';
@@ -31,8 +32,10 @@ type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
 export interface ToolContext {
   threadId: string;
   messageId: string;
-  /** Document open in the reader (default scope for search). */
-  docId: string;
+  /** Document open in the reader; absent in topic/subject chats (F-CHAT-08). */
+  docId?: string;
+  /** What the conversation is about (default search scope). */
+  scope: ThreadScope;
   emit: (event: ServerChatEvent) => void;
   /** Collects tool events so they are stored with the assistant message. */
   record: (event: ToolEvent) => void;
@@ -200,21 +203,26 @@ export function readingTools(deps: ToolDeps, ctx: ToolContext) {
       {
         query: z.string().min(1).max(200),
         scope: z.enum(['doc', 'topic', 'subject', 'all']).default('doc'),
-        docId: z.string().optional().describe('Document for scope "doc" (default: the open one)'),
+        docId: z
+          .string()
+          .optional()
+          .describe(
+            'Document for scope "doc" (default: the open one; required in topic/subject chats)',
+          ),
       },
       tracked(
         ctx,
         'search_library',
         ({ query }) => `«${query}»`,
         async ({ query, scope, docId }) => {
-          const doc = docOrError(docId ?? ctx.docId);
+          const doc = (docId ?? ctx.docId) ? docOrError((docId ?? ctx.docId)!) : null;
           const id =
             scope === 'doc'
               ? doc?.id
               : scope === 'topic'
-                ? doc?.topicId
+                ? (doc?.topicId ?? (ctx.scope.kind === 'topic' ? ctx.scope.id : undefined))
                 : scope === 'subject'
-                  ? doc?.subjectId
+                  ? (doc?.subjectId ?? (ctx.scope.kind === 'subject' ? ctx.scope.id : undefined))
                   : undefined;
           if (scope !== 'all' && !id) return fail('No document/topic/subject to search in.');
           const hits = search.search({ q: query, scope, id: id ?? undefined, limit: 25 });
@@ -281,6 +289,7 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
         ({ page }) => `p. ${page}`,
         async ({ docId, page, shapes }) => {
           const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
           let doc;
           try {
             doc = deps.library.detail(id);
@@ -336,6 +345,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
         () => '',
         async ({ docId, fromPage, toPage }) => {
           const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
           const meanings = new Map<string, string>(
             deps.settings.palette().map((p) => [p.key, p.meaning]),
           );
@@ -387,6 +397,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
         ({ highlights }) => `(${highlights.length})`,
         async ({ docId, highlights }) => {
           const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
           deps.library.getLive(id);
           const created = deps.annotations.create(
             id,
@@ -429,6 +440,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
         ({ page }) => `p. ${page}`,
         async ({ docId, page, text: body, quote, x, y }) => {
           const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
           deps.library.getLive(id);
           deps.annotations.create(
             id,
@@ -482,7 +494,7 @@ export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
         async ({ scope, docId, category, content, replaceId }) => {
           const r = memory.remember({
             scope,
-            documentId: scope === 'document' ? (docId ?? ctx.docId) : null,
+            documentId: scope === 'document' ? (docId ?? ctx.docId ?? null) : null,
             category,
             content,
             replaceId,
@@ -508,7 +520,7 @@ export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
         async (a) => {
           const id = memory.markDifficult({
             concept: a.concept,
-            documentId: a.docId ?? ctx.docId,
+            documentId: a.docId ?? ctx.docId ?? null,
             page: a.page ?? null,
             evidence: a.evidence,
           });
@@ -551,7 +563,7 @@ export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
         async ({ docId, note }) => {
           memory.remember({
             scope: 'document',
-            documentId: docId ?? ctx.docId,
+            documentId: docId ?? ctx.docId ?? null,
             category: 'progress',
             content: note,
           });
@@ -577,7 +589,7 @@ export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
         ({ correct }) => (correct ? '✓' : '✗'),
         async (a) => {
           memory.recordExam({
-            documentId: a.docId ?? ctx.docId,
+            documentId: a.docId ?? ctx.docId ?? null,
             question: a.question,
             userAnswer: a.userAnswer,
             correct: a.correct,
@@ -621,7 +633,7 @@ export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
               front: c.front,
               back: c.back,
               page: c.page ?? null,
-              documentId: c.docId ?? ctx.docId,
+              documentId: c.docId ?? ctx.docId ?? null,
             })),
             'claude',
             'proposed',

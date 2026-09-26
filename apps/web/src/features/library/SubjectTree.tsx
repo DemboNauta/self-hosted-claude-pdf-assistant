@@ -4,7 +4,7 @@ import type { LibraryTree, SubjectNode, TopicNode } from '@pdfclaudeassistant/sh
 import clsx from 'clsx';
 import { ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Dialog, NameDialog } from '../../components/Dialog';
 import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
@@ -39,6 +39,7 @@ export function SubjectTree({
   onTopicCreated: (topicId: string) => void;
 }) {
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const close = () => setDialog(null);
 
@@ -121,6 +122,10 @@ export function SubjectTree({
                           {
                             label: t.library.newTopic,
                             onSelect: () => setDialog({ kind: 'newTopic', subject }),
+                          },
+                          {
+                            label: t.chat.scope.subjectAction,
+                            onSelect: () => navigate(`/chat/subject/${subject.id}`),
                           },
                           {
                             label: t.library.rename,

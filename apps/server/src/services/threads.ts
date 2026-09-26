@@ -3,6 +3,7 @@ import type {
   ChatErrorCode,
   ChatMessage,
   StudyMode,
+  ThreadScope,
   ThreadSummary,
   ToolEvent,
 } from '@pdfclaudeassistant/shared';
@@ -37,35 +38,53 @@ function toMessage(row: MessageRow): ChatMessage {
   };
 }
 
-/** Chat threads and their messages (F-CHAT-07). */
+const scopeColumn = (kind: ThreadScope['kind']) =>
+  kind === 'document' ? threads.documentId : kind === 'topic' ? threads.topicId : threads.subjectId;
+
+/** The scope a stored thread belongs to. */
+export function scopeOf(row: ThreadRow): ThreadScope {
+  if (row.documentId) return { kind: 'document', id: row.documentId };
+  if (row.topicId) return { kind: 'topic', id: row.topicId };
+  return { kind: 'subject', id: row.subjectId ?? '' };
+}
+
+/** Chat threads and their messages (F-CHAT-07/08). */
 export class ThreadService {
   constructor(private readonly db: Db) {}
 
-  listForDocument(documentId: string): ThreadSummary[] {
+  list(scope: ThreadScope): ThreadSummary[] {
     return this.db
       .select({
         id: threads.id,
         documentId: threads.documentId,
+        topicId: threads.topicId,
+        subjectId: threads.subjectId,
         title: threads.title,
         createdAt: threads.createdAt,
         updatedAt: threads.updatedAt,
         messageCount: sql<number>`(SELECT count(*) FROM messages m WHERE m.thread_id = threads.id)`,
       })
       .from(threads)
-      .where(eq(threads.documentId, documentId))
+      .where(eq(scopeColumn(scope.kind), scope.id))
       .orderBy(desc(threads.updatedAt))
       .all();
   }
 
-  create(documentId: string): ThreadSummary {
-    const row = { id: newId(), documentId, updatedAt: now() };
+  create(scope: ThreadScope): ThreadSummary {
+    const row = {
+      id: newId(),
+      documentId: scope.kind === 'document' ? scope.id : null,
+      topicId: scope.kind === 'topic' ? scope.id : null,
+      subjectId: scope.kind === 'subject' ? scope.id : null,
+      updatedAt: now(),
+    };
     this.db.insert(threads).values(row).run();
     return { ...row, title: null, createdAt: row.updatedAt, messageCount: 0 };
   }
 
-  /** The document's active thread: the most recently used one, created if missing. */
-  active(documentId: string): ThreadSummary {
-    return this.listForDocument(documentId)[0] ?? this.create(documentId);
+  /** The scope's active thread: the most recently used one, created if missing. */
+  active(scope: ThreadScope): ThreadSummary {
+    return this.list(scope)[0] ?? this.create(scope);
   }
 
   get(id: string): ThreadRow {

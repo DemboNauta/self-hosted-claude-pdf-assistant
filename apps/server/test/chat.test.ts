@@ -121,7 +121,8 @@ async function ask(threadId: string, text: string, extra: Record<string, unknown
     ws.on('message', (raw) => {
       const ev = JSON.parse(String(raw)) as ServerChatEvent;
       events.push(ev);
-      if (ev.type === 'assistant_done') resolve();
+      // Errors before any answer (e.g. a rejected request) end the exchange too.
+      if (ev.type === 'assistant_done' || (ev.type === 'error' && !ev.messageId)) resolve();
     });
   });
   ws.send(
@@ -189,6 +190,28 @@ describe('chat', () => {
     expect(list[0]).toMatchObject({ title: '¿Dónde ocurre la fotosíntesis?', messageCount: 4 });
   });
 
+  it('chats about a whole topic with its documents in context (F-CHAT-08)', async () => {
+    const detail = (await app.inject({ url: `/api/documents/${docId}`, headers })).json<{
+      topicId: string;
+    }>();
+    const thread = (
+      await app.inject({ url: `/api/topics/${detail.topicId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    expect(thread).toMatchObject({ topicId: detail.topicId, documentId: null });
+    // A document context does not match a topic thread.
+    const wrong = await ask(thread.id, 'Hola');
+    expect(wrong.find((e) => e.type === 'error')).toBeTruthy();
+
+    const events = await ask(thread.id, '¿Qué temas hay?', {
+      context: { topicId: detail.topicId },
+    });
+    expect(events.at(-1)).toMatchObject({ type: 'assistant_done' });
+    const prompt = calls.at(-1)!.prompt;
+    expect(prompt).toContain('whole topic "T"');
+    expect(prompt).toContain(`"bio" (id ${docId}, 12 pages)`);
+    expect(prompt).not.toContain('looking at page');
+  });
+
   it('reports usage limits as rate_limited and keeps the failed turn', async () => {
     script = async function* () {
       yield {
@@ -239,6 +262,7 @@ describe('reading tools', () => {
       threadId: 't',
       messageId: 'm',
       docId,
+      scope: { kind: 'document', id: docId },
       emit: (e) => seen.push(e),
       record: () => {},
     };

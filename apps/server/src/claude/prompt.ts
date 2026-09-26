@@ -47,6 +47,37 @@ const SUMMARY_FORMATS: Record<SummaryFormat, string> = {
     'Format: glossary — alphabetical list of key terms, each with a one or two sentence definition.',
 };
 
+/** Scope line for a document chat. */
+export function documentScope(doc: TurnDocument, currentPage?: number): string[] {
+  const lines = [
+    `Active document: "${doc.title}" (id ${doc.id}${doc.pageCount ? `, ${doc.pageCount} pages` : ''}${
+      doc.subjectName ? `; subject "${doc.subjectName}"` : ''
+    }${doc.topicName ? `, topic "${doc.topicName}"` : ''}).`,
+  ];
+  if (currentPage) lines.push(`The student is looking at page ${currentPage}.`);
+  return lines;
+}
+
+/** Scope lines for a topic or subject chat (F-CHAT-08): every PDF it contains. */
+export function groupScope(
+  kind: 'topic' | 'subject',
+  name: string,
+  docs: { id: string; title: string; pageCount: number | null; topicName?: string }[],
+): string[] {
+  const list = docs.length
+    ? docs
+        .map(
+          (d) =>
+            `- "${d.title}" (id ${d.id}${d.pageCount ? `, ${d.pageCount} pages` : ''}${d.topicName ? `; topic "${d.topicName}"` : ''})`,
+        )
+        .join('\n')
+    : '(no documents yet)';
+  return [
+    `The student is asking about the whole ${kind} "${name}", which contains these documents:\n${list}`,
+    `No document is open: pass docId to your tools, use search_library with scope "${kind}" to find where things are, and cite each document by its own id.`,
+  ];
+}
+
 export interface TurnDocument {
   id: string;
   title: string;
@@ -60,17 +91,13 @@ export function buildTurnPrompt(input: {
   text: string;
   mode: StudyMode;
   context: ChatContext;
-  document: TurnDocument;
+  /** Description of the conversation's scope (document, or topic/subject with its PDFs). */
+  scope: string[];
   memory?: string;
   recoveredTranscript?: string;
 }): string {
-  const { text, mode, context, document: doc } = input;
-  const lines = [
-    `Active document: "${doc.title}" (id ${doc.id}${doc.pageCount ? `, ${doc.pageCount} pages` : ''}${
-      doc.subjectName ? `; subject "${doc.subjectName}"` : ''
-    }${doc.topicName ? `, topic "${doc.topicName}"` : ''}).`,
-    `The student is looking at page ${context.currentPage}.`,
-  ];
+  const { text, mode, context } = input;
+  const lines = [...input.scope];
   if (context.selection) {
     lines.push(
       `Selected text on page ${context.selection.page}:\n"""\n${context.selection.text}\n"""`,

@@ -57,6 +57,13 @@
       "when": 1790382354457,
       "tag": "0007_flashcards",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790383064623,
+      "tag": "0008_thread_scopes",
+      "breakpoints": true
     }
   ]
 }

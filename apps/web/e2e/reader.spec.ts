@@ -113,3 +113,25 @@ test('Claude remembers preferences and difficult concepts', async ({ page }, inf
   ).toBeVisible();
   await expect(page.getByRole('meter', { name: 'Dominio de Ciclo de Calvin' })).toBeVisible();
 });
+
+// F-CHAT-08: ask about a whole topic; citations open the cited document.
+test('chat about a whole topic and follow a citation', async ({ page }, info) => {
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Tema entero ${info.project.name}`,
+    tinyPdf('Primera pagina.'),
+  );
+  const detail = await (await page.request.get(`/api/documents/${docId}`)).json();
+  await page.goto(`/library/t/${detail.topicId}`);
+  await page.getByRole('link', { name: 'Preguntar sobre el tema' }).click();
+  await expect(page.getByText('Chat del tema')).toBeVisible();
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  await composer.fill('¿De qué trata este tema?');
+  await composer.press('Enter');
+  const answer = page.getByTestId('assistant-message').last();
+  await expect(answer).toContainText('Respuesta de prueba');
+  await answer.getByTestId('citation').click();
+  await expect(page).toHaveURL(new RegExp(`/read/${docId}`));
+  await expect(page.locator('[data-page="1"]')).toBeVisible();
+});

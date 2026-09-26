@@ -443,6 +443,10 @@ export class LibraryService {
     this.requireTopic(id);
   }
 
+  getSubjectOrThrow(id: string) {
+    this.requireSubject(id);
+  }
+
   private requireTopic(id: string) {
     if (!this.db.select({ id: topics.id }).from(topics).where(eq(topics.id, id)).get()) {
       throw new HttpError(400, 'unknown_topic');

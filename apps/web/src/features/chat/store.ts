@@ -7,6 +7,7 @@ import type {
   StudyMode,
   SummaryFormat,
   TextSelection,
+  ThreadScope,
   ThreadSummary,
 } from '@pdfclaudeassistant/shared';
 import { create } from 'zustand';
@@ -80,7 +81,8 @@ export interface ChatError {
 }
 
 interface ChatState {
-  docId: string | null;
+  /** What the open conversation is about (document, topic or subject). */
+  scope: ThreadScope | null;
   threadId: string | null;
   threads: ThreadSummary[];
   messages: ChatMessage[];
@@ -95,6 +97,7 @@ interface ChatState {
   pointers: PointerGroup[];
 
   openDocument: (docId: string) => Promise<void>;
+  openScope: (scope: ThreadScope) => Promise<void>;
   openThread: (threadId: string) => Promise<void>;
   refresh: () => Promise<void>;
   newThread: () => Promise<void>;
@@ -107,10 +110,13 @@ interface ChatState {
   clearPointers: (messageId?: string) => void;
 }
 
+const scopePath = (s: ThreadScope) =>
+  `/${s.kind === 'document' ? 'documents' : s.kind === 'topic' ? 'topics' : 'subjects'}/${s.id}`;
+
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useChat = create<ChatState>((set, get) => ({
-  docId: null,
+  scope: null,
   threadId: null,
   threads: [],
   messages: [],
@@ -122,10 +128,13 @@ export const useChat = create<ChatState>((set, get) => ({
   attached: null,
   pointers: [],
 
-  openDocument: async (docId) => {
-    if (get().docId === docId && get().threadId) return;
+  openDocument: (docId) => get().openScope({ kind: 'document', id: docId }),
+
+  openScope: async (scope) => {
+    const cur = get().scope;
+    if (cur?.kind === scope.kind && cur.id === scope.id && get().threadId) return;
     set({
-      docId,
+      scope,
       threadId: null,
       messages: [],
       threads: [],
@@ -134,18 +143,18 @@ export const useChat = create<ChatState>((set, get) => ({
       pointers: [],
     });
     chatSocket.connect();
-    const active = await api<ThreadSummary>(`/documents/${docId}/threads/active`);
-    if (get().docId !== docId) return;
+    const active = await api<ThreadSummary>(`${scopePath(scope)}/threads/active`);
+    if (get().scope !== scope) return;
     await get().openThread(active.id);
   },
 
   openThread: async (threadId) => {
     set({ threadId, messages: [], error: null });
     await get().refresh();
-    const docId = get().docId;
-    if (docId) {
-      const threads = await api<ThreadSummary[]>(`/documents/${docId}/threads`);
-      if (get().docId === docId) set({ threads });
+    const scope = get().scope;
+    if (scope) {
+      const threads = await api<ThreadSummary[]>(`${scopePath(scope)}/threads`);
+      if (get().scope === scope) set({ threads });
     }
   },
 
@@ -163,22 +172,25 @@ export const useChat = create<ChatState>((set, get) => ({
   },
 
   newThread: async () => {
-    const docId = get().docId;
-    if (!docId) return;
-    const thread = await api<ThreadSummary>(`/documents/${docId}/threads`, { method: 'POST' });
+    const scope = get().scope;
+    if (!scope) return;
+    const thread = await api<ThreadSummary>(`${scopePath(scope)}/threads`, { method: 'POST' });
     set({ threads: [thread, ...get().threads] });
     await get().openThread(thread.id);
   },
 
   send: (text, opts = {}) => {
-    const { threadId, docId, running } = get();
-    if (!threadId || !docId || running) return;
+    const { threadId, scope, running } = get();
+    if (!threadId || !scope || running) return;
     const selection = opts.selection === undefined ? get().attached : opts.selection;
     const mode = opts.mode ?? get().mode;
     const clientId = crypto.randomUUID();
     const context = {
-      docId,
-      currentPage: useReader.getState().currentPage,
+      ...(scope.kind === 'document'
+        ? { docId: scope.id, currentPage: useReader.getState().currentPage }
+        : scope.kind === 'topic'
+          ? { topicId: scope.id }
+          : { subjectId: scope.id }),
       ...(selection ? { selection } : {}),
       ...(mode === 'summary' ? { summaryFormat: get().summaryFormat } : {}),
     };
@@ -261,9 +273,12 @@ chatSocket.subscribe((event) => {
       break;
     case 'assistant_done':
       useChat.setState({ messages: upsert(s.messages, event.message), running: false });
-      void api<ThreadSummary[]>(`/documents/${s.docId}/threads`).then((threads) => {
-        if (useChat.getState().docId === s.docId) useChat.setState({ threads });
-      });
+      if (s.scope) {
+        const scope = s.scope;
+        void api<ThreadSummary[]>(`${scopePath(scope)}/threads`).then((threads) => {
+          if (useChat.getState().scope === scope) useChat.setState({ threads });
+        });
+      }
       break;
     case 'pointer': {
       useChat.setState({ pointers: [...s.pointers, event.group] });

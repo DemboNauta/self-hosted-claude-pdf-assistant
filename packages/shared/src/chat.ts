@@ -17,12 +17,19 @@ export const selectionSchema = z.object({
 export type TextSelection = z.infer<typeof selectionSchema>;
 
 /** Per-turn context: goes in the user message, never the system prompt (see CLAUDE.md). */
-export const chatContextSchema = z.object({
-  docId: id,
-  currentPage: z.number().int().min(1),
-  selection: selectionSchema.optional(),
-  summaryFormat: z.enum(SUMMARY_FORMATS).optional(),
-});
+export const chatContextSchema = z
+  .object({
+    /** Exactly one of docId / topicId / subjectId: what the conversation is about. */
+    docId: id.optional(),
+    topicId: id.optional(),
+    subjectId: id.optional(),
+    currentPage: z.number().int().min(1).optional(),
+    selection: selectionSchema.optional(),
+    summaryFormat: z.enum(SUMMARY_FORMATS).optional(),
+  })
+  .refine((c) => [c.docId, c.topicId, c.subjectId].filter(Boolean).length === 1, {
+    message: 'one scope required',
+  });
 export type ChatContext = z.infer<typeof chatContextSchema>;
 
 export const clientChatEventSchema = z.discriminatedUnion('type', [
@@ -63,9 +70,14 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+/** What a thread is about (F-CHAT-07 document threads, F-CHAT-08 topic/subject ones). */
+export type ThreadScope = { kind: 'document' | 'topic' | 'subject'; id: string };
+
 export interface ThreadSummary {
   id: string;
   documentId: string | null;
+  topicId: string | null;
+  subjectId: string | null;
   title: string | null;
   createdAt: string;
   updatedAt: string;

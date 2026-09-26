@@ -286,6 +286,12 @@ export const es = {
   },
   chat: {
     title: 'Claude',
+    scope: {
+      topic: 'Chat del tema',
+      subject: 'Chat de la asignatura',
+      topicAction: 'Preguntar sobre el tema',
+      subjectAction: 'Chat de la asignatura',
+    },
     open: 'Abrir chat con Claude',
     close: 'Cerrar chat',
     expand: 'Ampliar chat',

@@ -104,12 +104,19 @@ export const threads = sqliteTable(
   {
     id: text('id').primaryKey(),
     documentId: text('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    /** Topic or subject threads (F-CHAT-08) ask about several PDFs at once. */
+    topicId: text('topic_id').references(() => topics.id, { onDelete: 'cascade' }),
+    subjectId: text('subject_id').references(() => subjects.id, { onDelete: 'cascade' }),
     claudeSessionId: text('claude_session_id'),
     title: text('title'),
     createdAt: createdAt(),
     updatedAt: text('updated_at').notNull(),
   },
-  (t) => [index('threads_document_idx').on(t.documentId, t.updatedAt)],
+  (t) => [
+    index('threads_document_idx').on(t.documentId, t.updatedAt),
+    index('threads_topic_idx').on(t.topicId, t.updatedAt),
+    index('threads_subject_idx').on(t.subjectId, t.updatedAt),
+  ],
 );
 
 /** Chat history kept for consultation; long-term memory is the distilled one (F-MEM-06). */
