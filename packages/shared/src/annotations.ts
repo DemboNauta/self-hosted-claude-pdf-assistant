@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { POINTER_SHAPES } from './chat.js';
 import { studyTimerSchema, type StudyTimerSettings } from './focus.js';
+import { voiceSettingsSchema, type VoiceSettings } from './voice.js';
 
 const id = z.string().min(1).max(64);
 const unit = z.number().min(-0.5).max(1.5);
@@ -150,6 +151,8 @@ export interface AppSettings {
   /** Claude model alias or id; null = CLAUDE_MODEL from the environment / Claude Code default. */
   claudeModel: string | null;
   studyTimer: StudyTimerSettings;
+  /** Claude's voice in voice mode (F-CHAT-09). */
+  voice: VoiceSettings;
 }
 
 export const updateSettingsSchema = z.object({
@@ -172,4 +175,5 @@ export const updateSettingsSchema = z.object({
     .optional()
     .transform((v) => (v === '' ? null : v)),
   studyTimer: studyTimerSchema.optional(),
+  voice: voiceSettingsSchema.optional(),
 });

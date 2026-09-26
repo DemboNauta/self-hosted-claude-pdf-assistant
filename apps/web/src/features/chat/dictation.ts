@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** Minimal typing for the Web Speech API (not in the TypeScript DOM lib). */
-interface RecognitionResult {
+export interface RecognitionResult {
   isFinal: boolean;
   0: { transcript: string };
 }
-interface RecognitionEvent {
+export interface RecognitionEvent {
   resultIndex: number;
   results: ArrayLike<RecognitionResult>;
 }
-interface Recognition {
+export interface Recognition {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
@@ -19,9 +19,9 @@ interface Recognition {
   start: () => void;
   stop: () => void;
 }
-type RecognitionCtor = new () => Recognition;
+export type RecognitionCtor = new () => Recognition;
 
-function recognitionCtor(): RecognitionCtor | null {
+export function recognitionCtor(): RecognitionCtor | null {
   const w = window as unknown as {
     SpeechRecognition?: RecognitionCtor;
     webkitSpeechRecognition?: RecognitionCtor;

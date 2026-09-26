@@ -102,6 +102,8 @@ interface ChatState {
   attachedMark: DrawingMark | null;
   /** Claude's temporary marks on the PDF (F-POINT-03: gone with the next question). */
   pointers: PointerGroup[];
+  /** Voice mode (F-CHAT-09): questions ask for a spoken, tutor-style answer. */
+  voice: boolean;
 
   openDocument: (docId: string) => Promise<void>;
   openScope: (scope: ThreadScope) => Promise<void>;
@@ -110,7 +112,13 @@ interface ChatState {
   newThread: () => Promise<void>;
   send: (
     text: string,
-    opts?: { mode?: StudyMode; selection?: TextSelection | null; mark?: DrawingMark | null },
+    opts?: {
+      mode?: StudyMode;
+      selection?: TextSelection | null;
+      mark?: DrawingMark | null;
+      /** Voice mode: the last sentence heard before the student cut Claude short. */
+      interruptedAfter?: string;
+    },
   ) => void;
   stop: () => void;
   setMode: (mode: StudyMode) => void;
@@ -120,6 +128,7 @@ interface ChatState {
   attachMark: (mark: DrawingMark | null) => void;
   dismissError: () => void;
   clearPointers: (messageId?: string) => void;
+  setVoice: (on: boolean) => void;
 }
 
 const scopePath = (s: ThreadScope) =>
@@ -141,6 +150,7 @@ export const useChat = create<ChatState>((set, get) => ({
   attached: null,
   attachedMark: null,
   pointers: [],
+  voice: false,
 
   openDocument: (docId) => get().openScope({ kind: 'document', id: docId }),
 
@@ -213,6 +223,8 @@ export const useChat = create<ChatState>((set, get) => ({
       ...(mode === 'diagram' && !selection && scope.kind === 'document' && get().diagramRange
         ? { pageRange: get().diagramRange! }
         : {}),
+      ...(get().voice ? { voice: true } : {}),
+      ...(opts.interruptedAfter ? { interruptedAfter: opts.interruptedAfter.slice(0, 2000) } : {}),
     };
     const optimistic: ChatMessage = {
       id: clientId,
@@ -246,6 +258,7 @@ export const useChat = create<ChatState>((set, get) => ({
   attach: (attached) => set({ attached, ...(attached ? { attachedMark: null } : {}) }),
   attachMark: (attachedMark) => set({ attachedMark, ...(attachedMark ? { attached: null } : {}) }),
   dismissError: () => set({ error: null }),
+  setVoice: (voice) => set({ voice }),
   clearPointers: (messageId) =>
     set({ pointers: messageId ? get().pointers.filter((g) => g.messageId !== messageId) : [] }),
 }));

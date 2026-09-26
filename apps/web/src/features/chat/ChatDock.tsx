@@ -3,6 +3,8 @@ import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { create } from 'zustand';
 import { t } from '../../i18n';
+import { useVoice } from '../voice/store';
+import { useEndVoiceOnLeave, VoiceBar } from '../voice/VoiceBar';
 import { ChatPanel } from './ChatPanel';
 import { CITATION_EVENT } from './CitationChip';
 
@@ -118,6 +120,9 @@ export function ChatDock() {
   const desktop = useIsDesktop();
   const { open, sheet, width, setOpen, setSheet } = useChatDock();
 
+  useEndVoiceOnLeave();
+  const voiceActive = useVoice((s) => s.active);
+
   // After a citation jump on mobile, lower the sheet so the page is visible.
   useEffect(() => {
     const onCite = () => {
@@ -128,7 +133,7 @@ export function ChatDock() {
   }, [setSheet]);
 
   if (desktop) {
-    if (!open) return null;
+    if (!open) return voiceActive ? <FloatingVoice /> : null;
     return (
       <div className="border-border relative shrink-0 border-l" style={{ width }}>
         <ResizeHandle />
@@ -149,7 +154,7 @@ export function ChatDock() {
     );
   }
 
-  if (sheet === 'closed') return null;
+  if (sheet === 'closed') return voiceActive ? <FloatingVoice /> : null;
   return (
     <div
       className={clsx(
@@ -184,6 +189,15 @@ export function ChatDock() {
           </>
         }
       />
+    </div>
+  );
+}
+
+/** Voice mode keeps going with the chat closed, so the whole page stays visible. */
+function FloatingVoice() {
+  return (
+    <div className="bg-surface absolute inset-x-3 bottom-3 z-30 rounded-lg shadow-lg lg:left-auto lg:w-96">
+      <VoiceBar />
     </div>
   );
 }

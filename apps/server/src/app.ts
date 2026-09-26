@@ -28,6 +28,8 @@ import { registerAnnotationRoutes } from './routes/annotations.js';
 import { registerDiagramRoutes } from './routes/diagrams.js';
 import { registerFocusRoutes } from './routes/focus.js';
 import { UploadService } from './services/uploads.js';
+import { PiperTts, type Synthesize } from './services/tts.js';
+import { registerTtsRoutes } from './routes/tts.js';
 
 export interface AppDeps {
   db?: Db;
@@ -41,6 +43,8 @@ export interface AppDeps {
   ocr?: OcrRunner | null;
   /** Replaces the Agent SDK `query` (tests and the e2e server use a fake Claude). */
   claudeQuery?: typeof query;
+  /** Speech synthesis; defaults to Piper when PIPER_DIR is complete (tests inject a fake). */
+  synthesize?: Synthesize | null;
 }
 
 export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<FastifyInstance> {
@@ -116,12 +120,18 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   await registerFocusRoutes(app, svc);
   const chat = new ChatService(config, credentials, claudeStatus, app.log, runQuery);
   await registerChatRoutes(app, svc, chat);
+  const piper = deps.synthesize === undefined ? PiperTts.detect(config.piperDir, app.log) : null;
+  await registerTtsRoutes(
+    app,
+    deps.synthesize !== undefined ? deps.synthesize : (piper?.synthesize ?? null),
+  );
   if (config.webDir) await registerWebApp(app, config.webDir);
 
   app.addHook('onClose', async () => {
     clearInterval(purgeTimer);
     clearInterval(uploadsTimer);
     chat.stopAll();
+    piper?.close();
     db.$client.close();
   });
   return app;

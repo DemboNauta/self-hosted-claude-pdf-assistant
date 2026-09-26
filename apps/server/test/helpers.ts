@@ -32,6 +32,7 @@ export async function testConfig(overrides: Partial<AppConfig> = {}): Promise<Ap
     claudeModel: null,
     hasOauthToken: true,
     webDir: null,
+    piperDir: null,
     ...overrides,
   };
 }

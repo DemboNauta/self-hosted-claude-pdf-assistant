@@ -18,6 +18,8 @@ const envSchema = z.object({
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
   /** Built web app to serve (the Docker image sets it); unset in development. */
   WEB_DIR: z.string().optional(),
+  /** Piper binary and voice models for voice mode (F-CHAT-09); unset = browser voices. */
+  PIPER_DIR: z.string().optional(),
 });
 
 export interface AppConfig {
@@ -39,6 +41,7 @@ export interface AppConfig {
   claudeModel: string | null;
   hasOauthToken: boolean;
   webDir: string | null;
+  piperDir: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -67,5 +70,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     claudeModel: e.CLAUDE_MODEL?.trim() || null,
     hasOauthToken: Boolean(e.CLAUDE_CODE_OAUTH_TOKEN?.trim()),
     webDir: e.WEB_DIR?.trim() ? path.resolve(e.WEB_DIR) : null,
+    piperDir: e.PIPER_DIR?.trim() ? path.resolve(e.PIPER_DIR) : null,
   };
 }

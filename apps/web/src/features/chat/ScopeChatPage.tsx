@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router';
 import { t } from '../../i18n';
 import { useLibrary } from '../library/api';
 import { useReader } from '../reader/store';
+import { useEndVoiceOnLeave } from '../voice/VoiceBar';
 import { ChatPanel } from './ChatPanel';
 import { useChat } from './store';
 
@@ -11,6 +12,7 @@ import { useChat } from './store';
 export function ScopeChatPage({ kind }: { kind: 'topic' | 'subject' }) {
   const { id = '' } = useParams();
   const library = useLibrary();
+  useEndVoiceOnLeave();
 
   useEffect(() => {
     // No document is open: citations navigate to the reader.

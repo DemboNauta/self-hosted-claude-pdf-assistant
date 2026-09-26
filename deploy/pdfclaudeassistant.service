@@ -17,6 +17,8 @@ Environment=HOST=127.0.0.1
 Environment=DATA_DIR=@DIR@/data
 Environment=WEB_DIR=@DIR@/app/public
 Environment=CLAUDE_CONFIG_DIR=@DIR@/data/claude-home
+# Piper voices for voice mode (installed by deploy-remote.sh).
+Environment=PIPER_DIR=@DIR@/runtime/piper
 Environment=PATH=@DIR@/runtime/node/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=@DIR@/runtime/node/bin/node --env-file=@DIR@/.env --enable-source-maps dist/main.js
 Restart=on-failure

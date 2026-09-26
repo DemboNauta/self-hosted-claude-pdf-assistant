@@ -55,6 +55,13 @@ export const chatContextSchema = z
       .object({ from: z.number().int().min(1), to: z.number().int().min(1) })
       .refine((r) => r.to >= r.from, 'to < from')
       .optional(),
+    /** Voice mode (F-CHAT-09): the answer will be spoken aloud, tutor style. */
+    voice: z.boolean().optional(),
+    /**
+     * The student cut a spoken answer short to ask this question: the last sentence they
+     * heard. The app resumes the interrupted explanation by itself after the answer.
+     */
+    interruptedAfter: z.string().trim().max(2000).optional(),
   })
   .refine((c) => [c.docId, c.topicId, c.subjectId].filter(Boolean).length === 1, {
     message: 'one scope required',

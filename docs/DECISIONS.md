@@ -13,11 +13,28 @@ change them if he disagrees.
 | 2   | Highlight colours       | yellow = important, green = definition, blue = example, red = don't understand, purple = review. Claude uses its own orange (`#e8590c`). Colours and meanings are editable in Settings (stored in `settings.palette`). | Owner       |
 | 3   | Claude's reply language | The language of the student's question (in the system prompt).                                                                                                                                                         | Owner       |
 | 4   | Semantic search         | Not implemented (Phase 4). FTS5 only.                                                                                                                                                                                  | Provisional |
-| 5   | Voice                   | Browser Web Speech API (`features/chat/dictation.ts`); no server-side transcription. Switch to local Whisper if it works badly on his devices.                                                                         | Provisional |
+| 5   | Voice                   | Listening: the browser's Web Speech API (dictation button and voice mode). Speaking (voice mode, F-CHAT-09): Piper neural voices on the VPS, free and local. See "Voice mode" below.                                   | Owner       |
 | 6   | Max PDF size            | No limit (`MAX_UPLOAD_MB=0`). Uploads are chunked and streamed to disk, long books use per-page text and a virtualised viewer. URL imports are capped at 1 GB when the limit is 0 (`DEFAULT_URL_LIMIT`).               | Owner       |
 | 7   | Usage counter           | No counter. The app only shows a clear message when the subscription limit is hit (`rate_limited`).                                                                                                                    | Provisional |
 
 ## Other owner decisions
+
+- **Voice mode (2026-09-26, F-CHAT-09).** The owner asked for talking to Claude like
+  Gemini Live / Claude voice: free, a good voice, responsive, microphone always
+  open, able to cut Claude off with a question and have it carry on. Decisions:
+  - Claude speaks with **Piper** voices synthesised **on the VPS** (measured: ~10×
+    faster than real time on its 2 CPUs; a sentence in 0.1–0.3 s with the model
+    loaded). The owner picked two voices from Spain: **sharvard speaker 1
+    (female, default)** and **davefx (male)**; speed is adjustable. Audio plays
+    inside the page, so the microphone's echo cancellation can remove it.
+  - Listening uses the **browser's speech recognition** (owner's choice over
+    Whisper on the VPS, which would be slower). Main device: **Android**.
+  - Claude must **teach, not read**: explain in its own words with examples and
+    analogies, never a text-to-speech of the PDF (owner's explicit request).
+  - Interrupting: speaking over Claude stops it; Claude answers the question
+    briefly and then the app **resumes the explanation** from the sentence that
+    was cut ("Sigo con lo que te estaba contando."). "Sigue" / "espera" work as
+    spoken commands.
 
 - Deleting a subject or topic that still has PDFs moves those PDFs to the trash
   for 30 days. Restoring asks for a destination topic.

@@ -1,10 +1,12 @@
 import {
   DEFAULT_PALETTE,
   DEFAULT_STUDY_TIMER,
+  DEFAULT_VOICE,
   HIGHLIGHT_KEYS,
   type AppSettings,
   type PaletteEntry,
   type StudyTimerSettings,
+  type VoiceSettings,
 } from '@pdfclaudeassistant/shared';
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
@@ -54,6 +56,7 @@ export class SettingsService {
         ...DEFAULT_STUDY_TIMER,
         ...this.read<Partial<StudyTimerSettings>>('study_timer'),
       },
+      voice: { ...DEFAULT_VOICE, ...this.read<Partial<VoiceSettings>>('voice') },
     };
   }
 
@@ -61,6 +64,7 @@ export class SettingsService {
     if (patch.palette) this.write('palette', patch.palette);
     if (patch.claudeModel !== undefined) this.write('claude_model', patch.claudeModel);
     if (patch.studyTimer) this.write('study_timer', patch.studyTimer);
+    if (patch.voice) this.write('voice', patch.voice);
     return this.all();
   }
 

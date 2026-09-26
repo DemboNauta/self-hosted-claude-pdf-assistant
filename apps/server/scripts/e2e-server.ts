@@ -127,7 +127,18 @@ const fakeChat = ((args: {
     }
     // A drawing mark: say whether the image of the marked area came with the question.
     const marked = /freehand marks[^\n]* on page (\d+)/.exec(prompt);
-    const parts = [
+    // Voice mode (F-CHAT-09): a spoken explanation, or a short answer to an interruption.
+    const voiceParts = prompt.includes('The student interrupted')
+      ? ['Buena pregunta. ', 'La clorofila es el pigmento verde que capta la luz del sol.']
+      : prompt.includes('Voice mode:')
+        ? [
+            'Vamos a verlo con un ejemplo sencillo de la vida diaria. ',
+            'Imagina que la hoja es una pequeña cocina que funciona con luz. ',
+            `Eso es justo lo que cuenta la página ${page} ${cite}. `,
+            'Al final, la planta guarda esa energía en forma de azúcar.',
+          ]
+        : null;
+    const parts = voiceParts ?? [
       ...(diagram ? [diagram] : []),
       ...(marked
         ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]
@@ -153,8 +164,29 @@ const fakeChat = ((args: {
     yield { type: 'result', subtype: 'success', is_error: false, result: parts.join('') };
   })()) as never;
 
+/** Fake voice: silent WAV audio, about as long as reading the text would take. */
+function silentWav(text: string) {
+  const rate = 8000;
+  const samples = Math.round((rate * Math.min(4000, text.length * 40)) / 1000);
+  const wav = Buffer.alloc(44 + samples * 2);
+  wav.write('RIFF', 0);
+  wav.writeUInt32LE(36 + samples * 2, 4);
+  wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36);
+  wav.writeUInt32LE(samples * 2, 40);
+  return wav;
+}
+
 const app = await buildApp(config, {
   logger: false,
+  synthesize: async (text) => silentWav(text),
   loginAttemptsPerMinute: 1000,
   claudeQuery: fakeChat,
   claudeStatus: new ClaudeStatusService(config, fakeQuery),

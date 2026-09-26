@@ -162,6 +162,17 @@ of PDFs in the trash are hidden; purging a PDF deletes them.
 
 The chat context also accepts `pageRange: { from, to }` (the scope of a diagram).
 
+## Voice (F-CHAT-09)
+
+| Method | Path       | Notes                                                                                           |
+| ------ | ---------- | ----------------------------------------------------------------------------------------------- |
+| GET    | `/api/tts` | `{ available }`: Piper is installed (`PIPER_DIR`). Otherwise the web uses the browser's voices. |
+| POST   | `/api/tts` | `{ text (≤1000), voice: "sharvard-f"                                                            | "davefx" }`→`audio/wav`. One sentence per request; 240/min. `503` without Piper. |
+
+The chat context also accepts `voice: true` (spoken, tutor-style answer) and
+`interruptedAfter` (the last sentence heard before the student cut in). Settings
+carry `voice: { voice, rate }`.
+
 ## Memory, review, stats, settings, backup
 
 | Method | Path                                             | Notes                                                                                             |

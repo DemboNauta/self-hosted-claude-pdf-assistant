@@ -30,6 +30,11 @@ follows the same pattern:
   domain, so the site address has the `http://` prefix.
 - OCR packages (`ocrmypdf`, `tesseract-ocr-spa/eng`) are installed system-wide
   by the first deploy.
+- Piper (text to speech for voice mode) and its two Spanish voices go to
+  `runtime/piper` (`ensure_piper`, pinned SHA-256; ~130 MB), and the unit sets
+  `PIPER_DIR`. Each voice's model stays loaded ~10 min after use (~100 MB RAM).
+  The Docker image does not include Piper: there voice mode uses the browser's
+  voices.
 - Docker (`docker/`, `docker-compose.yml`) stays in the repo as an alternative
   for other hosts.
 
@@ -81,7 +86,7 @@ follows the same pattern:
   boot and gives all existing data to the admin account. Log in with user
   **`admin`** and the same password as before (it still comes from
   `APP_PASSWORD_HASH`; `-SetPassword` keeps working and overrides a password
-  changed in the app). The username and display name can be changed in Ajustes →
+  changed in the app). The username can be changed in Ajustes →
   Tu cuenta. `-SetClaudeToken` is the admin's Claude; other users paste their own
   token in Ajustes. Their Claude Code state lives in `data/claude-users/`.
 - Logs: `journalctl -u pdfclaudeassistant -f` (prefix `[PdfClaudeAssistant]`).

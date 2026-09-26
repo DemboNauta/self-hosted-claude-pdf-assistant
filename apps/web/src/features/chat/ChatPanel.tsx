@@ -18,6 +18,8 @@ import {
   Plus,
   Quote,
   Square,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import {
@@ -32,6 +34,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
 import { useReader } from '../reader/store';
+import { useVoice } from '../voice/store';
+import { VoiceBar, VoiceToggle, voiceSupported } from '../voice/VoiceBar';
 import { CITATION_EVENT } from './CitationChip';
 import { dictationSupported, useDictation } from './dictation';
 import { Markdown } from './Markdown';
@@ -117,6 +121,27 @@ export function setPointerActions(fn: (messageId: string) => ReactNode) {
   extraPointerActions = fn;
 }
 
+/** Reads an answer aloud with Claude's voice (outside voice mode). */
+function ReadAloudButton({ message }: { message: ChatMessage }) {
+  const reading = useVoice((s) => s.readingId === message.id);
+  const voiceMode = useVoice((s) => s.active);
+  if (voiceMode) return null;
+  const label = reading ? t.voice.stopReading : t.voice.read;
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        reading ? useVoice.getState().stopReading() : void useVoice.getState().read(message)
+      }
+      aria-label={label}
+      title={label}
+      className="text-text-muted hover:text-text rounded p-1"
+    >
+      {reading ? <VolumeX size={14} aria-hidden /> : <Volume2 size={14} aria-hidden />}
+    </button>
+  );
+}
+
 function MessageItem({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
     const sel = message.context?.selection;
@@ -172,8 +197,9 @@ function MessageItem({ message }: { message: ChatMessage }) {
         <p className="text-text-muted text-xs italic">{t.chat.interrupted}</p>
       )}
       {!streaming && message.content && (
-        <div className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <div className="flex opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
           <CopyButton text={message.content} />
+          <ReadAloudButton message={message} />
         </div>
       )}
     </li>
@@ -338,6 +364,8 @@ function Composer() {
   const { send, stop, attach, attachMark } = useChat.getState();
   const area = useRef<HTMLTextAreaElement>(null);
   const [canDictate] = useState(dictationSupported);
+  const [canTalk] = useState(voiceSupported);
+  const voiceMode = useVoice((s) => s.active);
   const dictation = useDictation((phrase) =>
     setText((prev) => (prev && !prev.endsWith(' ') ? `${prev} ${phrase}` : prev + phrase)),
   );
@@ -406,6 +434,7 @@ function Composer() {
           </button>
         </div>
       )}
+      <VoiceBar />
       {dictation.listening && (
         <p className="text-text-muted text-xs italic" aria-live="polite">
           {dictation.interim || t.chat.voice.listening}
@@ -434,7 +463,8 @@ function Composer() {
           aria-label={t.chat.placeholder}
           className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"
         />
-        {canDictate && (
+        {canTalk && <VoiceToggle />}
+        {canDictate && !voiceMode && (
           <button
             type="button"
             onClick={dictation.toggle}

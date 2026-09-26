@@ -93,6 +93,46 @@ ensure_node() {
   ln -sfn "$DIR/runtime/${file%.tar.xz}" "$DIR/runtime/node"
 }
 
+# Piper (free neural text to speech) and the two Spanish voices of voice mode, checked
+# against pinned hashes. Reinstalled only when a file is missing.
+PIPER_RELEASE=https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+PIPER_SHA=a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992
+VOICES_URL=https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES
+VOICE_FILES=(
+  "davefx/medium/es_ES-davefx-medium.onnx 6658b03b1a6c316ee4c265a9896abc1393353c2d9e1bca7d66c2c442e222a917"
+  "davefx/medium/es_ES-davefx-medium.onnx.json 0e0dda87c732f6f38771ff274a6380d9252f327dca77aa2963d5fbdf9ec54842"
+  "sharvard/medium/es_ES-sharvard-medium.onnx 40febfb1679c69a4505ff311dc136e121e3419a13a290ef264fdf43ddedd0fb1"
+  "sharvard/medium/es_ES-sharvard-medium.onnx.json 7438c9b699c72b0c3388dae1b68d3f364dc66a2150fe554a1c11f03372957b2c"
+)
+
+ensure_piper() {
+  local dir=$DIR/runtime/piper tmp entry file sum
+  if [ ! -x "$dir/piper" ]; then
+    log "Installing Piper (text to speech)..."
+    tmp=$(mktemp -d)
+    curl -fsSL "$PIPER_RELEASE" -o "$tmp/piper.tgz"
+    echo "$PIPER_SHA  $tmp/piper.tgz" | sha256sum -c --quiet - || die "Piper checksum mismatch."
+    tar -xzf "$tmp/piper.tgz" -C "$tmp"
+    rm -rf "$dir.new"
+    mv "$tmp/piper" "$dir.new"
+    [ -d "$dir/voices" ] && mv "$dir/voices" "$dir.new/voices"
+    rm -rf "$dir" "$tmp"
+    mv "$dir.new" "$dir"
+  fi
+  mkdir -p "$dir/voices"
+  for entry in "${VOICE_FILES[@]}"; do
+    file=${entry%% *}
+    sum=${entry##* }
+    [ -f "$dir/voices/$(basename "$file")" ] && continue
+    log "Downloading voice $(basename "$file")..."
+    curl -fsSL "$VOICES_URL/$file" -o "$dir/voices/$(basename "$file").part"
+    echo "$sum  $dir/voices/$(basename "$file").part" | sha256sum -c --quiet - ||
+      die "Checksum mismatch for $(basename "$file")."
+    mv "$dir/voices/$(basename "$file").part" "$dir/voices/$(basename "$file")"
+  done
+  chmod -R a+rX "$dir"
+}
+
 ensure_env() {
   [ -f "$DIR/.env" ] && return
   local port=${1:-8004} old_umask
@@ -225,6 +265,7 @@ cmd_deploy() {
   ensure_user
   ensure_packages
   ensure_node
+  ensure_piper
   ensure_env "$port_arg"
   secure_env
   mkdir -p "$DIR/data/claude-home"

@@ -86,6 +86,13 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
       `ScopeChatPage` (topic/subject chat).
     - `QuestionMarks`: margin badges on passages the student asked about, with
       the questions and answers (`GET /documents/:id/questions`).
+  - `voice/` (voice mode, F-CHAT-09): `speech.ts` (Markdown → speakable text,
+    streaming sentence splitter, echo filter, spoken commands), `player.ts`
+    (sentences from `POST /api/tts` played in order with prefetch; browser
+    voices as fallback), `listener.ts` (always-open Web Speech recognition,
+    restarted by itself), `store.ts` (the conversation: speak answers as they
+    stream, barge-in, answer the interruption, resume), `VoiceBar` (status,
+    pause, exit; floats over the reader when the chat is closed).
   - `annotations/`:
     - `api.ts`: queries and undoable mutations.
     - `AnnotationLayer` (underlay, overlay, pen/eraser/note input, dragging

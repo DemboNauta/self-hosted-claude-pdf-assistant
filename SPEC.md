@@ -86,6 +86,7 @@ Cada funcionalidad tiene un ID para referenciarla en commits, issues y en el roa
 - **F-CHAT-06** **Dictado por voz** para escribir preguntas (botón de micrófono en el input).
 - **F-CHAT-07** Hilos: cada documento tiene su conversación activa; se puede empezar una nueva. Las conversaciones antiguas se pueden consultar, pero la memoria a largo plazo es la destilada (ver 3.6).
 - **F-CHAT-08** Chat a nivel de **tema o asignatura** (preguntas sobre varios PDFs a la vez).
+- **F-CHAT-09** **Modo voz:** conversación hablada con Claude, micro siempre abierto. Claude explica con sus palabras y con ejemplos (no lee el PDF tal cual), con voz natural de España (chica o chico); se le puede interrumpir con una pregunta y después sigue donde lo dejó.
 
 ### 3.5 Anotaciones y señalización
 

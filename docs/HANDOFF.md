@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26 (multi-user merged into `main`, not deployed yet; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-26 (multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -83,6 +83,18 @@ fully isolated, and the existing data goes to the admin (`DECISIONS.md`).
   with his current password. He can rename the account in Ajustes. Not tried yet
   with real Claude for a second user (needs a second subscription's token).
 
+Then the owner asked for a single name per account (the username; migration `0013`
+drops `display_name`) and for **voice mode** (F-CHAT-09, see `DECISIONS.md` "Voice
+mode"): always-open microphone, Claude explains out loud (teaching with examples,
+never reading the PDF), can be interrupted with a question and then carries on.
+Claude's voice is Piper on the VPS (voices picked by the owner: sharvard female,
+davefx male); listening is the browser's speech recognition. Tested with a fake
+microphone/voice/Claude (e2e) and the real Piper on Windows; **not yet tried on the
+owner's Android** nor with real Claude in voice mode. Things to watch there: whether
+Claude's voice triggers false interruptions (the text echo filter in
+`features/voice/speech.ts` `isEcho` is the safety net; headphones avoid it),
+Android Chrome's recognition restarts, and the quality of Claude's spoken answers.
+
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.
 
@@ -106,12 +118,13 @@ The **deployment** milestone:
 
 ## Verification done so far
 
-- `apps/server`: 72 unit/integration tests pass (`vitest`), 9 of them for
+- `apps/server`: 76 unit/integration tests pass (`vitest`), 9 of them for
   multi-user isolation, invitations, admin rights and per-user Claude
-  (`test/users.test.ts`).
-- `apps/web`: 9 unit tests pass (citations, relative time, timer engine). The
-  Playwright suite has 38 tests over desktop and mobile projects: 33 pass and 5
-  are skipped on mobile by design (pointer drag, drawing, keyboard shortcuts).
+  (`test/users.test.ts`), 4 for voice (`test/tts.test.ts`).
+- `apps/web`: 15 unit tests pass (citations, relative time, timer engine, speech
+  splitting). The Playwright suite has 40 tests over desktop and mobile projects:
+  35 pass and 5 are skipped on mobile by design (pointer drag, drawing, keyboard
+  shortcuts).
 - Real Claude, run through the owner's subscription with a temp data dir and
   generated PDFs:
   - A document question: Claude used `get_pages`, answered with correct

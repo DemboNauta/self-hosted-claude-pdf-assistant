@@ -6,6 +6,7 @@ import { SHORTCUTS } from '../reader/shortcuts';
 import { AccountSettings } from './AccountSettings';
 import { ClaudeConnection } from './ClaudeConnection';
 import { StudySettings } from './StudySettings';
+import { VoiceSettingsSection } from './VoiceSettingsSection';
 
 const THEMES: ThemePreference[] = ['system', 'light', 'dark'];
 
@@ -52,6 +53,7 @@ export function SettingsPage() {
         </section>
         <ClaudeConnection />
         <StudySettings />
+        <VoiceSettingsSection />
         <section aria-labelledby="shortcuts" className="hidden space-y-4 lg:block">
           <h2 id="shortcuts" className="text-lg font-medium">
             {t.shortcuts.title}

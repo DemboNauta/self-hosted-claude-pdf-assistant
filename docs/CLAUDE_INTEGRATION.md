@@ -100,6 +100,17 @@ Chat failures also update the cached status (`report()`).
   the selection, `context.pageRange` or the whole document, saved with
   `create_diagram` and shown with `[[diagram:ID]]`).
 
+## Voice mode (F-CHAT-09)
+
+With `context.voice`, `buildTurnPrompt` adds `VOICE_INSTRUCTIONS`: teach, do not
+read the PDF aloud; explain in its own words with an example or analogy per key
+idea; spoken sentences without Markdown or LaTeX; citations still written (shown,
+not spoken); point at the page while explaining; about 120–250 words. With
+`context.interruptedAfter` Claude is told the student cut in after that sentence
+and must answer briefly without continuing the old explanation: the web resumes
+it itself (`features/voice/store.ts`). Speech comes from Piper
+(`services/tts.ts`), never from Anthropic.
+
 ## Images in the user message
 
 When the student asks about an area marked with freehand drawings
