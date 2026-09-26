@@ -58,13 +58,11 @@ The **deployment** milestone:
     `scripts/deploy.ps1` + `scripts/deploy-remote.sh`; details in
     `DEPLOYMENT.md`. The first deploy is done: release installed, unit enabled,
     Caddy block live.
-- **Next:** the owner runs `.\scripts\deploy.ps1 -SetPassword` and
-  `-SetClaudeToken` (Claude must not type these secrets). Then check the site,
-  Phase 0 acceptance and the backup cron (README). Commits are still unpushed;
-  the Docker image (alternative) is only built by CI.
-- After deployment: the owner validates Phase 0 acceptance on the VPS (HTTPS
-  login, "Conectado con tu suscripción", server refuses to start with an API
-  key), then real use.
+- **In production since 2026-09-26** and Phase 0 accepted (see
+  `DEPLOYMENT.md` "Status"). Deploy new commits with `.\scripts\deploy.ps1`
+  (`PCA_DEPLOY_HOST` and `PCA_DOMAIN` set in the shell; the host is the
+  `known_hosts` entry of the `garmin-ia` VPS). Commits are still unpushed; the
+  Docker image (alternative) is only built by CI.
 
 ## Verification done so far
 

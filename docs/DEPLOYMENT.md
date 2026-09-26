@@ -58,15 +58,19 @@ follows the same pattern:
 
 ## Status
 
-- 2026-09-26: first deploy done: release built and installed, unit enabled,
-  Caddy block live (the site answered 502 until the app starts). Waiting for
-  the owner to run `-SetPassword` and `-SetClaudeToken`.
-- Then Phase 0 acceptance:
-  - HTTPS login works.
-  - Settings → Conexión con Claude says "Conectado con tu suscripción".
-  - With `ANTHROPIC_API_KEY` in `.env`, the service refuses to start (check
-    `journalctl -u pdfclaudeassistant`). Remove it afterwards.
-- To do after that: add the backup cron line from the README.
+- 2026-09-26: **in production.** The owner set the password and the Claude
+  token and uses the app. Revision `23b5ee0` deployed with `deploy.ps1`
+  (build on the VPS about 2 minutes).
+- Phase 0 acceptance passed on the VPS:
+  - HTTPS login through Cloudflare → Caddy works (owner).
+  - Claude answers through the subscription: a query run as `pdfclaude` with
+    the service's settings reported `apiKeySource: none`.
+  - With `ANTHROPIC_API_KEY` set, the server refuses to start (tested with a
+    separate process on another port and a temp `DATA_DIR`, production
+    untouched).
+- Daily backup at 04:00 in root's crontab (line tagged
+  `# pdfclaudeassistant-backup`, log in
+  `/var/log/pdfclaudeassistant-backup.log`). Old archives are not pruned yet.
 
 ## Operating notes
 

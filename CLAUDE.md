@@ -65,8 +65,7 @@ Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 ## Status
 
 Phases 0–3 of SPEC §13 are implemented and tested (unit + Playwright with a fake
-Claude). The app is installed on the VPS (2026-09-26); starting it waits for
-the owner's password and Claude token, then Phase 0 acceptance. Per-feature
+Claude). In production on the VPS since 2026-09-26, Phase 0 accepted. Per-feature
 status: `docs/FEATURES.md`.
 Next steps: `docs/HANDOFF.md` and `docs/DEPLOYMENT.md`.
 
