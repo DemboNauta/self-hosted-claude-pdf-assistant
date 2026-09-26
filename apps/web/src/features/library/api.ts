@@ -169,5 +169,7 @@ export const useRestoreDocument = () =>
     api(`/trash/${id}/restore`, { method: 'POST', json: { topicId } }),
   );
 
+export const useEmptyTrash = () => useLibraryMutation(() => api('/trash', { method: 'DELETE' }));
+
 export const usePurgeDocument = () =>
   useLibraryMutation((id: string) => api(`/trash/${id}`, { method: 'DELETE' }));

@@ -7,6 +7,9 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AnnotationService } from '../services/annotations.js';
+import type { AppConfig } from '../config.js';
+import type { Db } from '../db/client.js';
+import { backupFileName, createBackup } from '../services/backup.js';
 import { exportAnnotatedPdf } from '../services/export.js';
 import type { LibraryService } from '../services/library.js';
 import type { SettingsService } from '../services/settings.js';
@@ -21,6 +24,8 @@ export async function registerAnnotationRoutes(
   annotations: AnnotationService,
   library: LibraryService,
   settings: SettingsService,
+  db: Db,
+  config: AppConfig,
 ) {
   const id = (params: unknown) => parse(idParams, params).id;
 
@@ -64,5 +69,12 @@ export async function registerAnnotationRoutes(
   });
 
   app.get('/api/settings', async () => settings.all());
+  app.get('/api/backup', async (_req, reply) => {
+    const { stream } = await createBackup(db, config);
+    return reply
+      .header('content-type', 'application/gzip')
+      .header('content-disposition', `attachment; filename="${backupFileName()}"`)
+      .send(stream);
+  });
   app.patch('/api/settings', async (req) => settings.update(parse(updateSettingsSchema, req.body)));
 }

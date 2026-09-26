@@ -118,7 +118,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
     deps.claudeQuery ?? query,
   );
   await registerReviewRoutes(app, review, brief, new StatsService(db, library));
-  await registerAnnotationRoutes(app, annotations, library, settings);
+  await registerAnnotationRoutes(app, annotations, library, settings, db, config);
   const chat = new ChatService(
     config,
     threads,

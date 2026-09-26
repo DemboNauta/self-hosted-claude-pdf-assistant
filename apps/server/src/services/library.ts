@@ -368,6 +368,16 @@ export class LibraryService {
   }
 
   /** Permanently deletes a trashed document and its files. */
+  /** Deletes every document in the trash for good (F-LIB-05). */
+  emptyTrash(): number {
+    const rows = this.db.select().from(documents).where(isNotNull(documents.deletedAt)).all();
+    for (const row of rows) {
+      this.db.delete(documents).where(eq(documents.id, row.id)).run();
+      this.removeFiles(row);
+    }
+    return rows.length;
+  }
+
   purgeDocument(id: string) {
     const row = this.getRow(id);
     if (!row.deletedAt) throw new HttpError(409, 'not_in_trash');

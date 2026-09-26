@@ -77,3 +77,24 @@ test('draw by hand and erase', async ({ page }, info) => {
   await page.mouse.click(pageBox.x + 150, pageBox.y + 230);
   await expect(strokes).toHaveCount(0);
 });
+
+// F-ANN-01 configurable meanings + F-UX-03 shortcuts: rename a colour in Settings,
+// then highlight with the number key.
+test('configure colour meanings and highlight with a shortcut', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'keyboard shortcuts are for desktop');
+  await login(page);
+  await page.goto('/settings');
+  await page.getByRole('textbox', { name: 'Significado del color 5' }).fill('Para el examen');
+  await page.locator('#palette ~ button', { hasText: 'Guardar' }).first().click();
+  await expect(page.getByRole('status')).toHaveText('Guardado');
+
+  const docId = await seedDocument(page, 'Atajos', tinyPdf('Texto para subrayar con el teclado.'));
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('teclado');
+  await selectInPdf(page, 'subrayar con el teclado');
+  await expect(page.getByRole('button', { name: 'Subrayar: Para el examen' })).toBeVisible();
+  await page.keyboard.press('5');
+  await expect(page.locator('[data-page="1"] [data-annotation]')).toHaveCount(1);
+  await page.keyboard.press('?');
+  await expect(page.getByRole('dialog', { name: 'Atajos de teclado' })).toBeVisible();
+});

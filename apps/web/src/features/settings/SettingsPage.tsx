@@ -2,7 +2,9 @@ import clsx from 'clsx';
 import { Page } from '../../components/Page';
 import { t } from '../../i18n';
 import { useThemeStore, type ThemePreference } from '../../lib/theme';
+import { SHORTCUTS } from '../reader/shortcuts';
 import { ClaudeConnection } from './ClaudeConnection';
+import { StudySettings } from './StudySettings';
 
 const THEMES: ThemePreference[] = ['system', 'light', 'dark'];
 
@@ -47,6 +49,24 @@ export function SettingsPage() {
           </label>
         </section>
         <ClaudeConnection />
+        <StudySettings />
+        <section aria-labelledby="shortcuts" className="hidden space-y-4 lg:block">
+          <h2 id="shortcuts" className="text-lg font-medium">
+            {t.shortcuts.title}
+          </h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            {SHORTCUTS.map(([keys, label]) => (
+              <div key={keys} className="contents">
+                <dt>
+                  <kbd className="bg-surface-muted rounded px-1.5 py-0.5 font-mono text-xs">
+                    {keys}
+                  </kbd>
+                </dt>
+                <dd>{label}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       </div>
     </Page>
   );

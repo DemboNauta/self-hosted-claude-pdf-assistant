@@ -23,6 +23,7 @@ import { PdfViewer, type ReadingPositionUpdate } from './PdfViewer';
 import { PointerLayer } from './PointerLayer';
 import { ReaderToolbar } from './ReaderToolbar';
 import { SelectionMenu } from './SelectionMenu';
+import { ShortcutsHelp, useReaderShortcuts } from './shortcuts';
 import { OutlinePanel, SearchPanel, ThumbnailsPanel } from './SidePanels';
 import { useReader } from './store';
 
@@ -59,6 +60,7 @@ export function ReaderPage() {
   const [showTools, setShowTools] = useState(false);
   const selectionActions = useSelectionAnnotationActions(documentId ?? '');
   useUndoShortcuts();
+  const shortcuts = useReaderShortcuts(documentId ?? '', scroller);
   const detail = useQuery({
     queryKey: ['document', documentId],
     queryFn: () => api<DocumentDetail>(`/documents/${documentId}`),
@@ -183,6 +185,7 @@ export function ReaderPage() {
       </div>
       <SelectionMenu root={scroller} extra={[flashcardAction(doc.id), ...selectionActions]} />
       <FlashcardDialog />
+      {shortcuts.help && <ShortcutsHelp onClose={shortcuts.closeHelp} />}
     </div>
   );
 }

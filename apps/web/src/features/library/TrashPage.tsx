@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { Dialog } from '../../components/Dialog';
 import { Page } from '../../components/Page';
 import { t } from '../../i18n';
-import { useLibrary, usePurgeDocument, useRestoreDocument, useTrash } from './api';
+import { useEmptyTrash, useLibrary, usePurgeDocument, useRestoreDocument, useTrash } from './api';
 import { TopicSelect } from './TopicSelect';
 
 const dateFmt = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long' });
@@ -18,6 +18,8 @@ export function TrashPage() {
   const purge = usePurgeDocument();
   const [restoring, setRestoring] = useState<TrashedDocument | null>(null);
   const [purging, setPurging] = useState<TrashedDocument | null>(null);
+  const [emptying, setEmptying] = useState(false);
+  const emptyTrash = useEmptyTrash();
 
   return (
     <Page title={t.library.trash.title}>
@@ -28,7 +30,18 @@ export function TrashPage() {
         <ArrowLeft size={16} aria-hidden />
         {t.library.title}
       </Link>
-      <p className="text-text-muted mb-6 text-sm">{t.library.trash.help}</p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-text-muted text-sm">{t.library.trash.help}</p>
+        {Boolean(trash.data?.length) && (
+          <button
+            type="button"
+            onClick={() => setEmptying(true)}
+            className="text-danger text-sm hover:underline"
+          >
+            {t.library.trash.emptyAll}
+          </button>
+        )}
+      </div>
 
       {trash.isPending && <p className="text-text-muted">{t.common.loading}</p>}
       {trash.data?.length === 0 && <p className="text-text-muted">{t.library.trash.empty}</p>}
@@ -66,6 +79,17 @@ export function TrashPage() {
           onClose={() => setRestoring(null)}
           tree={library.data}
         />
+      )}
+      {emptying && (
+        <Dialog
+          title={t.library.trash.emptyAll}
+          submitLabel={t.library.trash.emptyAll}
+          danger
+          onSubmit={() => emptyTrash.mutate()}
+          onClose={() => setEmptying(false)}
+        >
+          <p className="text-sm">{t.library.trash.confirmEmpty(trash.data?.length ?? 0)}</p>
+        </Dialog>
       )}
       {purging && (
         <Dialog

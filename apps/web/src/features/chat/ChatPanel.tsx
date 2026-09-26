@@ -12,6 +12,7 @@ import {
   Copy,
   History,
   Loader2,
+  Mic,
   MousePointer2,
   Plus,
   Quote,
@@ -31,6 +32,7 @@ import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
 import { useReader } from '../reader/store';
 import { CITATION_EVENT } from './CitationChip';
+import { dictationSupported, useDictation } from './dictation';
 import { Markdown } from './Markdown';
 import { useChat } from './store';
 
@@ -264,6 +266,10 @@ function Composer() {
   const mode = useChat((s) => s.mode);
   const { send, stop, attach } = useChat.getState();
   const area = useRef<HTMLTextAreaElement>(null);
+  const [canDictate] = useState(dictationSupported);
+  const dictation = useDictation((phrase) =>
+    setText((prev) => (prev && !prev.endsWith(' ') ? `${prev} ${phrase}` : prev + phrase)),
+  );
 
   // Grow with the content up to a few lines.
   useLayoutEffect(() => {
@@ -276,6 +282,7 @@ function Composer() {
   const canSend = !running && (text.trim().length > 0 || attached !== null || mode !== 'free');
   const submit = () => {
     if (!canSend) return;
+    dictation.stop();
     send(text.trim());
     setText('');
   };
@@ -306,6 +313,16 @@ function Composer() {
           </button>
         </div>
       )}
+      {dictation.listening && (
+        <p className="text-text-muted text-xs italic" aria-live="polite">
+          {dictation.interim || t.chat.voice.listening}
+        </p>
+      )}
+      {dictation.error && dictation.error !== 'aborted' && (
+        <p role="alert" className="text-danger text-xs">
+          {dictation.error === 'not-allowed' ? t.chat.voice.denied : t.chat.voice.error}
+        </p>
+      )}
       <div className="border-border bg-bg focus-within:border-text flex items-end gap-2 rounded-xl border px-3 py-2">
         <textarea
           id={COMPOSER_ID}
@@ -318,6 +335,23 @@ function Composer() {
           aria-label={t.chat.placeholder}
           className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"
         />
+        {canDictate && (
+          <button
+            type="button"
+            onClick={dictation.toggle}
+            aria-label={dictation.listening ? t.chat.voice.stop : t.chat.voice.start}
+            title={dictation.listening ? t.chat.voice.stop : t.chat.voice.start}
+            aria-pressed={dictation.listening}
+            className={clsx(
+              'rounded-full p-1.5',
+              dictation.listening
+                ? 'bg-danger animate-pulse text-white'
+                : 'text-text-muted hover:text-text',
+            )}
+          >
+            <Mic size={14} aria-hidden />
+          </button>
+        )}
         {running ? (
           <button
             type="button"

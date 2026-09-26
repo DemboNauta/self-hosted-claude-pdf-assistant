@@ -112,6 +112,10 @@ export async function registerLibraryRoutes(
     library.restoreDocument(id(req.params), parse(restoreDocumentSchema, req.body).topicId);
     return reply.code(204).send();
   });
+  app.delete('/api/trash', async (_req, reply) => {
+    library.emptyTrash();
+    return reply.code(204).send();
+  });
   app.delete('/api/trash/:id', async (req, reply) => {
     library.purgeDocument(id(req.params));
     return reply.code(204).send();

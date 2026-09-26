@@ -152,3 +152,38 @@ describe('library', () => {
     expect(fs.existsSync(file)).toBe(false);
   });
 });
+
+describe('backup and trash', () => {
+  it('downloads a backup with the database and PDFs, never Claude credentials', async () => {
+    const { list } = await import('tar');
+    const { authedApp: build, seedDocument, tempDataDir } = await import('./helpers.js');
+    const dirs = tempDataDir('pca-backup-');
+    const { app: a, headers: h } = await build(dirs);
+    try {
+      const { docId } = await seedDocument(a, h, [['Hola.']]);
+      fs.mkdirSync(path.join(dirs.dataDir, 'claude-home'), { recursive: true });
+      fs.writeFileSync(path.join(dirs.dataDir, 'claude-home', '.credentials.json'), '{}');
+      const res = await a.inject({ url: '/api/backup', headers: h });
+      expect(res.headers['content-disposition']).toContain('pdfclaudeassistant-backup-');
+      const file = path.join(dirs.dataDir, 'b.tgz');
+      fs.writeFileSync(file, res.rawPayload);
+      const names: string[] = [];
+      await list({ file, onReadEntry: (e) => void names.push(e.path) });
+      expect(names).toContain('pdfclaudeassistant.db');
+      expect(names).toContain(`pdfs/${docId}.pdf`);
+      expect(names.some((n) => n.includes('claude-home'))).toBe(false);
+      // The snapshot is removed and the PDFs stay in place.
+      expect(fs.readdirSync(dirs.dataDir).some((n) => n.startsWith('.backup-'))).toBe(false);
+      expect(fs.existsSync(path.join(dirs.pdfDir, `${docId}.pdf`))).toBe(true);
+
+      await a.inject({ method: 'DELETE', url: `/api/documents/${docId}`, headers: h });
+      expect((await a.inject({ method: 'DELETE', url: '/api/trash', headers: h })).statusCode).toBe(
+        204,
+      );
+      expect((await a.inject({ url: '/api/trash', headers: h })).json()).toEqual([]);
+      expect(fs.existsSync(path.join(dirs.pdfDir, `${docId}.pdf`))).toBe(false);
+    } finally {
+      await a.close();
+    }
+  });
+});

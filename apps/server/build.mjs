@@ -12,6 +12,7 @@ await build({
     main: 'src/main.ts',
     'ingest-worker': 'src/ingest/worker.ts',
     'hash-password': 'scripts/hash-password.ts',
+    backup: 'scripts/backup.ts',
   },
   outdir: 'dist',
   bundle: true,

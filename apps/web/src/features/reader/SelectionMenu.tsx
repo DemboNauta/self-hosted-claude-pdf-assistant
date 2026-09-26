@@ -17,7 +17,7 @@ interface Current {
 const MENU_GAP = 8;
 
 /** Reads the current text-layer selection inside `root`, if any. */
-function readSelection(root: HTMLElement): Current | null {
+export function readSelection(root: HTMLElement): Current | null {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
   const range = sel.getRangeAt(0);
