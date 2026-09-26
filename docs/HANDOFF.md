@@ -149,3 +149,20 @@ chunked uploads with progress, processing status polling, minimal trash.
   topics nested inside a subject.
 - Mutations return the invalidation promise in `onSettled` so per-call
   callbacks (navigate to a new topic) see the refreshed tree.
+
+## Session 2026-09-26 (end) — state
+
+Implemented and committed: library UI, chunked uploads, PDF viewer, Claude chat
+(streaming, citations, modes, pointers), annotations (incl. proposals, drawing,
+undo, export), memory, OCR/URL import, flashcards/FSRS, Home brief, stats,
+global search, topic/subject chat, voice, shortcuts, PWA, settings, backups,
+and the server serving the web build (compose binds 127.0.0.1:${APP_PORT},
+bundled Caddy is an optional profile). Provisional choices for open decisions:
+#5 voice = Web Speech API, #4 semantic search skipped, #7 no usage counter.
+
+Left for deployment (next session): `scripts/deploy.ps1` (host from env var,
+git archive + scp, never touch .env/data, `docker compose up -d --build`,
+health check), `deploy/host-caddy.example` (reverse_proxy 127.0.0.1:APP_PORT),
+README deploy section and backup cron, CI docker job (caddy image no longer
+builds the web), update CLAUDE.md status. Docker was not available locally, so
+the image build is untested here. Session stopped on a usage limit.
