@@ -17,20 +17,17 @@ export function AccountSettings() {
 
 function AccountForms({ user }: { user: CurrentUser }) {
   const setUser = useSetCurrentUser();
-  const [displayName, setDisplayName] = useState(user.displayName);
   const [username, setUsername] = useState(user.username);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const ids = { name: useId(), user: useId(), current: useId(), next: useId() };
+  const ids = { user: useId(), current: useId(), next: useId() };
 
   const saveProfile = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      setUser(
-        await api<CurrentUser>('/account', { method: 'PATCH', json: { displayName, username } }),
-      );
+      setUser(await api<CurrentUser>('/account', { method: 'PATCH', json: { username } }));
       setProfileMsg({ ok: true, text: t.account.saved });
     } catch (err) {
       setProfileMsg({ ok: false, text: errorText(err) });
@@ -63,19 +60,6 @@ function AccountForms({ user }: { user: CurrentUser }) {
         </Link>
       )}
       <form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label htmlFor={ids.name} className="block text-sm">
-            {t.account.displayName}
-          </label>
-          <input
-            id={ids.name}
-            required
-            maxLength={60}
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className={inputClass}
-          />
-        </div>
         <div className="space-y-1">
           <label htmlFor={ids.user} className="block text-sm">
             {t.account.username}

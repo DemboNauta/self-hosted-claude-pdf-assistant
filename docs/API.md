@@ -20,7 +20,7 @@ Ids are 10-char base36 strings.
 | POST   | `/api/auth/logout`             |                                                                                                                               |
 | GET    | `/api/auth/session`            | `{ authenticated, user?: CurrentUser }`                                                                                       |
 | GET    | `/api/auth/invitations/:token` | `{ valid }` (rate limited).                                                                                                   |
-| POST   | `/api/auth/signup`             | `{ token, username, displayName, password }` → 201 `SessionInfo`, logged in. `410 invitation_invalid`, `409 username_taken`.  |
+| POST   | `/api/auth/signup`             | `{ token, username, password }` → 201 `SessionInfo`, logged in. `410 invitation_invalid`, `409 username_taken`.               |
 | GET    | `/api/health`                  | `{ ok: true }`                                                                                                                |
 | GET    | `/api/claude/status?refresh=1` | The user's own `ClaudeStatus` (cached 10 min per user unless refresh). `not_configured` without a token (admin excepted).     |
 
@@ -29,7 +29,7 @@ Ids are 10-char base36 strings.
 | Method | Path                        | Notes                                                                                        |
 | ------ | --------------------------- | -------------------------------------------------------------------------------------------- |
 | GET    | `/api/account`              | `CurrentUser`                                                                                |
-| PATCH  | `/api/account`              | `{ displayName?, username? }` → `CurrentUser`; `409 username_taken`.                         |
+| PATCH  | `/api/account`              | `{ username? }` → `CurrentUser`; `409 username_taken`.                                       |
 | POST   | `/api/account/password`     | `{ currentPassword, newPassword }` → 204; logs out the other sessions; `403 wrong_password`. |
 | PUT    | `/api/account/claude-token` | `{ token }` (`claude setup-token` output), stored encrypted → `CurrentUser`.                 |
 | DELETE | `/api/account/claude-token` | → `CurrentUser`                                                                              |
@@ -39,7 +39,7 @@ Ids are 10-char base36 strings.
 | Method | Path                         | Notes                                                                                             |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------------------------- |
 | GET    | `/api/admin/users`           | `AdminUser[]` (no user data beyond name, PDF count, token yes/no, last login).                    |
-| POST   | `/api/admin/users`           | `{ username, displayName, password }` → 201 `AdminUser`.                                          |
+| POST   | `/api/admin/users`           | `{ username, password }` → 201 `AdminUser`.                                                       |
 | PATCH  | `/api/admin/users/:id`       | `{ disabled?, password? }`; both log the user out. The admin cannot be disabled (`409`).          |
 | DELETE | `/api/admin/users/:id`       | Deletes the account, its rows (cascade) and files. Not the admin (`409 cannot_delete_admin`).     |
 | GET    | `/api/admin/invitations`     | `Invitation[]`, newest first.                                                                     |

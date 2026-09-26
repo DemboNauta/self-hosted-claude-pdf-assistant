@@ -76,11 +76,7 @@ export function AppShell() {
           ))}
         </ul>
         <TimerToggle nav />
-        {user && (
-          <p className="text-text-muted truncate px-3 pt-2 text-xs" title={`@${user.username}`}>
-            {user.displayName}
-          </p>
-        )}
+        {user && <p className="text-text-muted truncate px-3 pt-2 text-xs">{user.username}</p>}
         <button
           type="button"
           onClick={() => logout.mutate()}

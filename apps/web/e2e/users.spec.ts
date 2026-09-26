@@ -16,7 +16,6 @@ test('invitation sign-up, isolated library and own Claude token', async ({ page,
   const other = await browser.newContext();
   const guest = await other.newPage();
   await guest.goto(link);
-  await guest.getByLabel('Tu nombre').fill('Marta');
   await guest.getByLabel('Usuario (para entrar)').fill(username);
   await guest.getByLabel('Contraseña').fill('marta-password');
   await guest.getByRole('button', { name: 'Crear cuenta' }).click();
@@ -39,5 +38,6 @@ test('invitation sign-up, isolated library and own Claude token', async ({ page,
 
   await page.reload();
   await expect(page.getByText(`Usada por ${username}`)).toBeVisible();
-  await expect(page.getByText(`@${username}`)).toBeVisible();
+  const account = page.getByRole('listitem').filter({ hasText: username });
+  await expect(account.filter({ hasText: 'Claude conectado' })).toBeVisible();
 });

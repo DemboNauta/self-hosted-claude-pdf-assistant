@@ -7,7 +7,6 @@ export const usernameSchema = z
   .toLowerCase()
   .regex(/^[a-z0-9._-]{3,32}$/);
 export const passwordSchema = z.string().min(8).max(1024);
-export const displayNameSchema = z.string().trim().min(1).max(60);
 
 export const loginRequestSchema = z.object({
   username: z.string().trim().toLowerCase().min(1).max(64),
@@ -21,7 +20,6 @@ export type UserRole = 'admin' | 'user';
 export interface CurrentUser {
   id: string;
   username: string;
-  displayName: string;
   role: UserRole;
   /** A personal Claude token is saved (its value is never sent back). */
   hasClaudeToken: boolean;
@@ -35,7 +33,6 @@ export interface SessionInfo {
 }
 
 export const updateProfileSchema = z.object({
-  displayName: displayNameSchema.optional(),
   username: usernameSchema.optional(),
 });
 export type UpdateProfile = z.infer<typeof updateProfileSchema>;
@@ -61,7 +58,6 @@ export const claudeTokenSchema = z.object({
 export interface AdminUser {
   id: string;
   username: string;
-  displayName: string;
   role: UserRole;
   hasClaudeToken: boolean;
   disabled: boolean;
@@ -72,7 +68,6 @@ export interface AdminUser {
 
 export const createUserSchema = z.object({
   username: usernameSchema,
-  displayName: displayNameSchema,
   password: passwordSchema,
 });
 export type CreateUser = z.infer<typeof createUserSchema>;
@@ -111,7 +106,6 @@ export interface InvitationCheck {
 export const acceptInvitationSchema = z.object({
   token: z.string().min(20).max(128),
   username: usernameSchema,
-  displayName: displayNameSchema,
   password: passwordSchema,
 });
 export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;

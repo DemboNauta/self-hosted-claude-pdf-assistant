@@ -34,7 +34,6 @@ export const es = {
     signup: {
       title: 'Crear tu cuenta',
       subtitle: 'Te han invitado a PdfClaudeAssistant.',
-      displayName: 'Tu nombre',
       username: 'Usuario (para entrar)',
       usernameHelp: 'De 3 a 32 caracteres: letras minúsculas, números, punto, guion o guion bajo.',
       password: 'Contraseña',
@@ -55,7 +54,6 @@ export const es = {
   account: {
     title: 'Tu cuenta',
     manageUsers: 'Gestionar usuarios e invitaciones',
-    displayName: 'Nombre',
     username: 'Usuario',
     saveProfile: 'Guardar',
     saved: 'Guardado',
@@ -96,7 +94,6 @@ export const es = {
       `¿Borrar la cuenta de ${name}? Se borrarán para siempre sus PDF, anotaciones, chats, memoria y tarjetas.`,
     create: {
       title: 'Crear una cuenta',
-      displayName: 'Nombre',
       username: 'Usuario',
       password: 'Contraseña inicial',
       submit: 'Crear cuenta',

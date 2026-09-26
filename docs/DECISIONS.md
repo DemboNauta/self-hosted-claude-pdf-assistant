@@ -74,6 +74,8 @@ change them if he disagrees.
   - **full isolation**: nobody sees anyone else's library, annotations, chats,
     memory, cards or stats, not even the admin;
   - the existing production data **goes to the admin account**.
+  - **one name per account** (owner, 2026-09-26): the username is also the name
+    shown; there is no separate display name (migration `0013`).
 
 ## Provisional product choices (Claude, "don't ask until deploy")
 
@@ -86,7 +88,7 @@ change them if he disagrees.
     server's Claude credentials (`CLAUDE_CODE_OAUTH_TOKEN` / interactive login).
     The admin can also save a personal token instead.
   - Invitation links expire after 7 days, work once and can be revoked. The admin
-    sees only name, username, PDF count, whether Claude is connected and last
+    sees only the username, PDF count, whether Claude is connected and last
     login. They can disable, re-enable, reset the password or delete (with all data).
   - The backup download (Settings) is admin-only, because it contains every user's
     data. The admin already owns the server, so it is not a new exposure.

@@ -69,7 +69,6 @@ async function login(username: string, password: string) {
 async function createUser(username = 'ana', password = 'ana-password-1') {
   const created = await api<AdminUser>('POST', '/api/admin/users', admin, {
     username,
-    displayName: 'Ana',
     password,
   });
   expect(created.status).toBe(201);
@@ -159,7 +158,6 @@ describe('accounts', () => {
     const ana = await createUser();
     const dup = await api('POST', '/api/admin/users', admin, {
       username: 'ANA',
-      displayName: 'Otra',
       password: 'whatever-123',
     });
     expect(dup.status).toBe(409);
@@ -218,7 +216,7 @@ describe('invitations', () => {
     const signup = await app.inject({
       method: 'POST',
       url: '/api/auth/signup',
-      payload: { token: inv.token, username: 'luis', displayName: 'Luis', password: 'luis-pass-1' },
+      payload: { token: inv.token, username: 'luis', password: 'luis-pass-1' },
     });
     expect(signup.statusCode).toBe(201);
     expect(signup.json<SessionInfo>().user).toMatchObject({ username: 'luis', role: 'user' });
@@ -228,7 +226,7 @@ describe('invitations', () => {
     const again = await app.inject({
       method: 'POST',
       url: '/api/auth/signup',
-      payload: { token: inv.token, username: 'otro', displayName: 'Otro', password: 'otro-pass-1' },
+      payload: { token: inv.token, username: 'otro', password: 'otro-pass-1' },
     });
     expect(again.statusCode).toBe(410);
     expect((await app.inject({ url: `/api/auth/invitations/${inv.token}` })).json()).toEqual({

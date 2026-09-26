@@ -28,10 +28,11 @@ To change the schema:
 | `0010_diagrams`           | `diagrams`                                                                                       |
 | `0011_focus_sessions`     | `focus_sessions`                                                                                 |
 | `0012_users`              | `users`, `invitations`, `user_settings`; `user_id` on every owned table (hand-edited, see below) |
+| `0013_drop_display_name`  | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
 
-- **users** `id, username (unique, lower case), display_name, password_hash
+- **users** `id, username (unique, lower case; also the name shown), password_hash
 (argon2), role (admin|user), claude_token_enc (AES-256-GCM, key derived from
 SESSION_SECRET, see services/secrets.ts), disabled_at, last_login_at`.
   The migration inserts the admin with the fixed id `owner` and username `admin`,

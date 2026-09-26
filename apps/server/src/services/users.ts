@@ -96,7 +96,6 @@ export class UserService {
     return {
       id: row.id,
       username: row.username,
-      displayName: row.displayName,
       role: row.role,
       hasClaudeToken: row.claudeTokenEnc !== null,
       serverClaude: row.id === OWNER_ID,
@@ -166,7 +165,6 @@ export class UserService {
       .map((u) => ({
         id: u.id,
         username: u.username,
-        displayName: u.displayName,
         role: u.role,
         hasClaudeToken: u.claudeTokenEnc !== null,
         disabled: u.disabledAt !== null,
@@ -184,7 +182,6 @@ export class UserService {
         .values({
           id,
           username: input.username,
-          displayName: input.displayName,
           passwordHash: await hash(input.password),
           role: 'user',
         })
@@ -306,7 +303,6 @@ export class UserService {
           .values({
             id,
             username: input.username,
-            displayName: input.displayName,
             passwordHash,
             role: 'user',
             lastLoginAt: new Date().toISOString(),

@@ -17,17 +17,16 @@ export function SignupPage() {
     retry: false,
   });
   const signup = useSignup();
-  const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const ids = { name: useId(), user: useId(), pass: useId(), userHelp: useId(), passHelp: useId() };
+  const ids = { user: useId(), pass: useId(), userHelp: useId(), passHelp: useId() };
 
   if (signup.data?.authenticated) return <Navigate to="/" replace />;
   const used = signup.error instanceof ApiError && signup.error.code === 'invitation_invalid';
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    signup.mutate({ token, displayName, username, password });
+    signup.mutate({ token, username, password });
   };
 
   const error =
@@ -58,27 +57,13 @@ export function SignupPage() {
         ) : (
           <form onSubmit={onSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label htmlFor={ids.name} className="block text-sm font-medium">
-                {t.auth.signup.displayName}
-              </label>
-              <input
-                id={ids.name}
-                autoComplete="name"
-                autoFocus
-                required
-                maxLength={60}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div className="space-y-2">
               <label htmlFor={ids.user} className="block text-sm font-medium">
                 {t.auth.signup.username}
               </label>
               <input
                 id={ids.user}
                 autoComplete="username"
+                autoFocus
                 autoCapitalize="none"
                 spellCheck={false}
                 required

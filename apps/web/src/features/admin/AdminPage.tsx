@@ -67,7 +67,7 @@ function Users({ myId }: { myId?: string }) {
           <li key={u.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
             <div className="min-w-0 flex-1">
               <p className="font-medium">
-                {u.displayName} <span className="text-text-muted font-normal">@{u.username}</span>
+                {u.username}
                 {u.id === myId && <span className="text-text-muted"> · {t.admin.you}</span>}
                 {u.role === 'admin' && (
                   <span className="text-text-muted"> · {t.admin.adminRole}</span>
@@ -103,7 +103,7 @@ function Users({ myId }: { myId?: string }) {
                   type="button"
                   className={`${buttonClass} text-danger`}
                   onClick={() => {
-                    if (window.confirm(t.admin.deleteConfirm(u.displayName))) {
+                    if (window.confirm(t.admin.deleteConfirm(u.username))) {
                       void run(() => api(`/admin/users/${u.id}`, { method: 'DELETE' }));
                     }
                   }}
@@ -124,7 +124,7 @@ function Users({ myId }: { myId?: string }) {
           onClose={() => setResetting(null)}
         >
           <label htmlFor={passwordId} className="block text-sm">
-            {t.admin.resetPasswordPrompt(resetting.displayName)}
+            {t.admin.resetPasswordPrompt(resetting.username)}
           </label>
           <input
             id={passwordId}
@@ -144,16 +144,16 @@ function Users({ myId }: { myId?: string }) {
 
 function CreateUser() {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ displayName: '', username: '', password: '' });
+  const [form, setForm] = useState({ username: '', password: '' });
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const ids = { name: useId(), user: useId(), pass: useId() };
+  const ids = { user: useId(), pass: useId() };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       const u = await api<AdminUser>('/admin/users', { method: 'POST', json: form });
       setMessage({ ok: true, text: t.admin.create.done(u.username) });
-      setForm({ displayName: '', username: '', password: '' });
+      setForm({ username: '', password: '' });
       void qc.invalidateQueries({ queryKey: usersKey });
     } catch (err) {
       setMessage({ ok: false, text: errorText(err) });
@@ -171,13 +171,7 @@ function CreateUser() {
       <h2 id="create-user" className="text-lg font-medium">
         {t.admin.create.title}
       </h2>
-      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1">
-          <label htmlFor={ids.name} className="block text-sm">
-            {t.admin.create.displayName}
-          </label>
-          <input id={ids.name} maxLength={60} {...field('displayName')} />
-        </div>
+      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <label htmlFor={ids.user} className="block text-sm">
             {t.admin.create.username}

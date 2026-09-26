@@ -30,7 +30,6 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   /** Lower-case login name. */
   username: text('username').notNull().unique(),
-  displayName: text('display_name').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['admin', 'user'] })
     .notNull()
