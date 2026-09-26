@@ -1,7 +1,7 @@
 import type { Diagram } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
 import { Download, Maximize2, Minus, Plus, Workflow, X } from 'lucide-react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Menu } from '../../components/Menu';
 import { t } from '../../i18n';
@@ -198,34 +198,39 @@ export function DiagramView({
   );
 }
 
-/** Full-screen viewer over the whole app. */
+/**
+ * Full-screen viewer. A native modal <dialog> (top layer), so it also opens above other
+ * modal dialogs, such as the questions asked about a passage.
+ */
 export function DiagramDialog({ diagram, onClose }: { diagram: Diagram; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={ref}
+      onClose={onClose}
       aria-label={diagram.title}
-      className="bg-bg fixed inset-0 z-[60] flex flex-col"
+      className="bg-bg text-text m-0 h-full max-h-none w-full max-w-none p-0"
     >
-      <div className="absolute top-2 right-2 z-10">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t.diagrams.close}
-          className="bg-surface border-border text-text-muted hover:text-text rounded-lg border p-1.5"
-        >
-          <X size={18} aria-hidden />
-        </button>
+      <div className="flex h-full flex-col">
+        <div className="absolute top-2 right-2 z-10">
+          <button
+            type="button"
+            onClick={() => ref.current?.close()}
+            aria-label={t.diagrams.close}
+            className="bg-surface border-border text-text-muted hover:text-text rounded-lg border p-1.5"
+          >
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col pt-1 pr-12">
+          <DiagramView diagram={diagram} variant="full" />
+        </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col pt-1 pr-12">
-        <DiagramView diagram={diagram} variant="full" />
-      </div>
-    </div>,
+    </dialog>,
     document.body,
   );
 }

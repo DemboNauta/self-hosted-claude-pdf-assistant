@@ -80,17 +80,36 @@ function mergeRects(rects: NormRect[]): NormRect[] {
   return out;
 }
 
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** The selection plus where it is, kept with the question to mark it on the page. */
+function located(selection: TextSelection, rects: NormRect[]): TextSelection {
+  const inPage = rects.slice(0, 200).map((r) => {
+    const x = clamp01(r.x);
+    const y = clamp01(r.y);
+    return { x, y, w: clamp01(r.x + r.w) - x, h: clamp01(r.y + r.h) - y };
+  });
+  return inPage.length ? { ...selection, rects: inPage } : selection;
+}
+
 /** Built-in chat actions (F-CHAT-02); annotations add "Subrayar" through `extra`. */
 function chatActions(): SelectionAction[] {
-  const { send, attach } = useChat.getState();
+  const { send: sendRaw, attach } = useChat.getState();
   const show = () => useChatDock.getState().show();
+  const send = (text: string, opts: Parameters<typeof sendRaw>[1] & { rects: NormRect[] }) => {
+    const { rects, ...rest } = opts;
+    sendRaw(text, {
+      ...rest,
+      ...(rest.selection && { selection: located(rest.selection, rects) }),
+    });
+  };
   return [
     {
       id: 'ask',
       label: t.chat.selection.ask,
       icon: MessageSquare,
-      run: (selection) => {
-        attach(selection);
+      run: (selection, rects) => {
+        attach(located(selection, rects));
         show();
         setTimeout(() => window.dispatchEvent(new CustomEvent('pca:focus-composer')), 50);
       },
@@ -99,36 +118,36 @@ function chatActions(): SelectionAction[] {
       id: 'eli5',
       label: t.chat.selection.eli5,
       icon: Lightbulb,
-      run: (selection) => {
+      run: (selection, rects) => {
         show();
-        send('', { mode: 'eli5', selection });
+        send('', { mode: 'eli5', selection, rects });
       },
     },
     {
       id: 'summarize',
       label: t.chat.selection.summarize,
       icon: ListTree,
-      run: (selection) => {
+      run: (selection, rects) => {
         show();
-        send(t.chat.selection.summarizePrompt, { mode: 'summary', selection });
+        send(t.chat.selection.summarizePrompt, { mode: 'summary', selection, rects });
       },
     },
     {
       id: 'quiz',
       label: t.chat.selection.quiz,
       icon: HelpCircle,
-      run: (selection) => {
+      run: (selection, rects) => {
         show();
-        send(t.chat.selection.quizPrompt, { mode: 'exam', selection });
+        send(t.chat.selection.quizPrompt, { mode: 'exam', selection, rects });
       },
     },
     {
       id: 'diagram',
       label: t.chat.selection.diagram,
       icon: Workflow,
-      run: (selection) => {
+      run: (selection, rects) => {
         show();
-        send('', { mode: 'diagram', selection });
+        send('', { mode: 'diagram', selection, rects });
       },
     },
   ];

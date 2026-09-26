@@ -55,6 +55,46 @@ test('read a PDF and ask Claude about a selection', async ({ page }, info) => {
   await expect(chat.getByTestId('user-message').first()).toContainText('cloroplastos');
 });
 
+// Asking about a selection leaves a mark on the page that shows the question and the
+// answer again, also after a reload.
+test('a question about a selection leaves a mark with its answer', async ({ page }, info) => {
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Marcas ${info.project.name}`,
+    tinyPdf([['La fotosintesis ocurre en los cloroplastos.', 'El ciclo de Calvin fija el CO2.']]),
+  );
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('Calvin');
+  await expect(page.getByTestId('question-mark')).toHaveCount(0);
+
+  await selectInPdf(page, 'El ciclo de Calvin fija');
+  await page
+    .getByRole('toolbar', { name: 'Acciones sobre la selección' })
+    .getByRole('button', { name: 'Preguntar' })
+    .click();
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  await composer.fill('¿Qué fija el ciclo?');
+  await composer.press('Enter');
+  await expect(page.getByTestId('assistant-message').last()).toContainText('Respuesta de prueba');
+  await expect(page.locator('[data-page="1"]').getByTestId('question-mark')).toBeVisible();
+
+  await page.reload();
+  const mark = page.locator('[data-page="1"]').getByTestId('question-mark');
+  await expect(mark).toBeVisible();
+  await mark.click();
+  const dialog = page.getByRole('dialog', { name: 'Lo que preguntaste en la p. 1' });
+  await expect(dialog).toContainText('El ciclo de Calvin fija');
+  await expect(dialog).toContainText('¿Qué fija el ciclo?');
+  await expect(dialog).toContainText('Respuesta de prueba');
+
+  await dialog.getByRole('button', { name: 'Ver en el chat' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.locator('section[aria-label="Claude"]').getByTestId('user-message').last(),
+  ).toContainText('¿Qué fija el ciclo?');
+});
+
 // F-LIB-04: leaving the reader and opening the document again (without reloading the
 // app) resumes at the page where the reading stopped.
 test('reopening a document resumes at the last page read', async ({ page }, info) => {

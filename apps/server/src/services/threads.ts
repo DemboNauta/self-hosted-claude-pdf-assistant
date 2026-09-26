@@ -2,6 +2,7 @@ import type {
   ChatContext,
   ChatErrorCode,
   ChatMessage,
+  DocumentQuestion,
   StudyMode,
   ThreadScope,
   ThreadSummary,
@@ -10,6 +11,7 @@ import type {
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { messages, threads } from '../db/schema.js';
+import { pageItems, quoteRects } from './anchoring.js';
 import { notFound } from './errors.js';
 import { newId } from './ids.js';
 
@@ -178,6 +180,53 @@ export class ThreadService {
     const row = this.getMessage(id);
     this.db.update(threads).set({ updatedAt: now() }).where(eq(threads.id, row.threadId)).run();
     return toMessage(row);
+  }
+
+  /**
+   * Questions asked about a passage of the document (selection or drawing mark), with
+   * the answer that followed each one, across all its threads, oldest first.
+   */
+  documentQuestions(documentId: string): DocumentQuestion[] {
+    const rows = this.db
+      .select({ message: messages })
+      .from(messages)
+      .innerJoin(threads, eq(threads.id, messages.threadId))
+      .where(eq(threads.documentId, documentId))
+      .orderBy(asc(messages.threadId), asc(messages.createdAt), asc(sql`messages.rowid`))
+      .all()
+      .map((r) => toMessage(r.message));
+    const items = new Map<number, ReturnType<typeof pageItems>>();
+    const locate = (page: number, quote: string) => {
+      if (!items.has(page)) items.set(page, pageItems(this.db, documentId, page));
+      return quoteRects(items.get(page) ?? [], quote);
+    };
+    const out: DocumentQuestion[] = [];
+    rows.forEach((m, i) => {
+      const { selection, mark } = m.context ?? {};
+      if (m.role !== 'user' || (!selection && !mark)) return;
+      const next = rows[i + 1];
+      const answer = next?.threadId === m.threadId && next.role === 'assistant' ? next : null;
+      out.push({
+        id: m.id,
+        threadId: m.threadId,
+        ...(selection
+          ? {
+              kind: 'selection' as const,
+              page: selection.page,
+              quote: selection.text,
+              rects: selection.rects?.length
+                ? selection.rects
+                : locate(selection.page, selection.text),
+            }
+          : { kind: 'mark' as const, page: mark!.page, quote: mark!.text, rects: [mark!.rect] }),
+        mode: m.mode ?? 'free',
+        question: m.content,
+        answer: answer?.content || null,
+        answerStatus: answer?.status ?? null,
+        createdAt: m.createdAt,
+      });
+    });
+    return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   setClaudeSession(threadId: string, sessionId: string | null) {

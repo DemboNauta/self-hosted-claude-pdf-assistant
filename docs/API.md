@@ -64,13 +64,14 @@ Ids are 10-char base36 strings.
 
 `:scope` is `documents`, `topics` or `subjects`.
 
-| Method | Path                             | Notes                                       |
-| ------ | -------------------------------- | ------------------------------------------- |
-| GET    | `/api/:scope/:id/threads`        | `ThreadSummary[]`, most recent first.       |
-| GET    | `/api/:scope/:id/threads/active` | The most recent thread, created if missing. |
-| POST   | `/api/:scope/:id/threads`        | New thread.                                 |
-| GET    | `/api/threads/:id/messages`      | `{ running, messages: ChatMessage[] }`      |
-| DELETE | `/api/threads/:id`               | 409 `busy` while a turn runs.               |
+| Method | Path                             | Notes                                                                                                               |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/:scope/:id/threads`        | `ThreadSummary[]`, most recent first.                                                                               |
+| GET    | `/api/:scope/:id/threads/active` | The most recent thread, created if missing.                                                                         |
+| POST   | `/api/:scope/:id/threads`        | New thread.                                                                                                         |
+| GET    | `/api/threads/:id/messages`      | `{ running, messages: ChatMessage[] }`                                                                              |
+| GET    | `/api/documents/:id/questions`   | `DocumentQuestion[]`: questions asked about a selection or drawn area, with the answer that followed, oldest first. |
+| DELETE | `/api/threads/:id`               | 409 `busy` while a turn runs.                                                                                       |
 
 ## WebSocket `/ws/chat`
 

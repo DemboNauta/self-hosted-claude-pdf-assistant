@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type {
   ChatMessage,
+  DocumentQuestion,
   ServerChatEvent,
   ThreadSummary,
   UploadSession,
@@ -189,6 +190,44 @@ describe('chat', () => {
       ThreadSummary[]
     >();
     expect(list[0]).toMatchObject({ title: '¿Dónde ocurre la fotosíntesis?', messageCount: 4 });
+  });
+
+  it('lists the questions asked about passages, with their answers', async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const rects = [{ x: 0.1, y: 0.2, w: 0.3, h: 0.02 }];
+    await ask(thread.id, '¿Qué es?', {
+      context: { docId, currentPage: 3, selection: { page: 3, text: 'el ciclo de Calvin', rects } },
+    });
+    await ask(thread.id, 'Sin selección');
+    // An older question without rects is located from the stored text layer.
+    await ask(thread.id, '', {
+      mode: 'eli5',
+      context: { docId, currentPage: 5, selection: { page: 5, text: 'ciclo de Calvin' } },
+    });
+
+    const res = await app.inject({ url: `/api/documents/${docId}/questions`, headers });
+    expect(res.statusCode).toBe(200);
+    const questions = res.json<DocumentQuestion[]>();
+    expect(questions).toHaveLength(2);
+    expect(questions[0]).toMatchObject({
+      threadId: thread.id,
+      kind: 'selection',
+      page: 3,
+      quote: 'el ciclo de Calvin',
+      rects,
+      mode: 'free',
+      question: '¿Qué es?',
+      answer: 'La fotosíntesis ocurre en los cloroplastos [[cite:x:1]].',
+      answerStatus: 'complete',
+    });
+    expect(questions[1]).toMatchObject({ page: 5, mode: 'eli5', question: '' });
+    expect(questions[1]!.rects.length).toBeGreaterThan(0);
+
+    expect((await app.inject({ url: '/api/documents/nope/questions', headers })).statusCode).toBe(
+      404,
+    );
   });
 
   it('chats about a whole topic with its documents in context (F-CHAT-08)', async () => {

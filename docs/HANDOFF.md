@@ -43,6 +43,18 @@ Session of 2026-09-26: the owner tried the app locally (fresh clone, see
 - Fix: reopening a document inside the app resumed at the stale page (cached
   detail); now the detail query is dropped on leaving the reader.
 
+Later the same day the owner asked for a mark on the page wherever he asked Claude
+about a selection, to find the question and the answer again. Done as "question
+marks" (`apps/web/src/features/chat/QuestionMarks.tsx`, `GET
+/api/documents/:id/questions`); see `DECISIONS.md`. It was built in a cloud session
+on branch `claude/zen-turing-8lrljs` and merged into `main`.
+
+Then visual schemas: an "Esquema visual" chat mode (whole PDF or pages) and a
+selection action. Claude draws Mermaid (`create_diagram` / `update_diagram`),
+shown in the chat and kept in the reader's "Esquemas" panel and the `/diagrams`
+page (`apps/web/src/features/diagrams`). Only tried with the fake Claude: check
+with real Claude that its Mermaid renders well on real PDFs.
+
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.
 
@@ -87,6 +99,11 @@ The **deployment** milestone:
 - `get_page_image` and the OCR re-extraction run synchronously on the main
   thread (page render) or in the ingest queue (OCR). This is fine for a single
   user.
+- The Chromium bundled in some sandboxes is older than what pdfjs-dist needs
+  (`Map.prototype.getOrInsertComputed`), so PDF pages never render there and every
+  reader e2e test fails. Running the suite with that method polyfilled via
+  `page.addInitScript` makes it pass. Real browsers the owner uses may need the
+  same check.
 - Pointer marks are ephemeral and not restored after a reload (by design, F-POINT-03).
 - A multi-page text selection highlights only the first page's part.
 - The main web chunk is ~1.5 MB (pdf.js + KaTeX + app; the pdf.js worker is a separate
