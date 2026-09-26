@@ -51,6 +51,7 @@ text, text_layer_json, viewed_at`.
 claude_session_id, title (first question), updated_at`.
 - **messages** `thread_id (cascade), role, content, context_json ({mode,
 context}), tool_events_json, status (complete|interrupted|error), error_code`.
+  `context.selection.rects` (normalised) places the question marks on the page.
   Order is `created_at, rowid`.
 - **annotations**:
   - `document_id (cascade), page, type (highlight|note|drawing|shape),

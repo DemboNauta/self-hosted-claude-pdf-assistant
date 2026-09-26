@@ -124,7 +124,11 @@ function MessageItem({ message }: { message: ChatMessage }) {
     const mode = message.mode && message.mode !== 'free' ? t.chat.modes[message.mode] : null;
     const quoted = sel?.text ?? mark?.text;
     return (
-      <li className="flex flex-col items-end gap-1" data-testid="user-message">
+      <li
+        className="flex scroll-mt-4 flex-col items-end gap-1"
+        data-testid="user-message"
+        data-message-id={message.id}
+      >
         {(mode || sel || mark) && (
           <span className="text-text-muted text-xs">
             {[mode, sel && t.chat.attached(sel.page), mark && t.chat.attachedMark(mark.page)]

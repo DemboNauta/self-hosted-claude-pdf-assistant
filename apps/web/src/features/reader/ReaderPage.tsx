@@ -14,6 +14,7 @@ import {
   useSelectionAnnotationActions,
 } from '../annotations/integrations';
 import { ChatDock, useChatDock } from '../chat/ChatDock';
+import { QuestionMarks } from '../chat/QuestionMarks';
 import { MemoryPanel } from '../memory/MemoryPanel';
 import { FlashcardDialog, flashcardAction } from '../review/FlashcardDialog';
 import { useChat } from '../chat/store';
@@ -176,6 +177,7 @@ export function ReaderPage() {
               overlay={(page, layers, size) => (
                 <>
                   <AnnotationOverlay docId={doc.id} page={page} layers={layers} {...size} />
+                  <QuestionMarks docId={doc.id} page={page} layers={layers} {...size} />
                   <PointerLayer pageNumber={page} docId={doc.id} layers={layers} {...size} />
                 </>
               )}

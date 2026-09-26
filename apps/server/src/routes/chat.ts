@@ -49,6 +49,12 @@ export async function registerChatRoutes(
       reply.code(201).send(threads.create(scope(req.params))),
     );
   }
+  /** Questions asked about passages of a document, shown as marks on its pages. */
+  app.get('/api/documents/:id/questions', async (req) => {
+    const docId = id(req.params);
+    library.getLive(docId);
+    return threads.documentQuestions(docId);
+  });
   app.get('/api/threads/:id/messages', async (req) => {
     const threadId = id(req.params);
     return { running: chat.isRunning(threadId), messages: threads.messages(threadId) };

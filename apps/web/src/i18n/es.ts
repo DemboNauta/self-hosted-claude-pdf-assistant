@@ -401,6 +401,16 @@ export const es = {
       busy: 'Claude todavía está respondiendo en esta conversación.',
       internal: 'Algo ha fallado al hablar con Claude. Inténtalo de nuevo.',
     },
+    questions: {
+      open: (n: number) =>
+        n === 1 ? 'Ya preguntaste a Claude sobre esto' : `Ya preguntaste ${n} veces sobre esto`,
+      title: (page: number) => `Lo que preguntaste en la p. ${page}`,
+      close: 'Cerrar',
+      openInChat: 'Ver en el chat',
+      pending: 'Claude todavía está respondiendo…',
+      noAnswer: 'Esta pregunta se quedó sin respuesta.',
+      markNoText: 'Zona marcada con dibujos.',
+    },
     pointers: {
       shown: (page: number) => `Claude ha señalado en la p. ${page}`,
       go: 'Ir',

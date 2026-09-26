@@ -36,16 +36,17 @@ server, not against real Claude yet.
 
 ## 3.4 Conversation with Claude
 
-| ID        | Status  | Where / notes                                                                                                           |
-| --------- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
-| F-CHAT-01 | ✅      | `ChatDock.tsx`: resizable right panel on desktop, bottom sheet on mobile.                                               |
-| F-CHAT-02 | ✅      | `SelectionMenu.tsx`: ask, explain simply, summarise, question me, flashcard, colours, note.                             |
-| F-CHAT-03 | 🟡      | All modes in `claude/prompt.ts`; summary formats. Exam mode records results. Only free mode was tried with real Claude. |
-| F-CHAT-04 | ✅      | `[[cite:docId:page\|"quote"]]` → chips (`Markdown.tsx`, `CitationChip.tsx`).                                            |
-| F-CHAT-05 | ✅      | Streaming Markdown + GFM + KaTeX + code.                                                                                |
-| F-CHAT-06 | 🟡      | Web Speech API mic button. Not testable in CI; needs a check on real devices.                                           |
-| F-CHAT-07 | ✅      | Threads per document, history menu, new thread.                                                                         |
-| F-CHAT-08 | ✅ fake | Topic/subject chats (`ScopeChatPage.tsx`).                                                                              |
+| ID        | Status  | Where / notes                                                                                                                                                                                                           |
+| --------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-CHAT-01 | ✅      | `ChatDock.tsx`: resizable right panel on desktop, bottom sheet on mobile.                                                                                                                                               |
+| F-CHAT-02 | ✅      | `SelectionMenu.tsx`: ask, explain simply, summarise, question me, flashcard, colours, note.                                                                                                                             |
+| F-CHAT-03 | 🟡      | All modes in `claude/prompt.ts`; summary formats. Exam mode records results. Only free mode was tried with real Claude.                                                                                                 |
+| F-CHAT-04 | ✅      | `[[cite:docId:page\|"quote"]]` → chips (`Markdown.tsx`, `CitationChip.tsx`).                                                                                                                                            |
+| F-CHAT-05 | ✅      | Streaming Markdown + GFM + KaTeX + code.                                                                                                                                                                                |
+| F-CHAT-06 | 🟡      | Web Speech API mic button. Not testable in CI; needs a check on real devices.                                                                                                                                           |
+| F-CHAT-07 | ✅      | Threads per document, history menu, new thread.                                                                                                                                                                         |
+| (extra)   | ✅ fake | Question marks (owner request 2026-09-26): asking about a selection or drawn area leaves a margin badge on the page; it opens the questions and Claude's answers (`QuestionMarks.tsx`, `GET /documents/:id/questions`). |
+| F-CHAT-08 | ✅ fake | Topic/subject chats (`ScopeChatPage.tsx`).                                                                                                                                                                              |
 
 ## 3.5 Marks
 

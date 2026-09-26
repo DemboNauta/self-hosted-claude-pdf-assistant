@@ -90,6 +90,14 @@ change them if he disagrees.
   - d: pen.
   - Esc: back out.
   - ?: help.
+- **Question marks** (2026-09-26, owner request: "que se quede una marquita para
+  ver que ya preguntaste y ver la respuesta"): derived from the chat history, not
+  stored as annotations. Every user message with a selection or drawing mark
+  becomes a dotted underline plus an orange badge in the right margin; questions
+  about the same passage share one badge (with a count). The badge opens a dialog
+  with each question and its answer and a "Ver en el chat" link. Deleting a thread
+  removes its marks. They follow the annotations' show/hide toggle. Selections now
+  carry their rects (`selection.rects`); older questions are located from the text.
 - **Model** can be overridden in Settings (`settings.claude_model`). It takes
   precedence over `CLAUDE_MODEL` for chat and the daily brief (not for the status
   probe).

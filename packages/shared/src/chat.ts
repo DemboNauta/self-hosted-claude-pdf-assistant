@@ -10,13 +10,19 @@ export type SummaryFormat = (typeof SUMMARY_FORMATS)[number];
 
 const id = z.string().min(1).max(64);
 
+const unitSchema = z.number().min(0).max(1);
+const rectSchema = z.object({ x: unitSchema, y: unitSchema, w: unitSchema, h: unitSchema });
+
 export const selectionSchema = z.object({
   page: z.number().int().min(1),
   text: z.string().trim().min(1).max(8000),
+  /**
+   * Selected lines on the page, in normalised page space. Kept with the question so
+   * the PDF can show where it was asked; missing ones are re-anchored from the text.
+   */
+  rects: z.array(rectSchema).max(200).optional(),
 });
 export type TextSelection = z.infer<typeof selectionSchema>;
-
-const unitSchema = z.number().min(0).max(1);
 
 /**
  * Area the student marked with freehand drawings to ask about it. The server renders
@@ -25,7 +31,7 @@ const unitSchema = z.number().min(0).max(1);
 export const markSchema = z.object({
   page: z.number().int().min(1),
   /** Bounding box of the drawings (plus a margin), in normalised page space. */
-  rect: z.object({ x: unitSchema, y: unitSchema, w: unitSchema, h: unitSchema }),
+  rect: rectSchema,
   /** The drawing annotations that make up the mark. */
   annotationIds: z.array(id).min(1).max(50),
   /** Text of the page inside the marked area (may be empty: figures, formulas). */
@@ -85,6 +91,28 @@ export interface ChatMessage {
   toolEvents?: ToolEvent[];
   status: 'complete' | 'interrupted' | 'error' | 'streaming';
   errorCode?: ChatErrorCode | null;
+  createdAt: string;
+}
+
+/**
+ * A question asked about a passage of a document (a selection or a drawing mark), with
+ * Claude's answer. Shown as a mark on the page so the student can find it again.
+ */
+export interface DocumentQuestion {
+  /** The user message. */
+  id: string;
+  threadId: string;
+  page: number;
+  /** The passage asked about (the selection, or the text inside the marked area). */
+  quote: string;
+  /** Where the passage is on the page, normalised; empty if it could not be located. */
+  rects: { x: number; y: number; w: number; h: number }[];
+  kind: 'selection' | 'mark';
+  mode: StudyMode;
+  question: string;
+  /** Claude's answer, null while it has not been given (or the turn failed). */
+  answer: string | null;
+  answerStatus: ChatMessage['status'] | null;
   createdAt: string;
 }
 
