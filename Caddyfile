@@ -1,27 +1,14 @@
+# Optional bundled Caddy (compose profile "caddy") for hosts without their own proxy.
+# On a VPS that already runs Caddy, use deploy/host-caddy.example instead.
 {$DOMAIN:localhost} {
 	encode zstd gzip
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
-		Referrer-Policy same-origin
 		-Server
 	}
 
-	# API and WebSocket go to the backend. No request body limit: uploads have
-	# no size cap (open decision #6) and are streamed through.
-	@backend path /api/* /ws/*
-	handle @backend {
-		reverse_proxy server:3000
-	}
-
-	# Static SPA with client-side routing fallback.
-	handle {
-		root * /srv/web
-		@assets path /assets/*
-		header @assets Cache-Control "public, max-age=31536000, immutable"
-		try_files {path} /index.html
-		file_server
-	}
+	# Everything (web app, API, WebSocket) is served by the app container.
+	# No request body limit: uploads are streamed in chunks.
+	reverse_proxy server:3000
 }

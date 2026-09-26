@@ -16,6 +16,8 @@ const envSchema = z.object({
   OCR_LANGS: z.string().default('spa+eng'),
   CLAUDE_MODEL: z.string().optional(),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
+  /** Built web app to serve (the Docker image sets it); unset in development. */
+  WEB_DIR: z.string().optional(),
 });
 
 export interface AppConfig {
@@ -34,6 +36,7 @@ export interface AppConfig {
   ocrLangs: string;
   claudeModel: string | null;
   hasOauthToken: boolean;
+  webDir: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -60,5 +63,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ocrLangs: e.OCR_LANGS,
     claudeModel: e.CLAUDE_MODEL?.trim() || null,
     hasOauthToken: Boolean(e.CLAUDE_CODE_OAUTH_TOKEN?.trim()),
+    webDir: e.WEB_DIR?.trim() ? path.resolve(e.WEB_DIR) : null,
   };
 }

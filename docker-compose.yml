@@ -8,12 +8,18 @@ services:
     container_name: pdfclaudeassistant-server
     restart: unless-stopped
     env_file: .env
+    # Only reachable from the host: the host's reverse proxy (Caddy) publishes it.
+    ports:
+      - '127.0.0.1:${APP_PORT:-3000}:3000'
     volumes:
-      # PDFs, SQLite, thumbnails and (in ./data/claude-home) the Claude Code session.
+      # PDFs, SQLite, covers, backups and (in ./data/claude-home) the Claude Code session.
       - ./data:/data
     networks: [pdfclaudeassistant-net]
 
+  # Optional: bundled Caddy for hosts without a reverse proxy.
+  #   docker compose --profile caddy up -d
   caddy:
+    profiles: [caddy]
     build:
       context: .
       dockerfile: docker/caddy.Dockerfile

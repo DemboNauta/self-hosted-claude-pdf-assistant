@@ -26,6 +26,7 @@ export async function testConfig(overrides: Partial<AppConfig> = {}): Promise<Ap
     ocrLangs: 'spa+eng',
     claudeModel: null,
     hasOauthToken: true,
+    webDir: null,
     ...overrides,
   };
 }

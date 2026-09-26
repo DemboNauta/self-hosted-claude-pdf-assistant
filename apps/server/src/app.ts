@@ -15,6 +15,7 @@ import { detectOcr, type OcrRunner } from './ingest/ocr.js';
 import { IngestService } from './ingest/service.js';
 import { registerLibraryRoutes } from './routes/library.js';
 import { registerPdfjsAssets } from './routes/pdfjs-assets.js';
+import { registerWebApp } from './routes/web.js';
 import { registerUploadRoutes } from './routes/upload.js';
 import { HttpError } from './services/errors.js';
 import { LibraryService } from './services/library.js';
@@ -130,6 +131,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
     (docId) => memory.contextFor(docId),
   );
   await registerChatRoutes(app, threads, library, chat);
+  if (config.webDir) await registerWebApp(app, config.webDir);
 
   app.addHook('onClose', async () => {
     clearInterval(purgeTimer);
