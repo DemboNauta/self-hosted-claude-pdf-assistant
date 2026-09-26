@@ -27,6 +27,9 @@ interface VoiceState {
   readingId: string | null;
   /** There is an explanation to go back to after an interruption. */
   canResume: boolean;
+  /** Diagnostics (`?vozdebug=1`). */
+  debugLines: string[];
+  debug: boolean;
   start: () => Promise<void>;
   stop: () => void;
   /** Pause button: stop talking (keeping the place) or carry on from there. */
@@ -69,14 +72,29 @@ const QUIET_MS = 1500;
 /** Single words that are enough to cut Claude off. */
 const BARGE_WORDS = /^(espera|para|oye|perdona|perdon|stop|calla)$/;
 
-/** `localStorage['pca.voice.debug'] = '1'` logs what the microphone hears. */
-const debug = (() => {
+/**
+ * Diagnostics shown in the voice bar: open the app once with `?vozdebug=1` (`=0`
+ * turns it off). Phones have no console, so the lines go on screen.
+ */
+function debugEnabled() {
   try {
+    const flag = new URLSearchParams(location.search).get('vozdebug');
+    if (flag === '1') localStorage.setItem('pca.voice.debug', '1');
+    if (flag === '0') localStorage.removeItem('pca.voice.debug');
     return localStorage.getItem('pca.voice.debug') === '1';
   } catch {
     return false;
   }
-})();
+}
+let debug = false;
+let debugTimer: ReturnType<typeof setInterval> | undefined;
+
+function debugLine(line: string) {
+  if (!debug) return;
+  console.debug('[voice]', line);
+  const at = new Date().toLocaleTimeString('es', { hour12: false });
+  set({ debugLines: [...get().debugLines, `${at} ${line}`].slice(-8) });
+}
 
 const BRIDGE = 'Sigo con lo que te estaba contando.';
 
@@ -212,11 +230,9 @@ function isBargeIn(text: string) {
 function onHeard(text: string, final: boolean) {
   if (!get().active) return;
   if (debug) {
-    console.debug('[voice]', final ? 'final' : 'interim', JSON.stringify(text), {
-      level: listener?.level.toFixed(3),
-      userSpeaking: listener?.userSpeaking(),
-      playing: player.playing?.text,
-    });
+    debugLine(
+      `${final ? 'final' : 'parcial'} «${text}» · nivel ${listener?.level.toFixed(3)} · voz ${String(listener?.userSpeaking())} · micro ${listener?.mode}`,
+    );
   }
   const talking =
     player.playing !== null || (get().phase === 'thinking' && speaking && !muted.has(speaking));
@@ -332,6 +348,8 @@ export const useVoice = create<VoiceState>(() => ({
   error: null,
   readingId: null,
   canResume: false,
+  debugLines: [],
+  debug: false,
 
   start: async () => {
     if (get().active) return;
@@ -342,13 +360,22 @@ export const useVoice = create<VoiceState>(() => ({
     player.stop();
     player.unlock();
     reset();
-    set({ active: true, phase: 'listening', heard: '', error: null, readingId: null });
+    debug = debugEnabled();
+    set({
+      active: true,
+      phase: 'listening',
+      heard: '',
+      error: null,
+      readingId: null,
+      debug,
+      debugLines: [],
+    });
     useChat.getState().setVoice(true);
-    await loadSettings();
-    player.warm();
+    // Start listening inside the tap: phones refuse the microphone outside a gesture.
     listener = new Listener({
       onResult: onHeard,
-      onError: (code) =>
+      onError: (code) => {
+        debugLine(`error visible: ${code}`);
         set({
           error:
             code === 'not-allowed' || code === 'service-not-allowed'
@@ -356,12 +383,28 @@ export const useVoice = create<VoiceState>(() => ({
               : code === 'network'
                 ? t.voice.network
                 : t.voice.error,
-        }),
+        });
+      },
+      onDebug: debugLine,
     });
     listener.start();
+    debugLine(`inicio · ${navigator.userAgent.includes('Android') ? 'Android' : 'escritorio'}`);
+    await loadSettings();
+    debugLine(`voz del servidor: ${player.serverVoices ? 'sí' : 'no'}`);
+    clearInterval(debugTimer);
+    if (debug) {
+      debugTimer = setInterval(() => {
+        if (!listener) return;
+        debugLine(
+          `estado ${get().phase} · micro ${listener.mode} · nivel ${listener.level.toFixed(3)} · voz ${String(listener.userSpeaking())} · escuchando ${listener.listening ? 'sí' : 'no'}`,
+        );
+      }, 3000);
+    }
+    player.warm();
   },
 
   stop: () => {
+    clearInterval(debugTimer);
     listener?.stop();
     listener = null;
     player.stop();

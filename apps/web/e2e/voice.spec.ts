@@ -1,9 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { login, seedDocument, tinyPdf } from './helpers';
 
-/** Replaces the browser's speech recognition with one the test speaks through. */
-async function fakeMicrophone(page: Page) {
-  await page.addInitScript(() => {
+/**
+ * Replaces the browser's speech recognition with one the test speaks through. With
+ * `phoneLike`, a second (echo-cancelled) microphone opens but the recognition refuses
+ * to start while it is open, as some Android phones do.
+ */
+async function fakeMicrophone(page: Page, phoneLike = false) {
+  await page.addInitScript((phone: boolean) => {
     type Handler = ((e: unknown) => void) | null;
     const w = window as unknown as Record<string, unknown>;
     class FakeRecognition {
@@ -14,6 +18,13 @@ async function fakeMicrophone(page: Page) {
       onend: (() => void) | null = null;
       onerror: Handler = null;
       start() {
+        if (w.__micOpen) {
+          setTimeout(() => {
+            this.onerror?.({ error: 'not-allowed' });
+            this.onend?.();
+          }, 50);
+          return;
+        }
         w.__rec = this;
       }
       stop() {
@@ -24,12 +35,24 @@ async function fakeMicrophone(page: Page) {
     w.SpeechRecognition = FakeRecognition;
     // No echo-cancelled microphone: barge-in relies on the text filter (the level gate
     // has its own unit test).
-    navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error('no microphone'));
+    navigator.mediaDevices.getUserMedia = async () => {
+      if (!phone) throw new Error('no microphone');
+      const stream = new AudioContext().createMediaStreamDestination().stream;
+      for (const track of stream.getTracks()) {
+        const stop = track.stop.bind(track);
+        track.stop = () => {
+          w.__micOpen = false;
+          stop();
+        };
+      }
+      w.__micOpen = true;
+      return stream;
+    };
     w.__say = (transcript: string, isFinal: boolean) => {
       const rec = w.__rec as FakeRecognition | null;
       rec?.onresult?.({ resultIndex: 0, results: [{ isFinal, 0: { transcript } }] });
     };
-  });
+  }, phoneLike);
 }
 
 const say = (page: Page, text: string, final = true) =>
@@ -95,4 +118,30 @@ test('talk to Claude, interrupt it and let it carry on', async ({ page }, info) 
 
   await page.getByRole('button', { name: 'Salir del modo voz' }).first().click();
   await expect(page.getByTestId('voice-bar')).toHaveCount(0);
+});
+
+// A phone that cannot share the microphone: voice mode gives up the echo-cancelled
+// one by itself and keeps listening; ?vozdebug=1 shows why on screen.
+test('voice mode recovers on a phone that cannot share the microphone', async ({ page }, info) => {
+  await fakeMicrophone(page, true);
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Voz móvil ${info.project.name}`,
+    tinyPdf([['Tema 1. La fotosintesis.', 'La fotosintesis ocurre en los cloroplastos.']]),
+  );
+  await page.goto(`/read/${docId}?vozdebug=1`);
+  await expect(page.locator('[data-page="1"]')).toBeVisible();
+  const chat = page.locator('section[aria-label="Claude"]');
+  if (!(await chat.isVisible())) {
+    await page.getByRole('button', { name: 'Abrir chat con Claude' }).click();
+  }
+  await chat.getByTestId('voice-toggle').click();
+  await expect(page.getByTestId('voice-debug')).toContainText('micro: plain');
+  await expect(page.getByTestId('voice-bar').getByRole('alert')).toHaveCount(0);
+
+  await say(page, 'Explícame esta página');
+  await expect(chat.getByTestId('user-message').last()).toContainText('Explícame esta página');
+  await page.getByRole('button', { name: 'Salir del modo voz' }).first().click();
+  await page.goto('/?vozdebug=0');
 });

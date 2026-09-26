@@ -40,15 +40,27 @@ export class LevelGate {
 }
 
 /**
+ * How the recognition gets its audio, from best to most compatible:
+ * - `track`: it listens to the echo-cancelled track (newer desktop Chrome/Edge);
+ * - `meter`: it uses the default microphone; the cleaned one only measures the level;
+ * - `plain`: no second microphone at all (phones that cannot share it).
+ * Any sign that the current way does not work moves to the next one.
+ */
+export type MicMode = 'track' | 'meter' | 'plain';
+
+/** Talking this long (by the level) without any recognition result means it is deaf. */
+const DEAF_AFTER_MS = 2500;
+
+/**
  * An always-open microphone for voice mode (F-CHAT-09), with the browser's speech
  * recognition (resolved with the owner: Web Speech API). Browsers end a recognition
  * session after a pause or a minute, so it starts again by itself until `stop()`.
  *
  * Echo: the microphone is also opened with the browser's echo cancellation, noise
- * suppression and gain control (as in video calls). Where the browser allows it the
- * recognition listens to that cleaned track, and its level tells whether the student
- * is really talking (`userSpeaking`), so Claude's voice from the speakers does not
- * count as an interruption.
+ * suppression and gain control (as in video calls), so its level tells whether the
+ * student is really talking (`userSpeaking`) and Claude's voice from the speakers does
+ * not count as an interruption. Some phones cannot share the microphone between that
+ * and the recognition: then it falls back step by step (`MicMode`).
  */
 export class Listener {
   private rec: Recognition | null = null;
@@ -59,7 +71,13 @@ export class Listener {
   private ctx: AudioContext | null = null;
   private meter: ReturnType<typeof setInterval> | undefined;
   private readonly gate = new LevelGate();
-  /** Level measured last (for the debug log). */
+  private voiceWithoutResult = 0;
+  mode: MicMode = 'track';
+  /** A recognition session is running (diagnostics). */
+  get listening() {
+    return this.rec !== null;
+  }
+  /** Level measured last (diagnostics). */
   level = 0;
 
   constructor(
@@ -67,6 +85,8 @@ export class Listener {
       /** Text heard so far in the current phrase (`final` once the phrase is complete). */
       onResult: (text: string, final: boolean) => void;
       onError: (code: string) => void;
+      /** Diagnostics for `?vozdebug=1`. */
+      onDebug?: (line: string) => void;
     },
   ) {}
 
@@ -74,10 +94,17 @@ export class Listener {
     return recognitionCtor() !== null;
   }
 
-  /** Listens at once; switches to the echo-cancelled track once the browser grants it. */
+  /** Listens at once; moves to the echo-cancelled microphone once the browser grants it. */
   start() {
     this.running = true;
     this.failures = 0;
+    this.mode = 'track';
+    // Created inside the tap: on phones an audio context made later stays suspended.
+    try {
+      this.ctx = new AudioContext();
+    } catch {
+      this.ctx = null;
+    }
     this.open();
     void this.openMicrophone().then(() => {
       // Restart the session on the cleaned track (onend opens it again).
@@ -99,7 +126,22 @@ export class Listener {
    * no such microphone (then only the text echo filter protects from self-interruption).
    */
   userSpeaking(): boolean | null {
-    return this.stream ? this.gate.speaking() : null;
+    if (!this.stream || this.ctx?.state !== 'running') return null;
+    return this.gate.speaking();
+  }
+
+  private debug(line: string) {
+    this.handlers.onDebug?.(line);
+  }
+
+  /** The current way of listening does not work here: try the next one. */
+  private degrade(reason: string) {
+    if (this.mode === 'plain') return;
+    this.mode = this.mode === 'track' ? 'meter' : 'plain';
+    if (this.mode === 'plain') this.closeMicrophone();
+    this.voiceWithoutResult = 0;
+    this.debug(`${reason} → micro: ${this.mode}`);
+    this.rec?.stop();
   }
 
   private async openMicrophone() {
@@ -107,12 +149,13 @@ export class Listener {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      // Voice mode ended while the browser was asking for permission.
-      if (!this.running) {
+      // Voice mode ended (or gave up on it) while the browser was asking for permission.
+      if (!this.running || this.mode === 'plain') {
         for (const track of stream.getTracks()) track.stop();
         return;
       }
-      const ctx = new AudioContext();
+      const ctx = this.ctx ?? new AudioContext();
+      if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       ctx.createMediaStreamSource(stream).connect(analyser);
@@ -123,10 +166,16 @@ export class Listener {
         for (const x of buf) sum += x * x;
         this.level = Math.sqrt(sum / buf.length);
         this.gate.add(this.level);
+        // Someone is talking and the recognition hears nothing: it has no audio.
+        if (this.gate.speaking()) this.voiceWithoutResult += 50;
+        if (this.voiceWithoutResult > DEAF_AFTER_MS) this.degrade('no oye nada');
       }, 50);
       this.stream = stream;
       this.ctx = ctx;
-    } catch {
+      this.debug(`micro limpio abierto (audio ${ctx.state})`);
+    } catch (err) {
+      this.debug(`sin micro limpio (${(err as Error).name})`);
+      this.mode = 'plain';
       this.closeMicrophone();
     }
   }
@@ -148,6 +197,7 @@ export class Listener {
     rec.interimResults = true;
     rec.onresult = (e) => {
       this.failures = 0;
+      this.voiceWithoutResult = 0;
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i]!;
         const text = r[0].transcript.trim();
@@ -156,9 +206,11 @@ export class Listener {
     };
     rec.onerror = (e) => {
       if (e.error === 'no-speech' || e.error === 'aborted') return;
-      // Some phones cannot share the microphone: give it back to the recognition.
-      if (e.error === 'audio-capture' && this.stream) {
-        this.closeMicrophone();
+      this.debug(`error ${e.error} (micro: ${this.mode})`);
+      // With a second microphone open, "not allowed" or "no audio" usually means the
+      // phone cannot share it, not that the student said no.
+      if (this.mode !== 'plain' && e.error !== 'network') {
+        this.degrade(e.error);
         return;
       }
       this.failures++;
@@ -175,19 +227,17 @@ export class Listener {
       this.restartTimer = setTimeout(() => this.open(), delay);
     };
     this.rec = rec;
+    const track = this.mode === 'track' ? this.stream?.getAudioTracks()[0] : undefined;
     try {
       // Newer Chrome/Edge listen to the given (echo-cancelled) track; older ones
       // ignore the argument and use the default microphone.
-      const track = this.stream?.getAudioTracks()[0];
       if (track) rec.start(track);
       else rec.start();
-    } catch {
-      try {
-        rec.start();
-      } catch {
-        this.rec = null;
-        this.restartTimer = setTimeout(() => this.open(), 500);
-      }
+    } catch (err) {
+      this.debug(`start falla (${(err as Error).name}, micro: ${this.mode})`);
+      this.rec = null;
+      if (track) this.degrade('start con pista');
+      this.restartTimer = setTimeout(() => this.open(), 300);
     }
   }
 }

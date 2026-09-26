@@ -36,7 +36,7 @@ export function useEndVoiceOnLeave() {
 
 /** Status of the conversation by voice, above the composer while voice mode is on. */
 export function VoiceBar() {
-  const { active, phase, heard, error, canResume } = useVoice();
+  const { active, phase, heard, error, canResume, debug, debugLines } = useVoice();
   const { stop, togglePause } = useVoice.getState();
 
   if (!active && !error) return null;
@@ -100,6 +100,14 @@ export function VoiceBar() {
         <p role="alert" className="text-danger text-xs">
           {error}
         </p>
+      )}
+      {debug && (
+        <pre
+          className="text-text-muted max-h-40 overflow-auto text-[10px] leading-tight whitespace-pre-wrap"
+          data-testid="voice-debug"
+        >
+          {debugLines.join('\n')}
+        </pre>
       )}
     </div>
   );
