@@ -77,7 +77,8 @@ pane:
     for ingestion.
   - `tempDataDir(prefix)` gives a fresh data dir.
   - Fake Claude: pass `claudeQuery`.
-- **Web unit** (`apps/web/src/**/*.test.ts`): citations and relative time.
+- **Web unit** (`apps/web/src/**/*.test.ts`): citations, relative time and the
+  study-timer engine.
 - **E2E** (`apps/web/e2e`, desktop + Pixel 7 projects): one spec per area.
   `helpers.ts` has `login`, `seedDocument`, `selectInPdf` (programmatic text
   selection in the text layer) and `openPanel` (toolbar icon or the phone

@@ -74,7 +74,9 @@ Chat failures also update the cached status (`report()`).
   - the scope lines: the active document with its id, page count and
     subject/topic plus the current page (document chats), or the list of PDFs
     for topic/subject chats (`groupScope`);
-  - the selection, the mode instructions and the summary format;
+  - the selection, a drawing mark (area, text inside; see below), the page
+    range (`Scope: pages X to Y.`), the mode instructions and the summary
+    format;
   - memory from `MemoryService.contextFor(docId)`: global items, document
     items and weakest concepts, with `[id]`s so Claude can update them.
 
@@ -86,6 +88,15 @@ Chat failures also update the cached status (`report()`).
   (searches the same subject first, then all), `diagram` (a Mermaid schema of
   the selection, `context.pageRange` or the whole document, saved with
   `create_diagram` and shown with `[[diagram:ID]]`).
+
+## Images in the user message
+
+When the student asks about an area marked with freehand drawings
+(`context.mark`), `ChatService` renders that part of the page with the strokes
+on top (`renderMarkImage`, up to 4× zoom) and passes the prompt as an
+`AsyncIterable<SDKUserMessage>` whose content is an image block plus the text
+(`withImage`). Without drawings (deleted, other page) the text goes alone.
+Checked against the real subscription.
 
 ## Citations
 

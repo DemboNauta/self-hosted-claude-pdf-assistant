@@ -61,6 +61,9 @@ follows the same pattern:
 - 2026-09-26: **in production.** The owner set the password and the Claude
   token and uses the app. Revision `23b5ee0` deployed with `deploy.ps1`
   (build on the VPS about 2 minutes).
+- Later deploys the same day: `70ce7c7`, `a9cf13e` (diagrams, question
+  marks), `88d6dcf` (study timer, diagram viewer). The live revision is in
+  `/opt/pdfclaudeassistant/app/REVISION`.
 - Phase 0 acceptance passed on the VPS:
   - HTTPS login through Cloudflare → Caddy works (owner).
   - Claude answers through the subscription: a query run as `pdfclaude` with

@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26 (study timer). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-26 (diagram viewer, study timer; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -90,10 +90,10 @@ The **deployment** milestone:
 ## Verification done so far
 
 - `apps/server`: 63 unit/integration tests pass (`vitest`).
-- `apps/web`: unit tests pass. The Playwright suite has 30 tests over desktop
-  and mobile projects: 25 pass and 5 are skipped on mobile by design (pointer
-  drag, drawing, keyboard shortcuts). The library drag-and-drop test is flaky
-  (see `DEVELOPMENT.md`).
+- `apps/web`: 9 unit tests pass (citations, relative time, timer engine). The
+  Playwright suite has 36 tests over desktop and mobile projects: 31 pass and 5
+  are skipped on mobile by design (pointer drag, drawing, keyboard shortcuts).
+  The old library drag-and-drop flake is fixed. CI is green.
 - Real Claude, run through the owner's subscription with a temp data dir and
   generated PDFs:
   - A document question: Claude used `get_pages`, answered with correct

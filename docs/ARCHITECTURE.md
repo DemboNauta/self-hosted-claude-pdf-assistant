@@ -7,6 +7,8 @@ apps/server     Fastify API + WebSocket + Claude Agent SDK + ingestion (esbuild 
 apps/web        React 19 + Vite + Tailwind v4 + TanStack Query + Zustand + React Router
 packages/shared Zod schemas and DTO/event types shared by both (TS sources, no build)
 docker/         server.Dockerfile (web + server in one image), caddy.Dockerfile (optional)
+scripts/        deploy.ps1 (runs on the PC) + deploy-remote.sh (runs on the VPS)
+deploy/         systemd unit and a reference Caddy block (see DEPLOYMENT.md)
 docs/           these notes
 ```
 
@@ -16,14 +18,14 @@ docs/           these notes
 guard (`auth-guard.ts`) and calls `buildApp()` (`app.ts`). `buildApp` wires
 everything and is also what tests use, through `test/helpers.ts` `authedApp()`.
 
-| Folder      | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth/`     | Password login (argon2), signed session cookie `pdfclaudeassistant_session`, sliding 90 days. An `onRequest` guard protects `/api/*` and `/ws/*` except login, session and health.                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `db/`       | `schema.ts` (Drizzle, SQLite via better-sqlite3), `client.ts` (opens the DB, runs migrations from `drizzle/` on boot, WAL, foreign keys on).                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `routes/`   | Thin HTTP layer. Each route validates input with Zod via `validate.ts` `parse()`, which throws 400 `invalid_request`. `web.ts` serves the SPA when `WEB_DIR` is set.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `services/` | Business logic, synchronous SQLite. `library` (tree, CRUD, trash, positions, reading time), `uploads` (chunked uploads, URL import), `url-import` (SSRF-safe download), `search` (FTS5), `threads` (chat threads and messages), `annotations`, `anchoring` (quote → rects from stored text items), `export` (annotated PDF), `settings`, `memory`, `review` (flashcards + FSRS), `brief` (daily brief via Claude), `stats`, `backup`. `errors.ts` has `HttpError(status, code)`, which the app turns into `{ error: code }`. `ids.ts` makes 10-char base36 ids (short because Claude writes them in citations). |
-| `ingest/`   | `service.ts`: sequential queue (resumes on boot), worker thread (`worker.ts` → `extract.ts` PDF.js legacy + @napi-rs/canvas for covers and page images), optional OCR (`ocr.ts`).                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `claude/`   | See `CLAUDE_INTEGRATION.md`: `options.ts` (sandboxed SDK options), `status.ts` (connection probe), `chat.ts` (turn runner), `prompt.ts`, `tools.ts` (in-process MCP tools), `errors.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Folder      | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth/`     | Password login (argon2), signed session cookie `pdfclaudeassistant_session`, sliding 90 days. An `onRequest` guard protects `/api/*` and `/ws/*` except login, session and health.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `db/`       | `schema.ts` (Drizzle, SQLite via better-sqlite3), `client.ts` (opens the DB, runs migrations from `drizzle/` on boot, WAL, foreign keys on).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `routes/`   | Thin HTTP layer. Each route validates input with Zod via `validate.ts` `parse()`, which throws 400 `invalid_request`. `web.ts` serves the SPA when `WEB_DIR` is set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `services/` | Business logic, synchronous SQLite. `library` (tree, CRUD, trash, positions, reading time), `uploads` (chunked uploads, URL import), `url-import` (SSRF-safe download), `search` (FTS5), `threads` (chat threads and messages; `documentQuestions` for the question marks), `annotations`, `anchoring` (quote → rects from stored text items), `export` (annotated PDF), `settings`, `memory`, `review` (flashcards + FSRS), `brief` (daily brief via Claude), `stats`, `backup`, `diagrams` (Claude's Mermaid schemas, source check), `focus` (study-timer blocks). `errors.ts` has `HttpError(status, code)`, which the app turns into `{ error: code }`. `ids.ts` makes 10-char base36 ids (short because Claude writes them in citations). |
+| `ingest/`   | `service.ts`: sequential queue (resumes on boot), worker thread (`worker.ts` → `extract.ts` PDF.js legacy + @napi-rs/canvas for covers, page images and `renderMarkImage`, the marked area with the student's drawing), optional OCR (`ocr.ts`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `claude/`   | See `CLAUDE_INTEGRATION.md`: `options.ts` (sandboxed SDK options), `status.ts` (connection probe), `chat.ts` (turn runner), `prompt.ts`, `tools.ts` (in-process MCP tools), `errors.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 Other entry points (bundled by `build.mjs`): `dist/main.js`,
 `dist/ingest-worker.js`, `dist/hash-password.js`, `dist/backup.js`.
@@ -68,16 +70,29 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
   - `chat/`:
     - `store.ts`: the single `/ws/chat` socket with reconnect, and the chat
       state for one scope (document, topic or subject).
-    - `ChatPanel`, `ChatDock` (desktop panel or mobile sheet), `Markdown`
-      (citations become `cite:` links, then `CitationChip`), `dictation.ts`
-      (voice), `ScopeChatPage` (topic/subject chat).
+    - `ChatPanel` (mode bar with the diagram scope, composer with the attached
+      selection or drawing mark), `ChatDock` (desktop panel or mobile sheet),
+      `Markdown` (citations become `cite:` links, then `CitationChip`;
+      `[[diagram:ID]]` becomes a `DiagramEmbed`), `dictation.ts` (voice),
+      `ScopeChatPage` (topic/subject chat).
+    - `QuestionMarks`: margin badges on passages the student asked about, with
+      the questions and answers (`GET /documents/:id/questions`).
   - `annotations/`:
     - `api.ts`: queries and undoable mutations.
-    - `AnnotationLayer` (underlay, overlay, pen/eraser/note input),
-      `AnnotationPopover`, `AnnotationsPanel`, `AnnotationTools` (floating
-      toolbar, undo shortcuts).
+    - `AnnotationLayer` (underlay, overlay, pen/eraser/note input, dragging
+      sticky notes and drawings), `AnnotationPopover` (the note window:
+      floating or phone sheet, resizable, movable, pinnable; `display` is saved
+      on the server; `popoverSize.ts` remembers the default size per layout),
+      `AnnotationsPanel`, `AnnotationTools` (floating toolbar with "Preguntar"
+      for new drawings, undo shortcuts).
+    - `mark.ts`: builds the drawing mark (area + text inside) sent to the chat.
     - `integrations.tsx`: selection-menu actions, the "Guardar" button on
       pointer marks, and refresh on the chat's `data_changed` events.
+  - `diagrams/`: Mermaid loaded on demand and rendered in the app's colours
+    (`mermaid.ts`), `DiagramView` (inline in the chat, full-screen viewer),
+    `PanZoom` (free zoom and pan canvas), reader panel and `/diagrams` page.
+  - `timer/`: study timer (`engine.ts` is pure and timestamp based, `store.ts`
+    persists to localStorage and syncs tabs, floating widget, break screen).
   - `memory/`, `review/` (queue, rating, flashcard dialog, brief and stats
     hooks), `stats/`, `search/`, `home/`, `settings/`, `auth/`.
 
@@ -96,6 +111,13 @@ Cross-feature communication:
   deltas become `assistant_delta` events, tool calls become `tool_event`s
   (plus `pointer` / `data_changed`), and the turn ends with `assistant_done`.
   The client store updates the message list, and the markdown renders chips.
+- **Question about a drawing:** "Preguntar" → `mark.ts` builds
+  `context.mark` (page, area, drawing ids, text inside) → the server renders
+  that area with the strokes (`renderMarkImage`) and sends it to Claude as an
+  image block next to the text (`withImage` in `claude/chat.ts`).
+- **Diagram:** "Esquema visual" mode (+ optional `context.pageRange`) → Claude
+  calls `create_diagram` → `data_changed: diagrams` → the answer's
+  `[[diagram:ID]]` renders the saved diagram.
 - **Citation click:**
   - Same document: `useReader.goTo(page, quote)`, which sets `nav` and `flash`.
     `PdfViewer` scrolls; `PdfPage` finds the quote rects and scrolls them into
