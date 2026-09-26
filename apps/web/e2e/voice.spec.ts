@@ -55,8 +55,10 @@ async function fakeMicrophone(page: Page, phoneLike = false) {
   }, phoneLike);
 }
 
-const say = (page: Page, text: string, final = true) =>
-  page.evaluate(
+const say = async (page: Page, text: string, final = true) => {
+  // The recognition restarts between sessions: speak once it is listening.
+  await page.waitForFunction(() => (window as unknown as { __rec: unknown }).__rec);
+  await page.evaluate(
     ([t, f]) =>
       (window as unknown as { __say: (t: string, f: boolean) => void }).__say(
         t as string,
@@ -64,6 +66,7 @@ const say = (page: Page, text: string, final = true) =>
       ),
     [text, final] as const,
   );
+};
 
 // Voice mode (F-CHAT-09): the microphone stays open, Claude explains out loud, the
 // student cuts in with a question and the explanation resumes where it was left.
@@ -112,8 +115,15 @@ test('talk to Claude, interrupt it and let it carry on', async ({ page }, info) 
     .poll(() => spoken.join(' | '), { timeout: 20_000 })
     .toContain('Sigo con lo que te estaba contando.');
   await expect
-    .poll(() => spoken.at(-1), { timeout: 20_000 })
+    .poll(() => spoken.join(' | '), { timeout: 20_000 })
     .toContain('la planta guarda esa energía en forma de azúcar');
+
+  // Podcast style: it carries on by itself until the topic is done.
+  await expect(chat.getByTestId('voice-continue').first()).toBeVisible({ timeout: 20_000 });
+  await expect
+    .poll(() => spoken.join(' | '), { timeout: 20_000 })
+    .toContain('Y con esto hemos terminado el tema.');
+  await expect(chat.getByTestId('assistant-message').last()).not.toContainText('voice-end');
   await expect(phase).toHaveText('Te escucho…', { timeout: 20_000 });
 
   await page.getByRole('button', { name: 'Salir del modo voz' }).first().click();

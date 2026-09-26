@@ -10,6 +10,7 @@ export function cleanForSpeech(md: string): string {
     md
       // Citations and diagrams are shown in the chat, not read.
       .replace(/\[\[(?:cite|diagram):[^\]]*\]\]/g, '')
+      .replace(/\[\[voice-end\]\]/g, '')
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/`([^`]*)`/g, '$1')
       .replace(/!\[[^\]]*\]\([^)]*\)/g, '')

@@ -43,6 +43,12 @@ change them if he disagrees.
   - Moving around the PDF while listening must not change the subject:
     interruptions are sent with the page being explained (where it started, then
     where Claude points); new questions use the page on screen.
+  - **Podcast style** (owner): Claude does not stop to ask whether to go on. After
+    each spoken answer the app asks it to carry on (`context.continueExplaining`,
+    shown as a small "Sigue explicando" line) until the student talks, pauses, or
+    Claude closes the topic with `[[voice-end]]` (hidden, not spoken).
+  - The screen stays on while voice mode runs (Wake Lock): a locked phone would
+    cut the microphone.
 
 - Deleting a subject or topic that still has PDFs moves those PDFs to the trash
   for 30 days. Restoring asks for a destination topic.

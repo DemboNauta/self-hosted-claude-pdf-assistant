@@ -62,6 +62,8 @@ export const chatContextSchema = z
      * heard. The app resumes the interrupted explanation by itself after the answer.
      */
     interruptedAfter: z.string().trim().max(2000).optional(),
+    /** Voice mode keeps going like a podcast: carry on with the next idea. */
+    continueExplaining: z.boolean().optional(),
   })
   .refine((c) => [c.docId, c.topicId, c.subjectId].filter(Boolean).length === 1, {
     message: 'one scope required',

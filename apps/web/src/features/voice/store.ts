@@ -1,5 +1,6 @@
 import {
   DEFAULT_VOICE,
+  VOICE_END,
   type AppSettings,
   type ChatMessage,
   type TtsStatus,
@@ -117,11 +118,65 @@ const player = new VoicePlayer({
       set({ phase: 'thinking' });
       return;
     }
-    // The answer is over: go back to the explanation it interrupted, if any.
-    if (resumePoint && resumePoint.messageId !== speaking) resume(true);
-    else set({ phase: 'listening', canResume: resumePoint !== null });
+    afterAnswer(speaking);
   },
 });
+
+/**
+ * Keeps the screen on while voice mode runs: if the phone locked itself, the browser
+ * would cut the microphone and the voice. Taken again when the page comes back.
+ */
+let wakeLock: WakeLockSentinel | null = null;
+async function keepAwake() {
+  try {
+    wakeLock = (await navigator.wakeLock?.request('screen')) ?? null;
+    wakeLock?.addEventListener('release', () => (wakeLock = null));
+  } catch {
+    wakeLock = null;
+  }
+}
+function letSleep() {
+  void wakeLock?.release().catch(() => {});
+  wakeLock = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && get().active && !wakeLock) void keepAwake();
+});
+
+/** Answers that closed the explanation (`VOICE_END`): the podcast stops there. */
+const ended = new Set<string>();
+let continueTimer: ReturnType<typeof setTimeout> | undefined;
+/** A breath between answers, so the student can jump in before Claude carries on. */
+const CONTINUE_DELAY_MS = 700;
+
+/**
+ * An answer has been spoken: go back to the explanation it interrupted, or (podcast
+ * style) ask Claude to carry on, until it says it is done or the student talks.
+ */
+function afterAnswer(id: string | null) {
+  if (resumePoint && resumePoint.messageId !== id) return resume(true);
+  set({ phase: 'listening', canResume: resumePoint !== null });
+  if (id && ended.has(id)) return;
+  clearTimeout(continueTimer);
+  continueTimer = setTimeout(() => {
+    const busy =
+      !get().active ||
+      get().phase !== 'listening' ||
+      utterance !== '' ||
+      player.busy ||
+      pending !== null ||
+      useChat.getState().running;
+    if (!busy) carryOn();
+  }, CONTINUE_DELAY_MS);
+}
+
+function carryOn() {
+  set({ phase: 'thinking' });
+  useChat.getState().send(t.voice.continued, {
+    continueExplaining: true,
+    ...(focusPage ? { page: focusPage } : {}),
+  });
+}
 
 function reset() {
   chunks.clear();
@@ -135,6 +190,8 @@ function reset() {
   expectInterruptionAnswer = false;
   pending = null;
   utterance = '';
+  ended.clear();
+  clearTimeout(continueTimer);
   focusPage = null;
   quietUntil = 0;
   previousHeard = '';
@@ -180,7 +237,9 @@ function feed(messageId: string, sentences: string[]) {
 function resume(withBridge: boolean) {
   const point = resumePoint;
   if (!point) {
+    // "Sigue" / the play button with nothing cut short: carry on explaining.
     set({ phase: 'listening', canResume: false });
+    afterAnswer(null);
     return;
   }
   resumePoint = null;
@@ -236,6 +295,8 @@ function onHeard(text: string, final: boolean) {
   }
   const talking =
     player.playing !== null || (get().phase === 'thinking' && speaking && !muted.has(speaking));
+  // The student is talking: Claude does not carry on by itself meanwhile.
+  if (talking ? isBargeIn(text) : performance.now() >= quietUntil) clearTimeout(continueTimer);
   if (talking) {
     if (!isBargeIn(text)) return;
     interrupt();
@@ -323,10 +384,8 @@ chatSocket.subscribe((event) => {
       const splitter = splitters.get(id);
       if (splitter) feed(id, splitter.flush());
       finished.add(id);
-      if (!player.busy && speaking === id && get().phase !== 'paused') {
-        if (resumePoint && resumePoint.messageId !== id) resume(true);
-        else set({ phase: 'listening' });
-      }
+      if (event.message.content.includes(VOICE_END)) ended.add(id);
+      if (!player.busy && speaking === id && get().phase !== 'paused') afterAnswer(id);
       break;
     }
     case 'pointer':
@@ -371,6 +430,7 @@ export const useVoice = create<VoiceState>(() => ({
       debugLines: [],
     });
     useChat.getState().setVoice(true);
+    void keepAwake();
     // Start listening inside the tap: phones refuse the microphone outside a gesture.
     listener = new Listener({
       onResult: onHeard,
@@ -405,6 +465,7 @@ export const useVoice = create<VoiceState>(() => ({
 
   stop: () => {
     clearInterval(debugTimer);
+    letSleep();
     listener?.stop();
     listener = null;
     player.stop();

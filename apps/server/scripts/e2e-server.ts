@@ -130,14 +130,19 @@ const fakeChat = ((args: {
     // Voice mode (F-CHAT-09): a spoken explanation, or a short answer to an interruption.
     const voiceParts = prompt.includes('The student interrupted')
       ? ['Buena pregunta. ', 'La clorofila es el pigmento verde que capta la luz del sol.']
-      : prompt.includes('Voice mode:')
+      : prompt.includes('Carry on with your spoken explanation')
         ? [
-            'Vamos a verlo con un ejemplo sencillo de la vida diaria. ',
-            'Imagina que la hoja es una pequeña cocina que funciona con luz. ',
-            `Eso es justo lo que cuenta la página ${page} ${cite}. `,
-            'Al final, la planta guarda esa energía en forma de azúcar.',
+            'Seguimos con la segunda idea: la energía se guarda como azúcar. ',
+            'Y con esto hemos terminado el tema. [[voice-end]]',
           ]
-        : null;
+        : prompt.includes('Voice mode:')
+          ? [
+              'Vamos a verlo con un ejemplo sencillo de la vida diaria. ',
+              'Imagina que la hoja es una pequeña cocina que funciona con luz. ',
+              `Eso es justo lo que cuenta la página ${page} ${cite}. `,
+              'Al final, la planta guarda esa energía en forma de azúcar.',
+            ]
+          : null;
     const parts = voiceParts ?? [
       ...(diagram ? [diagram] : []),
       ...(marked

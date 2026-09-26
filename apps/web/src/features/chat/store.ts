@@ -120,6 +120,8 @@ interface ChatState {
       interruptedAfter?: string;
       /** The page the question is about instead of the one on screen (voice mode). */
       page?: number;
+      /** Voice mode, podcast style: ask Claude to carry on explaining. */
+      continueExplaining?: boolean;
     },
   ) => void;
   stop: () => void;
@@ -227,6 +229,7 @@ export const useChat = create<ChatState>((set, get) => ({
         : {}),
       ...(get().voice ? { voice: true } : {}),
       ...(opts.interruptedAfter ? { interruptedAfter: opts.interruptedAfter.slice(0, 2000) } : {}),
+      ...(opts.continueExplaining ? { continueExplaining: true } : {}),
     };
     const optimistic: ChatMessage = {
       id: clientId,

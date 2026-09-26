@@ -143,6 +143,14 @@ function ReadAloudButton({ message }: { message: ChatMessage }) {
 }
 
 function MessageItem({ message }: { message: ChatMessage }) {
+  if (message.role === 'user' && message.context?.continueExplaining) {
+    // Voice mode carrying on by itself (podcast style): a quiet separator, not a bubble.
+    return (
+      <li className="text-text-muted text-center text-xs" data-testid="voice-continue">
+        · {t.voice.continued} ·
+      </li>
+    );
+  }
   if (message.role === 'user') {
     const sel = message.context?.selection;
     const mark = message.context?.mark;

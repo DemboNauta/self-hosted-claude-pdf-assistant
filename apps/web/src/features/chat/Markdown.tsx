@@ -1,4 +1,4 @@
-import { CITATION_RE, parseCitation, type Citation } from '@pdfclaudeassistant/shared';
+import { CITATION_RE, parseCitation, VOICE_END, type Citation } from '@pdfclaudeassistant/shared';
 import 'katex/dist/katex.min.css';
 import { memo } from 'react';
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
@@ -24,10 +24,11 @@ function citationLink(c: Citation): string {
  * the end is hidden instead of flashing as raw markup.
  */
 export function prepareMarkdown(text: string, streaming = false): string {
-  let out = text.replace(CITATION_RE, (...m) =>
-    citationLink(parseCitation(m as unknown as RegExpMatchArray)),
-  );
+  let out = text
+    .replace(CITATION_RE, (...m) => citationLink(parseCitation(m as unknown as RegExpMatchArray)))
+    .replaceAll(VOICE_END, '');
   if (streaming) {
+    out = out.replace(/\[\[v[a-z-]*\]?$/, '');
     out = out.replace(/\[\[?(c(i(t(e(:[^\]]*)?)?)?)?)?$/, '');
     out = out.replace(/\[\[d[a-z]*(:[0-9a-z]*)?\]?$/, '');
   }

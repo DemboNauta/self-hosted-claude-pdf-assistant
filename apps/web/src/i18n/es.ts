@@ -630,6 +630,7 @@ export const es = {
     },
     hint: 'Habla con naturalidad. Puedes cortarle en cualquier momento: responde tu duda y sigue donde lo dejó.',
     read: 'Leer en voz alta',
+    continued: 'Sigue explicando',
     stopReading: 'Dejar de leer',
     unsupported: 'Este navegador no permite el modo voz. Usa Chrome o Edge.',
     denied: 'Permite el acceso al micrófono para usar el modo voz.',

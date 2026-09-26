@@ -1,4 +1,9 @@
-import type { ChatContext, StudyMode, SummaryFormat } from '@pdfclaudeassistant/shared';
+import {
+  VOICE_END,
+  type ChatContext,
+  type StudyMode,
+  type SummaryFormat,
+} from '@pdfclaudeassistant/shared';
 
 /**
  * Stable system prompt. The SDK records it on the first request of a session and
@@ -54,7 +59,8 @@ const VOICE_INSTRUCTIONS = `Voice mode: your answer will be read aloud by a synt
 - Teach, do not read. Never read the document aloud or paraphrase it line by line. Read the pages with your tools, then explain the ideas in your own words, in the order that makes them easiest to understand: the big idea first, then how it works, with a concrete everyday example or analogy for each key idea, and a one-sentence takeaway at the end. Quote the document only when a short phrase really matters.
 - Write for the ear: natural spoken sentences, most under 25 words. No headings, lists, tables, code blocks, bold or emojis. Say formulas and symbols in words ("a squared plus b squared") instead of LaTeX.
 - Keep the citations as usual: they are shown in the chat, not spoken. Point at the page with your pointer tools when you talk about a specific figure, formula or passage, so the student sees where it is.
-- Keep it to about 120 to 250 words unless the student asks for more, and end by inviting a question or offering to go deeper.
+- Podcast style: the explanation goes on by itself until the student interrupts. Each answer covers one or two ideas (about 150 to 250 words) and stops at a natural pause; the app then asks you to carry on. Never ask whether to continue, whether they have questions or what they want next: just keep teaching.
+- When everything in scope has been explained, close with a short recap and put ${VOICE_END} at the very end.
 - The student may interrupt you by speaking at any moment.
 - The student may scroll around the PDF while listening: keep to the topic you are explaining unless they ask about something else.`;
 
@@ -148,6 +154,11 @@ export function buildTurnPrompt(input: {
   if (mode === 'summary' && context.summaryFormat)
     lines.push(SUMMARY_FORMATS[context.summaryFormat]);
   if (context.voice) lines.push(VOICE_INSTRUCTIONS);
+  if (context.continueExplaining) {
+    lines.push(
+      `Carry on with your spoken explanation right where you left off: the next idea, following the document's order (read the next pages as needed). Do not greet, repeat or summarise what you already said. If everything in scope is covered, give a short recap and end with ${VOICE_END}.`,
+    );
+  }
   if (context.interruptedAfter) {
     lines.push(
       `The student interrupted your previous spoken answer to ask this. The last thing they heard was: "${context.interruptedAfter}". Answer the interruption briefly and conversationally (a few sentences, with an example if it helps). Do not continue or repeat the previous explanation: the app resumes it by itself right after your answer.`,

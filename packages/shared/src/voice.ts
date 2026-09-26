@@ -27,6 +27,12 @@ export const ttsRequestSchema = z.object({
 });
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 
+/**
+ * Claude ends a spoken explanation with this when the scope is covered, so voice mode
+ * stops asking it to carry on (podcast style). Hidden in the chat and not spoken.
+ */
+export const VOICE_END = '[[voice-end]]';
+
 /** Whether the server can synthesise speech (Piper installed). */
 export interface TtsStatus {
   available: boolean;

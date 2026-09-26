@@ -85,6 +85,15 @@ describe('voice mode (F-CHAT-09)', () => {
     expect(prompt).toContain('Teach, do not read');
     expect(prompt).toContain('example or analogy');
     expect(prompt).toContain('The last thing they heard was: "La clorofila absorbe luz."');
+    expect(prompt).toContain('Never ask whether to continue');
+    const carryOn = buildTurnPrompt({
+      text: 'Sigue explicando',
+      mode: 'free',
+      context: { docId: 'd1', voice: true, continueExplaining: true },
+      scope: [],
+    });
+    expect(carryOn).toContain('Carry on with your spoken explanation');
+    expect(carryOn).toContain('[[voice-end]]');
     const plain = buildTurnPrompt({
       text: 'Hola',
       mode: 'free',
