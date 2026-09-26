@@ -9,6 +9,7 @@ export const es = {
   nav: {
     home: 'Inicio',
     library: 'Biblioteca',
+    search: 'Buscar',
     read: 'Leer',
     chat: 'Chat',
     review: 'Repaso',
@@ -142,6 +143,15 @@ export const es = {
     panels: 'Paneles',
     notReady: 'Este PDF todavía se está procesando.',
     loadError: 'No se ha podido abrir el PDF.',
+  },
+  search: {
+    title: 'Buscar',
+    placeholder: '¿Dónde hablaba de…?',
+    scope: 'Dónde buscar',
+    everywhere: 'En toda la biblioteca',
+    none: 'Sin resultados.',
+    count: (hits: number, docs: number) =>
+      `${hits === 1 ? '1 página' : `${hits} páginas`} en ${docs === 1 ? '1 documento' : `${docs} documentos`}`,
   },
   review: {
     title: 'Repaso',

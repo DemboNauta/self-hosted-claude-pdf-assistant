@@ -5,6 +5,7 @@ import { HomePage } from './features/home/HomePage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { MemoryPage } from './features/memory/MemoryPage';
 import { ReviewPage } from './features/review/ReviewPage';
+import { SearchPage } from './features/search/SearchPage';
 import { StatsPage } from './features/stats/StatsPage';
 import { TrashPage } from './features/library/TrashPage';
 import { ReaderPage } from './features/reader/ReaderPage';
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
       { path: 'read/:documentId', element: <ReaderPage /> },
       { path: 'memory', element: <MemoryPage /> },
       { path: 'review', element: <ReviewPage /> },
+      { path: 'search', element: <SearchPage /> },
       { path: 'stats', element: <StatsPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],

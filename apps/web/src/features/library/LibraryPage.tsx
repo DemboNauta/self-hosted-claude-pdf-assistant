@@ -13,9 +13,9 @@ import { arrayMove } from '@dnd-kit/sortable';
 import type { LibraryTree } from '@pdfclaudeassistant/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { FileText } from 'lucide-react';
+import { FileText, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import { t } from '../../i18n';
 import {
   libraryKey,
@@ -143,7 +143,16 @@ export function LibraryPage() {
             selected && 'hidden',
           )}
         >
-          <h1 className="mb-6 font-serif text-3xl tracking-tight lg:hidden">{t.library.title}</h1>
+          <div className="mb-6 flex items-center justify-between lg:hidden">
+            <h1 className="font-serif text-3xl tracking-tight">{t.library.title}</h1>
+            <Link
+              to="/search"
+              aria-label={t.search.title}
+              className="text-text-muted hover:text-text rounded-md p-2"
+            >
+              <Search size={20} aria-hidden />
+            </Link>
+          </div>
           <SubjectTree
             tree={tree}
             selectedTopicId={selected?.topic.id ?? null}

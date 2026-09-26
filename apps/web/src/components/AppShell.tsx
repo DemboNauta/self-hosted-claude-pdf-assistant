@@ -6,6 +6,7 @@ import {
   Home,
   Layers,
   LogOut,
+  Search,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: t.nav.home, icon: Home },
   { to: '/library', label: t.nav.library, icon: BookOpen },
+  { to: '/search', label: t.nav.search, icon: Search, desktopOnly: true },
   { to: '/review', label: t.nav.review, icon: Layers },
   { to: '/memory', label: t.nav.memory, icon: Brain },
   { to: '/stats', label: t.nav.stats, icon: BarChart3, desktopOnly: true },
