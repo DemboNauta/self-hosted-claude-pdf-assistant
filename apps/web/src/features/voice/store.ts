@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { t } from '../../i18n';
 import { api } from '../../lib/api';
 import { chatSocket, useChat } from '../chat/store';
+import { useReader } from '../reader/store';
 import { Listener } from './listener';
 import { VoicePlayer, type Chunk } from './player';
 import { isEcho, SentenceSplitter, splitSentences, voiceCommand } from './speech';
@@ -58,6 +59,24 @@ let utterance = '';
 let silenceTimer: ReturnType<typeof setTimeout> | undefined;
 let listener: Listener | null = null;
 let settingsLoaded = false;
+/** Page the explanation is about: where it started, then wherever Claude points. */
+let focusPage: number | null = null;
+/** Results right after a question is sent are its own tail, not a new interruption. */
+let quietUntil = 0;
+/** The sentence before the one playing, whose echo can still be heard. */
+let previousHeard = '';
+const QUIET_MS = 1500;
+/** Single words that are enough to cut Claude off. */
+const BARGE_WORDS = /^(espera|para|oye|perdona|perdon|stop|calla)$/;
+
+/** `localStorage['pca.voice.debug'] = '1'` logs what the microphone hears. */
+const debug = (() => {
+  try {
+    return localStorage.getItem('pca.voice.debug') === '1';
+  } catch {
+    return false;
+  }
+})();
 
 const BRIDGE = 'Sigo con lo que te estaba contando.';
 
@@ -66,6 +85,7 @@ const get = () => useVoice.getState();
 
 const player = new VoicePlayer({
   onStart: (c) => {
+    previousHeard = lastHeard ?? '';
     lastHeard = c.text;
     if (get().active) set({ phase: 'speaking' });
   },
@@ -97,6 +117,9 @@ function reset() {
   expectInterruptionAnswer = false;
   pending = null;
   utterance = '';
+  focusPage = null;
+  quietUntil = 0;
+  previousHeard = '';
   clearTimeout(silenceTimer);
 }
 
@@ -169,16 +192,39 @@ function interrupt() {
   set({ phase: 'listening', canResume: resumePoint !== null });
 }
 
+const normalizeWord = (w: string) =>
+  w
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z]/g, '');
+
+/** Real speech from the student: not Claude's voice, noise or the tail of a question. */
+function isBargeIn(text: string) {
+  if (performance.now() < quietUntil) return false;
+  if (isEcho(text, `${previousHeard} ${player.playing?.text ?? lastHeard ?? ''}`)) return false;
+  // The echo-cancelled microphone must hear a voice (null: not available here).
+  if (listener?.userSpeaking() === false) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+  return words.length >= 2 || BARGE_WORDS.test(normalizeWord(words[0] ?? ''));
+}
+
 function onHeard(text: string, final: boolean) {
   if (!get().active) return;
-  const playing = player.playing;
-  if (playing) {
-    // Claude hearing itself is not an interruption; a word or two of noise neither.
-    if (isEcho(text, playing.text)) return;
-    if (!final && text.split(/\s+/).length < 2) return;
+  if (debug) {
+    console.debug('[voice]', final ? 'final' : 'interim', JSON.stringify(text), {
+      level: listener?.level.toFixed(3),
+      userSpeaking: listener?.userSpeaking(),
+      playing: player.playing?.text,
+    });
+  }
+  const talking =
+    player.playing !== null || (get().phase === 'thinking' && speaking && !muted.has(speaking));
+  if (talking) {
+    if (!isBargeIn(text)) return;
     interrupt();
-  } else if (get().phase === 'thinking' && speaking && !muted.has(speaking)) {
-    interrupt();
+  } else if (performance.now() < quietUntil) {
+    return;
   }
   if (final) utterance = `${utterance} ${text}`.trim();
   set({ heard: final ? utterance : `${utterance} ${text}`.trim() });
@@ -215,7 +261,12 @@ function submit(text: string) {
 
 function ask(text: string, interruptedAfter?: string) {
   set({ phase: 'thinking' });
-  useChat.getState().send(text, { interruptedAfter });
+  quietUntil = performance.now() + QUIET_MS;
+  // Scrolling while listening must not change the subject: an interruption is about
+  // the page being explained; a new question is about the page on screen.
+  const page = interruptedAfter && focusPage ? focusPage : useReader.getState().currentPage;
+  focusPage = page;
+  useChat.getState().send(text, { interruptedAfter, page });
 }
 
 // A question waiting for the previous answer to finish streaming.
@@ -262,6 +313,10 @@ chatSocket.subscribe((event) => {
       }
       break;
     }
+    case 'pointer':
+      // Claude points where it is explaining: that is the page of the conversation.
+      if (event.group.docId === useReader.getState().docId) focusPage = event.group.page;
+      break;
     case 'error':
       if (!player.busy) set({ phase: 'listening' });
       break;

@@ -22,6 +22,9 @@ async function fakeMicrophone(page: Page) {
       }
     }
     w.SpeechRecognition = FakeRecognition;
+    // No echo-cancelled microphone: barge-in relies on the text filter (the level gate
+    // has its own unit test).
+    navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error('no microphone'));
     w.__say = (transcript: string, isFinal: boolean) => {
       const rec = w.__rec as FakeRecognition | null;
       rec?.onresult?.({ resultIndex: 0, results: [{ isFinal, 0: { transcript } }] });
@@ -73,6 +76,9 @@ test('talk to Claude, interrupt it and let it carry on', async ({ page }, info) 
   await expect.poll(() => spoken.join(' | ')).toContain('Vamos a verlo con un ejemplo sencillo');
 
   // Cutting in: it stops, answers the question, then resumes the explanation.
+  // (Right after a question, what the microphone hears is still its tail: wait.)
+  await page.waitForTimeout(1600);
+  await expect(phase).toContainText('Hablando');
   await say(page, 'espera qué es la clorofila', false);
   await expect(phase).toHaveText('Te escucho…');
   await say(page, 'espera qué es la clorofila');

@@ -35,6 +35,14 @@ change them if he disagrees.
     briefly and then the app **resumes the explanation** from the sentence that
     was cut ("Sigo con lo que te estaba contando."). "Sigue" / "espera" work as
     spoken commands.
+  - Echo (owner, after trying it with loud headphones): the microphone is opened
+    with echo cancellation, noise suppression and gain control, and newer
+    Chrome/Edge recognise from that cleaned track; an interruption needs a voice on
+    it (level above the room noise), 2+ words (or "espera", "para", "oye"), not
+    matching what Claude is saying, and not right after a question.
+  - Moving around the PDF while listening must not change the subject:
+    interruptions are sent with the page being explained (where it started, then
+    where Claude points); new questions use the page on screen.
 
 - Deleting a subject or topic that still has PDFs moves those PDFs to the trash
   for 30 days. Restoring asks for a destination topic.

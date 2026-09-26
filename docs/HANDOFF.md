@@ -93,7 +93,7 @@ microphone/voice/Claude (e2e) and the real Piper on Windows; **not yet tried on 
 owner's Android** nor with real Claude in voice mode. Things to watch there: whether
 Claude's voice triggers false interruptions (the text echo filter in
 `features/voice/speech.ts` `isEcho` is the safety net; headphones avoid it),
-Android Chrome's recognition restarts, and the quality of Claude's spoken answers.
+Android Chrome's recognition restarts, and the quality of Claude's spoken answers. The owner's first try (desktop, loud headphones) had Claude cutting itself off; fixed with echo cancellation and a voice-level gate (see DECISIONS). To see what the microphone hears, set `localStorage["pca.voice.debug"] = "1"` and watch the console (`[voice]` lines with the level).
 
 Decisions are in `DECISIONS.md` (2026-09-26 entries). The owner may still have
 feedback on these; then continue with the deployment below.

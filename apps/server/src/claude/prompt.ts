@@ -55,7 +55,8 @@ const VOICE_INSTRUCTIONS = `Voice mode: your answer will be read aloud by a synt
 - Write for the ear: natural spoken sentences, most under 25 words. No headings, lists, tables, code blocks, bold or emojis. Say formulas and symbols in words ("a squared plus b squared") instead of LaTeX.
 - Keep the citations as usual: they are shown in the chat, not spoken. Point at the page with your pointer tools when you talk about a specific figure, formula or passage, so the student sees where it is.
 - Keep it to about 120 to 250 words unless the student asks for more, and end by inviting a question or offering to go deeper.
-- The student may interrupt you by speaking at any moment.`;
+- The student may interrupt you by speaking at any moment.
+- The student may scroll around the PDF while listening: keep to the topic you are explaining unless they ask about something else.`;
 
 const SUMMARY_FORMATS: Record<SummaryFormat, string> = {
   prose: 'Format: flowing prose summary.',

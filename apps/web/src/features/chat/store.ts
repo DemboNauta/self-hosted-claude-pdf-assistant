@@ -118,6 +118,8 @@ interface ChatState {
       mark?: DrawingMark | null;
       /** Voice mode: the last sentence heard before the student cut Claude short. */
       interruptedAfter?: string;
+      /** The page the question is about instead of the one on screen (voice mode). */
+      page?: number;
     },
   ) => void;
   stop: () => void;
@@ -213,7 +215,7 @@ export const useChat = create<ChatState>((set, get) => ({
     const clientId = crypto.randomUUID();
     const context = {
       ...(scope.kind === 'document'
-        ? { docId: scope.id, currentPage: useReader.getState().currentPage }
+        ? { docId: scope.id, currentPage: opts.page ?? useReader.getState().currentPage }
         : scope.kind === 'topic'
           ? { topicId: scope.id }
           : { subjectId: scope.id }),

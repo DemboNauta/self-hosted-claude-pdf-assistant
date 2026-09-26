@@ -16,7 +16,7 @@ export interface Recognition {
   onresult: ((e: RecognitionEvent) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
-  start: () => void;
+  start: (track?: MediaStreamTrack) => void;
   stop: () => void;
 }
 export type RecognitionCtor = new () => Recognition;
