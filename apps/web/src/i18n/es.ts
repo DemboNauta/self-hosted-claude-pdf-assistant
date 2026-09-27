@@ -539,6 +539,7 @@ export const es = {
     collapse: 'Reducir chat',
     resize: 'Cambiar ancho del chat',
     newThread: 'Nueva conversación',
+    toEnd: 'Ir al final de la conversación',
     history: 'Conversaciones anteriores',
     untitled: 'Conversación sin título',
     messages: (n: number) => (n === 1 ? '1 mensaje' : `${n} mensajes`),

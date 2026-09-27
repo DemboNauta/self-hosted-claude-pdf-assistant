@@ -225,6 +225,7 @@ the user's own token:
     - "tarjetas" → `create_flashcards`;
     - "nota al margen" → `add_margin_notes` on the selection;
     - "conecta" → `point_at` with an arrow from the selection to a rect (`to`);
+    - "larga" → 40 more paragraphs streamed (chat scrolling tests);
     - "recuerda …" → `remember` + `mark_concept_difficult`;
     - diagram mode → `create_diagram` with a small mind map, answered with
       `[[diagram:ID]]`.

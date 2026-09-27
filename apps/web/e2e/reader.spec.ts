@@ -240,3 +240,45 @@ test('chat about a whole topic and follow a citation', async ({ page }, info) =>
   await expect(page).toHaveURL(new RegExp(`/read/${docId}`));
   await expect(page.locator('[data-page="1"]')).toBeVisible();
 });
+
+// Reading while Claude writes: a new question goes to the top of the chat and the
+// answer grows below it without dragging the view down; "↓" jumps to the end.
+test('the chat does not scroll while Claude writes a long answer', async ({ page }, info) => {
+  await login(page);
+  const docId = await seedDocument(page, `Scroll ${info.project.name}`, tinyPdf('Texto.'));
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('Texto');
+  const chat = page.locator('section[aria-label="Claude"]');
+  if (!(await chat.isVisible())) {
+    await page.getByRole('button', { name: 'Abrir chat con Claude' }).click();
+  }
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  const box = page.getByTestId('chat-messages');
+  const stop = page.getByRole('button', { name: 'Detener' });
+
+  await composer.fill('Primera pregunta, respuesta larga');
+  await composer.press('Enter');
+  await expect(stop).toBeHidden({ timeout: 15_000 });
+
+  await composer.fill('Segunda pregunta, también larga');
+  await composer.press('Enter');
+  await expect(page.getByTestId('assistant-message').last()).toContainText('Párrafo 3');
+  // The question sits at the top of the chat...
+  const question = page.getByTestId('user-message').last();
+  await expect
+    .poll(async () => {
+      const [q, b] = await Promise.all([question.boundingBox(), box.boundingBox()]);
+      return Math.abs(q!.y - b!.y);
+    })
+    .toBeLessThan(40);
+  // ...and stays there while the answer keeps streaming.
+  const before = await box.evaluate((el) => el.scrollTop);
+  await expect(page.getByTestId('assistant-message').last()).toContainText('Párrafo 25');
+  expect(await box.evaluate((el) => el.scrollTop)).toBe(before);
+
+  await expect(stop).toBeHidden({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Ir al final de la conversación' }).click();
+  await expect(
+    page.getByTestId('assistant-message').last().getByText('Párrafo 40'),
+  ).toBeInViewport();
+});

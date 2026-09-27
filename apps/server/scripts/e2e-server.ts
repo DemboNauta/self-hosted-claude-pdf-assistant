@@ -212,6 +212,10 @@ const fakeChat = ((args: {
       'la idea principal está en la página ',
       `${page} ${cite}.`,
       '\n\nFórmula: $E = mc^2$',
+      // "Larga" streams a long answer, to test reading while Claude writes.
+      ...(/larga/i.test(question)
+        ? Array.from({ length: 40 }, (_, i) => `\n\nPárrafo ${i + 1} de una respuesta larga.`)
+        : []),
     ];
     yield {
       type: 'stream_event',

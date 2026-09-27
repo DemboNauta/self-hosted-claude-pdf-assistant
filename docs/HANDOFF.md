@@ -58,6 +58,10 @@ Session of 2026-09-27 (owner's requests, deployed after each commit):
 - After the owner's first real cards: "Pedir pista a Claude" (P) during multiple
   choice (right after a hint = «Difícil»); the cards prompt forbids questions about
   the notes' structure/order; new cards are shuffled.
+- Chat scrolling (owner: the chat dragged the view down while Claude wrote): a new
+  question is scrolled to the top and the answer grows below it without moving
+  the view (spacer below the list), "↓" jumps to the end. The e2e fake streams a
+  long answer when the question says "larga".
 - Voice (2026-09-27): the owner found Piper robotic; Claude now speaks with
   Supertonic 3 (F1/M1, 5 steps, see DECISIONS "Voice mode"). Not deployed yet: the
   next deploy downloads ~400 MB into `runtime/supertonic` and removes

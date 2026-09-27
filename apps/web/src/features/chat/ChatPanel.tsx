@@ -7,6 +7,7 @@ import {
 import clsx from 'clsx';
 import {
   AlertCircle,
+  ArrowDown,
   ArrowUp,
   Check,
   Copy,
@@ -146,7 +147,11 @@ function MessageItem({ message }: { message: ChatMessage }) {
   if (message.role === 'user' && message.context?.continueExplaining) {
     // Voice mode carrying on by itself (podcast style): a quiet separator, not a bubble.
     return (
-      <li className="text-text-muted text-center text-xs" data-testid="voice-continue">
+      <li
+        className="text-text-muted text-center text-xs"
+        data-testid="voice-continue"
+        data-role="user"
+      >
         · {t.voice.continued} ·
       </li>
     );
@@ -160,6 +165,7 @@ function MessageItem({ message }: { message: ChatMessage }) {
       <li
         className="flex scroll-mt-4 flex-col items-end gap-1"
         data-testid="user-message"
+        data-role="user"
         data-message-id={message.id}
       >
         {(mode || sel || mark) && (
@@ -214,38 +220,113 @@ function MessageItem({ message }: { message: ChatMessage }) {
   );
 }
 
+/** Space kept above a new question when it is scrolled to the top. */
+const QUESTION_TOP = 16;
+
+/**
+ * The conversation. A new question is scrolled to the top and the answer grows below
+ * it without moving the view, so it can be read while Claude writes (as on claude.ai);
+ * a spacer lets the question reach the top even while the answer is short. Opening a
+ * conversation shows its end, and "↓" jumps to the end when there is more below.
+ */
 function MessageList() {
   const messages = useChat((s) => s.messages);
-  const bottom = useRef<HTMLDivElement>(null);
+  const threadId = useChat((s) => s.threadId);
   const box = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
+  const list = useRef<HTMLUListElement>(null);
+  const spacer = useRef<HTMLDivElement>(null);
+  const [below, setBelow] = useState(false);
+  const shown = useRef<{ thread: string | null; questions: number }>({
+    thread: null,
+    questions: 0,
+  });
 
-  // Follow the stream unless the reader scrolled up to re-read something.
+  const lastQuestion = () => {
+    const items = list.current?.querySelectorAll<HTMLElement>('[data-role="user"]');
+    return items?.[items.length - 1] ?? null;
+  };
+
+  /** Spacer height and whether there is content below the view. */
+  const layout = () => {
+    const el = box.current;
+    const end = spacer.current;
+    if (!el || !end) return;
+    const q = lastQuestion();
+    const fromQuestion = q ? end.offsetTop - q.offsetTop : 0;
+    end.style.height = `${q ? Math.max(0, el.clientHeight - fromQuestion - QUESTION_TOP * 2) : 0}px`;
+    setBelow(end.offsetTop - (el.scrollTop + el.clientHeight) > 40);
+  };
+
   useLayoutEffect(() => {
-    if (stick.current) bottom.current?.scrollIntoView({ block: 'end' });
-  }, [messages]);
+    const el = box.current;
+    if (!el) return;
+    const questions = messages.filter((m) => m.role === 'user').length;
+    const prev = shown.current;
+    shown.current = { thread: threadId, questions };
+    if (prev.thread !== threadId || prev.questions === 0) {
+      // A conversation just opened (or loaded): show where it ends.
+      layout();
+      el.scrollTop = el.scrollHeight;
+    } else if (questions > prev.questions) {
+      // A new question: bring it to the top and let the answer grow below it.
+      layout();
+      const q = lastQuestion();
+      if (q) el.scrollTo({ top: q.offsetTop - QUESTION_TOP, behavior: 'smooth' });
+    }
+    // Only on new messages; the answer streaming in never moves the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, threadId]);
+
+  // The answer growing (or the panel resizing) updates the spacer and the "↓" button.
+  useEffect(() => {
+    const el = list.current;
+    const outer = box.current;
+    if (!el || !outer) return;
+    const ro = new ResizeObserver(() => layout());
+    ro.observe(el);
+    ro.observe(outer);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length === 0]);
+
+  const toEnd = () => {
+    const el = box.current;
+    const end = spacer.current;
+    if (el && end) el.scrollTo({ top: end.offsetTop - el.clientHeight + 16, behavior: 'smooth' });
+  };
 
   return (
-    <div
-      ref={box}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      }}
-      className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
-      aria-live="polite"
-      aria-busy={useChat.getState().running}
-    >
-      {messages.length === 0 ? (
-        <p className="text-text-muted mt-6 text-center text-sm">{t.chat.empty}</p>
-      ) : (
-        <ul className="space-y-5">
-          {messages.map((m) => (
-            <MessageItem key={m.id} message={m} />
-          ))}
-        </ul>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={box}
+        onScroll={layout}
+        className="relative min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        aria-live="polite"
+        aria-busy={useChat.getState().running}
+        data-testid="chat-messages"
+      >
+        {messages.length === 0 ? (
+          <p className="text-text-muted mt-6 text-center text-sm">{t.chat.empty}</p>
+        ) : (
+          <ul ref={list} className="space-y-5">
+            {messages.map((m) => (
+              <MessageItem key={m.id} message={m} />
+            ))}
+          </ul>
+        )}
+        <div ref={spacer} aria-hidden />
+      </div>
+      {below && (
+        <button
+          type="button"
+          onClick={toEnd}
+          aria-label={t.chat.toEnd}
+          title={t.chat.toEnd}
+          className="bg-surface border-border hover:bg-surface-muted absolute bottom-3 left-1/2 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border shadow-md"
+        >
+          <ArrowDown size={16} aria-hidden />
+        </button>
       )}
-      <div ref={bottom} />
     </div>
   );
 }
