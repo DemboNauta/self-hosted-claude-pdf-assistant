@@ -202,6 +202,12 @@ the user's own token:
   due cards; cards keep "Mostrar respuesta" until theirs arrive. Wrong answers equal
   to the right one or repeated are discarded (fewer than three → the card stays
   without options).
+- The cards prompt forbids questions about the document itself (how it is organised,
+  what a module covers, what comes first); cards are created in random order so the
+  review interleaves them.
+- `hint(id)` (`POST /api/flashcards/:id/hint`): one short hint from the question, the
+  right and wrong answers and the source page, without giving the answer or the
+  right option away. A right answer after a hint is rated «Difícil» (client side).
 
 ## Testing without the subscription
 
@@ -225,7 +231,8 @@ the user's own token:
   - Its `result` is the full text, used by the daily brief.
   - One-shot requests are told apart by their system prompt: "write flashcards"
     answers one card per page shown (with fixed wrong answers) and "wrong options"
-    answers the same three wrong answers for every card.
+    answers the same three wrong answers for every card; "You give hints" answers
+    "Pista de prueba." (checked first: its prompt also mentions wrong options).
 - For a real check without touching the owner's data, run a scratch script
   (not committed):
   - It should call `buildApp(loadConfig({...process.env, DATA_DIR: <temp>}))`.

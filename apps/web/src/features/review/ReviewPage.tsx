@@ -345,7 +345,13 @@ export function ReviewPage() {
             </button>
           </div>
           {choices && card ? (
-            <MultipleChoice key={card.id} card={card} busy={busy} onRate={(r) => void answer(r)} />
+            <MultipleChoice
+              key={card.id}
+              card={card}
+              busy={busy}
+              canHint={claude}
+              onRate={(r) => void answer(r)}
+            />
           ) : (
             !editing &&
             (shown ? (

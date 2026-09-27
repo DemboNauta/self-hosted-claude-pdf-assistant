@@ -55,6 +55,9 @@ Session of 2026-09-27 (owner's requests, deployed after each commit):
   cards, and the review screen asks for missing ones in the background (next 10
   due; classic "Mostrar respuesta" until they arrive). Wrong = Otra vez, right =
   Bien, or Fácil if faster than `fastLimitMs`. Editing a card clears them.
+- After the owner's first real cards: "Pedir pista a Claude" (P) during multiple
+  choice (right after a hint = «Difícil»); the cards prompt forbids questions about
+  the notes' structure/order; new cards are shuffled.
 - Pending, asked by the owner: improve how Claude talks in voice mode (owner not
   convinced by it). Two flaky/failing e2e tests were flagged as separate tasks
   (review.spec desktop Home brief; reader.spec mobile selection menu).

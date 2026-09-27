@@ -25,7 +25,8 @@ const WRONG_RULES = `The wrong answers must be plausible to someone who studied 
 const CARDS_PROMPT = `You write flashcards for spaced repetition in a study app, from pages the student has already read.
 Rules:
 - One idea per card. The front is a precise question (or a term to define); the back is a short, self-contained answer (one to three sentences, or a formula).
-- Test understanding of what matters (definitions, relations, causes, procedures, formulas), not trivia such as page numbers or the author's wording.
+- Test understanding of what matters (definitions, relations, causes, procedures, formulas, how to apply them), not trivia such as page numbers or the author's wording.
+- Ask about the subject, never about the document: no questions on how the text is organised, what a module/chapter/section covers, what is explained first or next, or in what order the author presents things (e.g. not "¿Qué caso se estudia primero en el módulo?"). Each card must make sense to someone who never saw these notes.
 - Use only what the pages say. Write in the language of the pages. Mathematics in KaTeX ($...$).
 - Do not repeat or rephrase the cards the student already has.
 - Spread the cards over the pages given, favouring the ones marked as not yet covered.
@@ -35,6 +36,10 @@ Answer ONLY with a JSON array, no prose: [{"ref": "D1", "page": 12, "front": "..
 const DISTRACTORS_PROMPT = `You write the wrong options of multiple-choice flashcards in a study app. For each card you get its question and its right answer.
 ${WRONG_RULES}
 Answer ONLY with a JSON array, no prose: [{"ref": "C1", "wrong": ["...", "...", "..."]}], one entry per card.`;
+
+const HINT_PROMPT = `You give hints to a student answering a multiple-choice flashcard in a study app. You get the question, the right answer, the wrong options and, when available, the page the card comes from.
+Write ONE short hint (one or two sentences) in the language of the question that helps the student recall or reason towards the right answer: a related idea, an analogy, what to think about, or why a tempting option fails.
+Never state the right answer or its key words, never say which option (or number) is right, and do not simply rule out all wrong options. Plain text, no preamble.`;
 
 const cardsSchema = z
   .array(
@@ -65,6 +70,15 @@ export interface CardSource {
   subjectIds?: string[];
   topicIds?: string[];
   documentIds?: string[];
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const out = items.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
 }
 
 /** First JSON array in Claude's answer (it may wrap it in a code fence). */
@@ -158,6 +172,30 @@ export class CardGenService {
       }
     }
     return text;
+  }
+
+  /** A hint for a card, from Claude, that does not give the answer away. */
+  async hint(id: string): Promise<{ hint: string }> {
+    const card = this.review.get(id);
+    const page =
+      card.documentId && card.page
+        ? this.db
+            .select({ text: pages.text })
+            .from(pages)
+            .where(and(eq(pages.documentId, card.documentId), eq(pages.pageNumber, card.page)))
+            .get()
+        : undefined;
+    const prompt = [
+      `Question: ${card.front}`,
+      `Right answer: ${card.back}`,
+      card.distractors ? `Wrong options: ${card.distractors.join(' | ')}` : '',
+      page?.text ? `Page the card comes from:\n${page.text.slice(0, MAX_PAGE_CHARS)}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const hint = (await this.ask(HINT_PROMPT, prompt)).trim();
+    if (!hint) throw new HttpError(502, 'claude_failed');
+    return { hint };
   }
 
   /**
@@ -278,6 +316,8 @@ export class CardGenService {
         };
       });
     if (!cards.length) throw new HttpError(502, 'claude_failed');
-    return this.review.create(cards, 'claude', 'active');
+    // Created in random order, so the review interleaves them instead of following the
+    // order of the notes.
+    return this.review.create(shuffle(cards), 'claude', 'active');
   }
 }

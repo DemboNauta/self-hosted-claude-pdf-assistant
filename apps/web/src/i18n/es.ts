@@ -306,7 +306,11 @@ export const es = {
       incorrect: 'No era esa: la correcta está marcada en verde.',
       next: 'Siguiente',
       preparing: 'Claude está preparando las opciones de esta tarjeta…',
-      shortcuts: 'Atajos: 1–4 elige una opción · Intro continúa tras un fallo',
+      shortcuts: 'Atajos: 1–4 elige una opción · P pide una pista · Intro continúa tras un fallo',
+      hint: 'Pedir pista a Claude',
+      hintLoading: 'Claude está pensando una pista…',
+      hintError: 'No se ha podido pedir la pista. Toca para reintentar.',
+      hintNote: 'Con pista, acertar cuenta como «Difícil».',
     },
     generate: {
       open: 'Crear tarjetas con Claude',

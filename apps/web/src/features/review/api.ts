@@ -92,6 +92,11 @@ export async function fillDistractors(ids: string[]) {
   return filled;
 }
 
+/** A hint from Claude that does not give the answer away. */
+export async function askHint(id: string) {
+  return (await api<{ hint: string }>(`/flashcards/${id}/hint`, { method: 'POST' })).hint;
+}
+
 export async function updateCard(
   id: string,
   patch: { front?: string; back?: string; status?: 'active' | 'rejected' },

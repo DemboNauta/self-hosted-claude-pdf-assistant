@@ -1,9 +1,12 @@
 import type { Flashcard, ReviewRating } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { Check, X } from 'lucide-react';
+import { Check, Lightbulb, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { Markdown } from '../chat/Markdown';
+import { askHint } from './api';
+
+type Hint = { state: 'idle' | 'loading' | 'error' } | { state: 'shown'; text: string };
 
 /** How long a right answer may take to count as "Fácil": reading time plus a margin. */
 export function fastLimitMs(card: Pick<Flashcard, 'front' | 'back' | 'distractors'>) {
@@ -11,9 +14,18 @@ export function fastLimitMs(card: Pick<Flashcard, 'front' | 'back' | 'distractor
   return Math.min(12_000, 3_000 + chars * 25);
 }
 
-/** The FSRS rating of a multiple-choice answer: wrong = again, right = good, or easy if fast. */
-export function ratingFor(correct: boolean, elapsedMs: number, fastMs: number): ReviewRating {
+/**
+ * The FSRS rating of a multiple-choice answer: wrong = again, right = good, or easy if
+ * fast. Right after asking for a hint is "hard": neither a success nor a failure.
+ */
+export function ratingFor(
+  correct: boolean,
+  elapsedMs: number,
+  fastMs: number,
+  hinted = false,
+): ReviewRating {
   if (!correct) return 1;
+  if (hinted) return 2;
   return elapsedMs <= fastMs ? 4 : 3;
 }
 
@@ -38,12 +50,16 @@ export function shuffled<T>(items: T[], seed: string): T[] {
 export function MultipleChoice({
   card,
   busy,
+  canHint,
   onRate,
 }: {
   card: Flashcard;
   busy: boolean;
+  /** Whether Claude can be asked for a hint (the user has a Claude token). */
+  canHint: boolean;
   onRate: (rating: ReviewRating) => void;
 }) {
+  const [hint, setHint] = useState<Hint>({ state: 'idle' });
   const options = useMemo(
     () => shuffled([card.back, ...(card.distractors ?? [])], card.id),
     [card.id, card.back, card.distractors],
@@ -66,7 +82,22 @@ export function MultipleChoice({
   const pick = (i: number) => {
     if (picked !== null || busy) return;
     setPicked(i);
-    rating.current = ratingFor(i === right, performance.now() - started.current, fastLimitMs(card));
+    rating.current = ratingFor(
+      i === right,
+      performance.now() - started.current,
+      fastLimitMs(card),
+      hint.state !== 'idle',
+    );
+  };
+
+  const requestHint = async () => {
+    if (hint.state === 'loading' || hint.state === 'shown' || picked !== null) return;
+    setHint({ state: 'loading' });
+    try {
+      setHint({ state: 'shown', text: await askHint(card.id) });
+    } catch {
+      setHint({ state: 'error' });
+    }
   };
 
   // A right answer moves on after a short confirmation; a wrong one waits for the student.
@@ -89,6 +120,9 @@ export function MultipleChoice({
       if (picked === null && n >= 1 && n <= options.length) {
         e.preventDefault();
         pick(n - 1);
+      } else if (picked === null && canHint && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        void requestHint();
       } else if (picked !== null && picked !== right && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         onRate(rating.current);
@@ -100,6 +134,33 @@ export function MultipleChoice({
 
   return (
     <div className="space-y-3">
+      {canHint && picked === null && hint.state !== 'shown' && (
+        <button
+          type="button"
+          onClick={() => void requestHint()}
+          aria-disabled={hint.state === 'loading'}
+          className="text-text-muted hover:text-text flex items-center gap-1.5 text-sm"
+        >
+          <Lightbulb size={14} aria-hidden />
+          {hint.state === 'loading'
+            ? t.review.choices.hintLoading
+            : hint.state === 'error'
+              ? t.review.choices.hintError
+              : t.review.choices.hint}
+        </button>
+      )}
+      {hint.state === 'shown' && (
+        <p
+          className="bg-surface-muted flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
+          data-testid="hint"
+        >
+          <Lightbulb size={14} aria-hidden className="mt-0.5 shrink-0 text-amber-500" />
+          <span>
+            {hint.text}
+            <span className="text-text-muted block text-xs">{t.review.choices.hintNote}</span>
+          </span>
+        </p>
+      )}
       <ol className="grid gap-2" aria-label={t.review.choices.label}>
         {options.map((text, i) => {
           const isRight = picked !== null && i === right;

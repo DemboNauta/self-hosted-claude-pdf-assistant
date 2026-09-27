@@ -687,7 +687,7 @@ export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
   return [
     tool(
       'create_flashcards',
-      'Propose flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are shown as proposals the student accepts in the review screen. They are answered as multiple choice: give three plausible wrong answers ("wrong") in the same style and length as the right one.',
+      'Propose flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are shown as proposals the student accepts in the review screen. They are answered as multiple choice: give three plausible wrong answers ("wrong") in the same style and length as the right one. Ask about the subject, never about how the document is organised (what a module covers, what comes first).',
       {
         cards: z
           .array(

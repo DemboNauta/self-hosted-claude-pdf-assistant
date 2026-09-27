@@ -48,6 +48,9 @@ test('create flashcards, review them and see today and the stats', async ({ page
   await expect(card).toContainText('¡Correcto!');
   await expect(card).toContainText('¿Qué dice este fragmento?');
   await expect(options).toHaveCount(4);
+  // A hint from Claude: a right answer then counts as "Difícil".
+  await card.getByRole('button', { name: 'Pedir pista a Claude' }).click();
+  await expect(card.getByTestId('hint')).toContainText('Pista de prueba.');
   await options.filter({ hasText: 'Opción falsa A' }).click();
   await expect(card).toContainText('No era esa');
   await card.getByRole('button', { name: 'Siguiente' }).click();

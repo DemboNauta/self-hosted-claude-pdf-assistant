@@ -33,6 +33,7 @@ export async function registerReviewRoutes(app: FastifyInstance, svc: RequestSer
   app.post('/api/flashcards/distractors', async (req) =>
     svc(req).cardgen.fillDistractors(parse(fillDistractorsSchema, req.body).ids),
   );
+  app.post('/api/flashcards/:id/hint', async (req) => svc(req).cardgen.hint(id(req.params)));
   app.patch('/api/flashcards/:id', async (req) =>
     svc(req).review.update(id(req.params), parse(updateFlashcardSchema, req.body)),
   );

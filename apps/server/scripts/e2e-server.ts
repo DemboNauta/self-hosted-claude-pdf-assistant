@@ -63,6 +63,11 @@ const fakeChat = ((args: {
       yield { type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(cards) };
       return;
     }
+    // A hint for a card (its prompt also mentions "wrong options": check it first).
+    if (typeof args.prompt === 'string' && args.options.systemPrompt?.includes('You give hints')) {
+      yield { type: 'result', subtype: 'success', is_error: false, result: 'Pista de prueba.' };
+      return;
+    }
     // Wrong options for multiple choice: the same three for every card asked about.
     if (typeof args.prompt === 'string' && args.options.systemPrompt?.includes('wrong options')) {
       const refs = [...args.prompt.matchAll(/--- (C\d+) ---/g)].map((m) => ({

@@ -77,13 +77,13 @@ server, not against real Claude yet.
 
 ## 3.7 Review
 
-| ID       | Status  | Where / notes                                                                                                                                      |
-| -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F-REV-01 | ✅      | Cards from a selection, Claude proposals (`create_flashcards`) and "Crear tarjetas con Claude" from read pages (`services/cardgen.ts`, fake only). |
-| F-REV-02 | ✅      | ts-fsrs; multiple choice (4 options, auto-rated) or 4 ratings with interval preview (`services/review.ts`, `MultipleChoice.tsx`).                  |
-| F-REV-03 | ✅ fake | Home "Repaso de hoy" (`services/brief.ts`) with 5 daily Claude cards and mini stats.                                                               |
-| F-REV-04 | ✅      | `/stats` (`services/stats.ts`); per-day detail on hover/tap in the 30-day chart.                                                                   |
-| F-REV-05 | ✅      | Filter by subject or topic.                                                                                                                        |
+| ID       | Status  | Where / notes                                                                                                                                                   |
+| -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-REV-01 | ✅      | Cards from a selection, Claude proposals (`create_flashcards`) and "Crear tarjetas con Claude" from read pages (`services/cardgen.ts`, fake only).              |
+| F-REV-02 | ✅      | ts-fsrs; multiple choice (4 options, auto-rated, hint from Claude → «Difícil») or 4 ratings with interval preview (`services/review.ts`, `MultipleChoice.tsx`). |
+| F-REV-03 | ✅ fake | Home "Repaso de hoy" (`services/brief.ts`) with 5 daily Claude cards and mini stats.                                                                            |
+| F-REV-04 | ✅      | `/stats` (`services/stats.ts`); per-day detail on hover/tap in the 30-day chart.                                                                                |
+| F-REV-05 | ✅      | Filter by subject or topic.                                                                                                                                     |
 
 ## 3.8 Search
 

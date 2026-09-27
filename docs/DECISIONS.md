@@ -74,6 +74,11 @@ change them if he disagrees.
   options** (faster than "Mostrar respuesta"), rated **automatically**: wrong =
   "Otra vez", right = "Bien", or "Fácil" when fast. Claude writes the wrong
   answers, also for the student's own cards.
+- **Hints and card content (2026-09-27, after the first real cards).** A "Pedir
+  pista" button asks Claude for a hint; a right answer after it counts as
+  «Difícil» ("neither right nor wrong"), a wrong one still «Otra vez». Cards must
+  not ask about the order or structure of the notes (a real card asked "what case
+  is studied first in the module"), and new cards come in random order.
 - **Stats chart:** hovering or tapping a day shows its time in hours/minutes.
 
 - Deleting a subject or topic that still has PDFs moves those PDFs to the trash

@@ -14,6 +14,7 @@ let cardCalls: number;
 let cardsAnswer: string;
 let distractorsAnswer: string;
 let distractorPrompts: string[];
+let hintPrompts: string[];
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -23,10 +24,13 @@ beforeEach(async () => {
   cardsAnswer = '[]';
   distractorsAnswer = '[]';
   distractorPrompts = [];
+  hintPrompts = [];
   const fakeQuery = ((args: { prompt: string; options: { systemPrompt?: string } }) => {
-    const wrong = args.options.systemPrompt?.includes('wrong options') ?? false;
+    const hint = args.options.systemPrompt?.includes('You give hints') ?? false;
+    if (hint) hintPrompts.push(args.prompt);
+    const wrong = !hint && (args.options.systemPrompt?.includes('wrong options') ?? false);
     if (wrong) distractorPrompts.push(args.prompt);
-    const cards = !wrong && (args.options.systemPrompt?.includes('flashcards') ?? false);
+    const cards = !hint && !wrong && (args.options.systemPrompt?.includes('flashcards') ?? false);
     if (cards) cardCalls++;
     else briefCalls++;
     return (async function* () {
@@ -41,11 +45,13 @@ beforeEach(async () => {
         type: 'result',
         subtype: 'success',
         is_error: false,
-        result: wrong
-          ? distractorsAnswer
-          : cards
-            ? cardsAnswer
-            : '**Derivada:** repasa la regla de la cadena.',
+        result: hint
+          ? 'Piensa en la pendiente de la recta tangente.'
+          : wrong
+            ? distractorsAnswer
+            : cards
+              ? cardsAnswer
+              : '**Derivada:** repasa la regla de la cadena.',
       };
     })();
   }) as never;
@@ -151,10 +157,14 @@ describe('flashcards written by Claude', () => {
     });
     expect(res.statusCode).toBe(201);
     const cards = res.json<Flashcard[]>();
-    expect(cards.map((c) => [c.front, c.page, c.author, c.documentId])).toEqual([
-      ['¿Qué son las derivadas?', 1, 'claude', docId],
-      ['Otra', null, 'claude', docId],
-    ]);
+    // Created in random order (the review interleaves them).
+    expect(cards).toHaveLength(2);
+    expect(cards.map((c) => [c.front, c.page, c.author, c.documentId])).toEqual(
+      expect.arrayContaining([
+        ['¿Qué son las derivadas?', 1, 'claude', docId],
+        ['Otra', null, 'claude', docId],
+      ]),
+    );
     // Ready to review straight away (not proposals).
     const queue = await req<ReviewQueue>('GET', '/api/review/queue');
     expect(queue.due).toHaveLength(2);
@@ -196,7 +206,8 @@ describe('multiple choice', () => {
       documentIds: [docId],
       count: 5,
     });
-    expect(cards.map((c) => c.distractors)).toEqual([['Área', 'Límite', 'Suma'], null]);
+    const byFront = Object.fromEntries(cards.map((c) => [c.front, c.distractors]));
+    expect(byFront).toEqual({ '¿Derivada?': ['Área', 'Límite', 'Suma'], '¿Integral?': null });
   });
 
   it('writes missing wrong answers in one request and drops them when the card changes', async () => {
@@ -226,5 +237,21 @@ describe('multiple choice', () => {
       back: 'El área bajo la curva.',
     });
     expect(edited.distractors).toBeNull();
+  });
+});
+
+describe('hints', () => {
+  it('asks Claude for a hint with the card, its options and its page', async () => {
+    const [card] = await req<Flashcard[]>('POST', '/api/flashcards', {
+      cards: [
+        { front: '¿Qué es una derivada?', back: 'Una tasa de cambio.', documentId: docId, page: 1 },
+      ],
+    });
+    const res = await req<{ hint: string }>('POST', `/api/flashcards/${card!.id}/hint`);
+    expect(res.hint).toBe('Piensa en la pendiente de la recta tangente.');
+    expect(hintPrompts[0]).toContain('Right answer: Una tasa de cambio.');
+    expect(hintPrompts[0]).toContain('Derivadas.');
+    const missing = await app.inject({ method: 'POST', url: '/api/flashcards/nope/hint', headers });
+    expect(missing.statusCode).toBe(404);
   });
 });

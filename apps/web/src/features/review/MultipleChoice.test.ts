@@ -8,6 +8,11 @@ describe('multiple-choice cards', () => {
     expect(ratingFor(true, 6000, 5000)).toBe(3);
   });
 
+  it('rates a right answer after a hint as "hard" and a wrong one still "again"', () => {
+    expect(ratingFor(true, 1000, 5000, true)).toBe(2);
+    expect(ratingFor(false, 1000, 5000, true)).toBe(1);
+  });
+
   it('gives longer cards more time to count as fast', () => {
     const short = fastLimitMs({ front: '¿2+2?', back: '4', distractors: ['3', '5', '6'] });
     const long = fastLimitMs({
