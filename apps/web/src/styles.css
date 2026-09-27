@@ -201,7 +201,29 @@ body {
   opacity: 0;
   animation: pca-fade 0.4s ease-out forwards;
 }
+/* Claude's marks fade back once the answer is over; the × to dismiss them fades in. */
+.pointer-layer {
+  & svg {
+    transition: opacity 0.6s ease;
+  }
+  & .pointer-dismiss {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.3s ease,
+      visibility 0.3s;
+  }
+  &[data-rest='true'] svg {
+    opacity: 0.35;
+    transition: opacity 1.2s ease 2s;
+  }
+  &[data-rest='true'] .pointer-dismiss {
+    opacity: 1;
+    visibility: visible;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .pointer-layer svg,
   .pointer-draw,
   .pointer-fade,
   .animate-flash {

@@ -1,7 +1,10 @@
 import type { Anchor, PointerGroup, PointerShape } from '@pdfclaudeassistant/shared';
+import { X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { t } from '../../i18n';
 import { useChat } from '../chat/store';
+import { useVoice } from '../voice/store';
 import type { PageLayers } from './PdfPage';
 import { findQuoteRects, type NormRect } from './textMatch';
 
@@ -176,24 +179,60 @@ export function PointerLayer({
     return out;
   }, [groups, layers]);
 
+  // While Claude answers (or reads the answer aloud) the marks stay bright; afterwards
+  // they fade back so they no longer cover the page.
+  const answering = useChat((s) => s.running);
+  const talking = useVoice((s) => s.phase === 'thinking' || s.phase === 'speaking');
+  const clear = useChat((s) => s.clearPointers);
+
   const marks = resolved.flatMap(({ group, marks }) => marks.map((m) => ({ group, m })));
   if (!marks.length) return null;
   return (
-    <svg
-      aria-hidden
-      className="pointer-events-none absolute inset-0 overflow-visible"
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      fill="none"
-      stroke={CLAUDE}
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      data-testid="claude-pointers"
+    <div
+      className="pointer-layer pointer-events-none absolute inset-0"
+      data-rest={!answering && !talking}
     >
-      {marks.map(({ group, m }, i) => (
-        <Mark key={`${group.messageId}-${i}`} r={m} w={width} h={height} delay={i * 180} />
-      ))}
-    </svg>
+      <svg
+        aria-hidden
+        className="absolute inset-0 overflow-visible"
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        fill="none"
+        stroke={CLAUDE}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        data-testid="claude-pointers"
+      >
+        {marks.map(({ group, m }, i) => (
+          <Mark key={`${group.messageId}-${i}`} r={m} w={width} h={height} delay={i * 180} />
+        ))}
+      </svg>
+      {resolved.map(({ group, marks }) => {
+        const box = unionRect(marks.map((m) => m.box));
+        if (!box) return null;
+        return (
+          <button
+            key={group.messageId}
+            type="button"
+            data-annotation-ui
+            aria-label={t.chat.pointers.dismiss}
+            title={t.chat.pointers.dismiss}
+            onClick={(e) => {
+              e.stopPropagation();
+              clear(group.messageId);
+            }}
+            className="pointer-dismiss pointer-events-auto absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow"
+            style={{
+              left: `min(calc(${(box.x + box.w) * 100}% + 10px), calc(100% - 14px))`,
+              top: `max(calc(${box.y * 100}% - 10px), 14px)`,
+              background: CLAUDE,
+            }}
+          >
+            <X size={14} aria-hidden />
+          </button>
+        );
+      })}
+    </div>
   );
 }

@@ -164,6 +164,37 @@ test('Claude points at the page and the marks clear with the next question', asy
   await expect(page.locator('[data-testid="claude-pointers"]')).toHaveCount(0);
 });
 
+// Once the answer is over the marks fade back and can be dismissed from the page itself.
+test('Claude marks fade after the answer and can be dismissed on the page', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== 'desktop', 'the chat covers the page on phones');
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Quitar señales ${info.project.name}`,
+    tinyPdf([['El ciclo de Calvin fija el CO2.']]),
+  );
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('Calvin');
+  await selectInPdf(page, 'El ciclo de Calvin fija');
+  await page
+    .getByRole('toolbar', { name: 'Acciones sobre la selección' })
+    .getByRole('button', { name: 'Preguntar' })
+    .click();
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  await composer.fill('Señala dónde está esto');
+  await composer.press('Enter');
+
+  const marks = page.locator('[data-page="1"] [data-testid="claude-pointers"]');
+  await expect(marks).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Detener' })).toBeHidden();
+  await expect.poll(() => marks.evaluate((el) => getComputedStyle(el).opacity)).toBe('0.35');
+  await page.getByRole('button', { name: 'Quitar la señal de Claude' }).click();
+  await expect(marks).toHaveCount(0);
+  await expect(page.getByText('Claude ha señalado en la p. 1')).toBeHidden();
+});
+
 // F-MEM-04/05: what Claude saves through its tools shows up, read-only, in "Memoria".
 test('Claude remembers preferences and difficult concepts', async ({ page }, info) => {
   await login(page);

@@ -573,6 +573,7 @@ export const es = {
       shown: (page: number) => `Claude ha señalado en la p. ${page}`,
       go: 'Ir',
       clear: 'Limpiar',
+      dismiss: 'Quitar la señal de Claude',
       save: 'Guardar',
       saved: 'Guardado como anotación',
     },
