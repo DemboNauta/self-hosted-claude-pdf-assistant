@@ -53,3 +53,18 @@ describe('barge-in helpers', () => {
     expect(voiceCommand('¿Y eso por qué pasa?')).toBeNull();
   });
 });
+
+describe('marks in spoken answers', () => {
+  it('drops [[mark:ID]] from speech and hands the ids with their sentence', () => {
+    const s = new SentenceSplitter();
+    expect(
+      s.pushSentences('[[mark:m1]] Mira esta flecha que sale de la entrada. [[mark:m2]] '),
+    ).toEqual([{ text: 'Mira esta flecha que sale de la entrada.', marks: ['m1'] }]);
+    // A mark alone waits for the next sentence to have something to say.
+    expect(s.pushSentences('Y esta otra llega hasta la salida del sistema.\n')).toEqual([
+      { text: 'Y esta otra llega hasta la salida del sistema.', marks: ['m2'] },
+    ]);
+    expect(s.pushSentences('[[mark:m3]]')).toEqual([]);
+    expect(s.flushSentences()).toEqual([{ text: '', marks: ['m3'] }]);
+  });
+});

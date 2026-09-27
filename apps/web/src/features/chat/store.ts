@@ -1,15 +1,16 @@
-import type {
-  ChatErrorCode,
-  ChatMessage,
-  ClientChatEvent,
-  DrawingMark,
-  PointerGroup,
-  ServerChatEvent,
-  StudyMode,
-  SummaryFormat,
-  TextSelection,
-  ThreadScope,
-  ThreadSummary,
+import {
+  markRefs,
+  type ChatErrorCode,
+  type ChatMessage,
+  type ClientChatEvent,
+  type DrawingMark,
+  type PointerGroup,
+  type ServerChatEvent,
+  type StudyMode,
+  type SummaryFormat,
+  type TextSelection,
+  type ThreadScope,
+  type ThreadSummary,
 } from '@pdfclaudeassistant/shared';
 import { create } from 'zustand';
 import { api } from '../../lib/api';
@@ -132,6 +133,11 @@ interface ChatState {
   attachMark: (mark: DrawingMark | null) => void;
   dismissError: () => void;
   clearPointers: (messageId?: string) => void;
+  /**
+   * Shows the marks of an answer again (a `[[mark:ID]]` chip, or all of them), replacing
+   * the ones on screen, and jumps to their page.
+   */
+  showMarks: (messageId: string, markId?: string) => void;
   setVoice: (on: boolean) => void;
 }
 
@@ -266,7 +272,55 @@ export const useChat = create<ChatState>((set, get) => ({
   setVoice: (voice) => set({ voice }),
   clearPointers: (messageId) =>
     set({ pointers: messageId ? get().pointers.filter((g) => g.messageId !== messageId) : [] }),
+  showMarks: (messageId, markId) => {
+    const groups = (get().messages.find((m) => m.id === messageId)?.pointers ?? []).filter(
+      (g) => !markId || g.id === markId,
+    );
+    if (!groups.length) return;
+    for (const g of groups) revealed.add(`${messageId}:${g.id}`);
+    set({ pointers: groups });
+    jumpTo(groups[0]!);
+  },
 }));
+
+/**
+ * Marks already shown on their own, by `messageId:markId`: each one appears once as the
+ * answer reaches it (and stays gone if the student dismisses it); chips show it again.
+ */
+const revealed = new Set<string>();
+
+/** Jumps to the page of a mark (F-POINT-05), unless the reader is already there. */
+function jumpTo(group: PointerGroup) {
+  const reader = useReader.getState();
+  if (group.docId === reader.docId && reader.currentPage !== group.page) reader.goTo(group.page);
+}
+
+/**
+ * Shows marks of an answer that have not been shown yet: the ones it references
+ * (`ids`), or with `ids` absent the deferred ones it never referenced.
+ */
+export function revealMarks(messageId: string, ids?: string[]) {
+  const s = useChat.getState();
+  const message = s.messages.find((m) => m.id === messageId);
+  if (!message?.pointers?.length) return;
+  const referenced = ids ? null : new Set(markRefs(message.content));
+  const fresh = message.pointers.filter(
+    (g) =>
+      !revealed.has(`${messageId}:${g.id}`) && (ids ? ids.includes(g.id) : !referenced!.has(g.id)),
+  );
+  if (!fresh.length) return;
+  for (const g of fresh) revealed.add(`${messageId}:${g.id}`);
+  useChat.setState({ pointers: [...s.pointers.filter((p) => !fresh.includes(p)), ...fresh] });
+  jumpTo(fresh[fresh.length - 1]!);
+}
+
+/** Written answers show their marks as the text reaches them; voice mode as it is spoken. */
+function revealWritten(messageId: string) {
+  const s = useChat.getState();
+  if (s.voice) return;
+  const message = s.messages.find((m) => m.id === messageId);
+  if (message) revealMarks(messageId, markRefs(message.content));
+}
 
 function upsert(messages: ChatMessage[], message: ChatMessage, replaceId = message.id) {
   const i = messages.findIndex((m) => m.id === replaceId);
@@ -299,6 +353,7 @@ chatSocket.subscribe((event) => {
           m.id === event.messageId ? { ...m, content: m.content + event.text } : m,
         ),
       });
+      if (event.text.includes(']]')) revealWritten(event.messageId);
       break;
     case 'tool_event':
       useChat.setState({
@@ -314,6 +369,9 @@ chatSocket.subscribe((event) => {
       break;
     case 'assistant_done':
       useChat.setState({ messages: upsert(s.messages, event.message), running: false });
+      // Marks never referenced in the answer show at its end.
+      revealWritten(event.message.id);
+      revealMarks(event.message.id);
       if (s.scope) {
         const scope = s.scope;
         void api<ThreadSummary[]>(`${scopePath(scope)}/threads`).then((threads) => {
@@ -322,12 +380,14 @@ chatSocket.subscribe((event) => {
       }
       break;
     case 'pointer': {
-      useChat.setState({ pointers: [...s.pointers, event.group] });
-      // Jump to the page Claude points at (F-POINT-05), unless the reader is already there.
-      const reader = useReader.getState();
-      if (event.group.docId === reader.docId && reader.currentPage !== event.group.page) {
-        reader.goTo(event.group.page);
-      }
+      const { group } = event;
+      useChat.setState({
+        messages: s.messages.map((m) =>
+          m.id === group.messageId ? { ...m, pointers: [...(m.pointers ?? []), group] } : m,
+        ),
+      });
+      if (!group.deferred) revealMarks(group.messageId, [group.id]);
+      else revealWritten(group.messageId);
       break;
     }
     case 'clear_pointers':

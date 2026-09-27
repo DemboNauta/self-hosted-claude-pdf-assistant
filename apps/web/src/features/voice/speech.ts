@@ -1,3 +1,5 @@
+import { markRefs } from '@pdfclaudeassistant/shared';
+
 /**
  * Turns Claude's Markdown into speakable text and cuts the stream into sentences, so the
  * voice can start with the first sentence while the rest is still being written
@@ -8,8 +10,8 @@
 export function cleanForSpeech(md: string): string {
   return (
     md
-      // Citations and diagrams are shown in the chat, not read.
-      .replace(/\[\[(?:cite|diagram):[^\]]*\]\]/g, '')
+      // Citations, diagrams and marks are shown, not read.
+      .replace(/\[\[(?:cite|diagram|mark):[^\]]*\]\]/g, '')
       .replace(/\[\[voice-end\]\]/g, '')
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/`([^`]*)`/g, '$1')
@@ -72,29 +74,62 @@ const MIN_CHARS = 25;
 /** Without punctuation for this long, cut at a comma or space anyway. */
 const MAX_CHARS = 280;
 
+/** A speakable sentence and the marks it refers to (shown when it is spoken). */
+export interface Sentence {
+  text: string;
+  marks: string[];
+}
+
 /** Collects streamed Markdown and hands out speakable sentences as they complete. */
 export class SentenceSplitter {
   private buffer = '';
+  /** Marks referenced by text that had nothing to say: they go with the next sentence. */
+  private carry: string[] = [];
 
   /** Adds streamed text; returns the sentences it completed (already cleaned). */
   push(text: string): string[] {
-    this.buffer += text;
-    const out: string[] = [];
-    for (;;) {
-      const cut = this.nextCut();
-      if (cut < 0) break;
-      const spoken = cleanForSpeech(this.buffer.slice(0, cut));
-      this.buffer = this.buffer.slice(cut);
-      if (spoken) out.push(spoken);
-    }
-    return out;
+    return this.pushSentences(text).map((s) => s.text);
   }
 
   /** The rest, once the answer is complete. */
   flush(): string[] {
-    const spoken = cleanForSpeech(this.buffer);
+    return this.flushSentences()
+      .map((s) => s.text)
+      .filter(Boolean);
+  }
+
+  /** Like `push`, with the marks each sentence refers to. */
+  pushSentences(text: string): Sentence[] {
+    this.buffer += text;
+    const out: Sentence[] = [];
+    for (;;) {
+      const cut = this.nextCut();
+      if (cut < 0) break;
+      const s = this.take(this.buffer.slice(0, cut));
+      this.buffer = this.buffer.slice(cut);
+      if (s) out.push(s);
+    }
+    return out;
+  }
+
+  /** Like `flush`; marks left without a sentence come back with empty text. */
+  flushSentences(): Sentence[] {
+    const s = this.take(this.buffer);
     this.buffer = '';
-    return spoken ? [spoken] : [];
+    const rest = this.carry;
+    this.carry = [];
+    return s ? [s] : rest.length ? [{ text: '', marks: rest }] : [];
+  }
+
+  private take(raw: string): Sentence | null {
+    const text = cleanForSpeech(raw);
+    const marks = [...this.carry, ...markRefs(raw)];
+    if (!text) {
+      this.carry = marks;
+      return null;
+    }
+    this.carry = [];
+    return { text, marks };
   }
 
   private nextCut(): number {

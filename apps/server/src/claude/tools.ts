@@ -1,10 +1,15 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import {
+  anchorSchema,
+  HIGHLIGHT_KEYS,
   MEMORY_CATEGORIES,
-  pointerShapeSchema,
+  POINTER_SHAPES,
   SEARCH_MARK_END,
   SEARCH_MARK_START,
+  type Anchor,
   type OutlineEntry,
+  type PointerGroup,
+  type PointerShape,
   type ServerChatEvent,
   type ThreadScope,
   type ToolEvent,
@@ -13,6 +18,14 @@ import { and, asc, between, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { pages } from '../db/schema.js';
 import { renderPageImage } from '../ingest/extract.js';
+import {
+  buildLayout,
+  findLayoutBox,
+  formatLayout,
+  pageGraphics,
+  type PageLayout,
+} from '../ingest/layout.js';
+import { pageItems } from '../services/anchoring.js';
 import { newId } from '../services/ids.js';
 import { checkDiagramSource, MAX_DIAGRAM_SOURCE } from '../services/diagrams.js';
 import type { UserServices } from '../services/scope.js';
@@ -34,7 +47,40 @@ export interface ToolContext {
   emit: (event: ServerChatEvent) => void;
   /** Collects tool events so they are stored with the assistant message. */
   record: (event: ToolEvent) => void;
+  /** Collects the marks Claude draws so they are stored with the assistant message. */
+  recordPointer?: (group: PointerGroup) => void;
 }
+
+/** Page layouts by file and page: `point_at` resolves block ids against the same one. */
+const layoutCache = new Map<string, PageLayout>();
+const LAYOUT_CACHE_SIZE = 40;
+
+async function cachedLayout(db: ToolDeps['db'], filePath: string, docId: string, page: number) {
+  const key = `${filePath}#${page}`;
+  const hit = layoutCache.get(key);
+  if (hit) {
+    layoutCache.delete(key);
+    layoutCache.set(key, hit);
+    return hit;
+  }
+  const layout = buildLayout(page, pageItems(db, docId, page), await pageGraphics(filePath, page));
+  layoutCache.set(key, layout);
+  if (layoutCache.size > LAYOUT_CACHE_SIZE) layoutCache.delete(layoutCache.keys().next().value!);
+  return layout;
+}
+
+/** A `point_at` anchor: the shared ones plus a block of `get_page_layout`. */
+const toolAnchorSchema = z.union([
+  anchorSchema,
+  z.object({
+    kind: z.literal('block'),
+    id: z
+      .string()
+      .regex(/^[bf]\d{1,3}(\.\d{1,2})?$/)
+      .describe('Id from get_page_layout: "b3" (text block), "f1" (figure), "f1.2" (label)'),
+  }),
+]);
+type ToolAnchor = z.infer<typeof toolAnchorSchema>;
 
 /** The services of the user whose turn this is: tools only see that user's data. */
 export type ToolDeps = Pick<
@@ -65,18 +111,19 @@ function tracked<A>(
   ctx: ToolContext,
   name: string,
   summarize: (args: A) => string,
-  run: (args: A) => Promise<CallToolResult>,
+  run: (args: A, extra: Pick<ToolEvent, 'annotationIds'>) => Promise<CallToolResult>,
 ) {
   return async (args: A): Promise<CallToolResult> => {
     const event: ToolEvent = { id: newId(), name, summary: summarize(args), status: 'running' };
     ctx.emit({ type: 'tool_event', threadId: ctx.threadId, messageId: ctx.messageId, event });
     let result: CallToolResult;
+    const extra: Pick<ToolEvent, 'annotationIds'> = {};
     try {
-      result = await run(args);
+      result = await run(args, extra);
     } catch (err) {
       result = fail(err instanceof Error ? err.message : String(err));
     }
-    const done: ToolEvent = { ...event, status: result.isError ? 'error' : 'done' };
+    const done: ToolEvent = { ...event, ...extra, status: result.isError ? 'error' : 'done' };
     ctx.emit({ type: 'tool_event', threadId: ctx.threadId, messageId: ctx.messageId, event: done });
     ctx.record(done);
     return result;
@@ -219,6 +266,28 @@ export function readingTools(deps: ToolDeps, ctx: ToolContext) {
     ),
 
     tool(
+      'get_page_layout',
+      [
+        'Structure of one page: text blocks (headings, paragraphs) and figures (images, vector diagrams, charts, tables) with the text labels inside them, each with an id and its exact box in page fractions.',
+        'Use it before pointing at a figure, a formula block or a paragraph: pass the ids to point_at as {"kind":"block","id":"f1"} instead of guessing coordinates, and a figure box as get_page_image "region" to look at it.',
+      ].join(' '),
+      { docId: z.string(), page: z.number().int().min(1) },
+      tracked(
+        ctx,
+        'get_page_layout',
+        ({ page }) => `p. ${page}`,
+        async ({ docId, page }) => {
+          const doc = docOrError(docId);
+          if (!doc) return fail(`Unknown document ${docId}.`);
+          if (doc.pageCount && page > doc.pageCount)
+            return fail(`The document has ${doc.pageCount} pages.`);
+          const row = library.getLive(docId);
+          return text(formatLayout(await cachedLayout(db, row.filePath, docId, page)));
+        },
+      ),
+    ),
+
+    tool(
       'search_library',
       'Full-text search. scope "doc" searches the open document, "topic"/"subject" its topic or subject, "all" the whole library. Returns document, page and a snippet with «matches».',
       {
@@ -291,26 +360,40 @@ export function readingTools(deps: ToolDeps, ctx: ToolContext) {
 
 /** Ephemeral "teacher's pointer" marks on the page (F-POINT-01..05). */
 export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
+  let marks = 0;
   return [
     tool(
       'point_at',
       [
         'Draw temporary marks on a page of the PDF while you explain: arrow, circle, rect (box), highlight or label.',
-        'Each shape has an anchor: {"kind":"text","quote":"exact words from the page"} (preferred; 2 to 12 consecutive words copied verbatim, add "occurrence" when the words repeat on the page) or {"kind":"rect","x":0.1,"y":0.2,"w":0.3,"h":0.1} in page fractions (origin top-left) for figures.',
-        'Labels and text inside figures are often in the text layer too, so try a text anchor first; otherwise read rect coordinates from get_page_image with "grid" (and "region" to zoom in).',
-        'An arrow with "to" (another anchor) connects two parts, e.g. one state of a diagram to the next; use several to walk through a figure step by step.',
-        'Use "label" for a short note shown next to the mark. The viewer jumps to the page. Marks disappear when the student sends the next message.',
+        'Each shape has an anchor: {"kind":"block","id":"f1"} with an id from get_page_layout (most precise for figures, formulas, labels and paragraphs), {"kind":"text","quote":"exact words from the page"} (2 to 12 consecutive words copied verbatim, add "occurrence" when the words repeat on the page) or {"kind":"rect","x":0.1,"y":0.2,"w":0.3,"h":0.1} in page fractions (origin top-left), e.g. read off get_page_image with "grid".',
+        'An arrow with "to" (another anchor) connects two parts, e.g. one state of a diagram to the next.',
+        'Use "label" for a short note shown next to the mark.',
+        'The call returns a mark id (m1, m2…). Write [[mark:ID]] in your answer at the start of the sentence that talks about those marks: they appear on the page at that moment of the explanation (also when it is spoken) and the student can click it later to see them again.',
+        'To walk through a figure step by step, call point_at once per step first, then explain each step with its [[mark:ID]].',
+        'Marks without a reference in the answer appear when it ends. Set "now": true to show them immediately instead. The viewer jumps to the page when they appear.',
       ].join(' '),
       {
         docId: z.string().optional().describe('Default: the open document'),
         page: z.number().int().min(1),
-        shapes: z.array(pointerShapeSchema).min(1).max(12),
+        shapes: z
+          .array(
+            z.object({
+              type: z.enum(POINTER_SHAPES),
+              anchor: toolAnchorSchema,
+              to: toolAnchorSchema.optional(),
+              label: z.string().max(200).optional(),
+            }),
+          )
+          .min(1)
+          .max(12),
+        now: z.boolean().optional(),
       },
       tracked(
         ctx,
         'point_at',
         ({ page }) => `p. ${page}`,
-        async ({ docId, page, shapes }) => {
+        async ({ docId, page, shapes, now }) => {
           const id = docId ?? ctx.docId;
           if (!id) return fail('docId is required here (no document is open).');
           let doc;
@@ -321,13 +404,51 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
           }
           if (doc.pageCount && page > doc.pageCount)
             return fail(`The document has ${doc.pageCount} pages.`);
-          ctx.emit({
-            type: 'pointer',
-            threadId: ctx.threadId,
-            group: { messageId: ctx.messageId, docId: id, page, shapes },
-          });
+
+          // Block ids become rectangles here, so the client and saved marks need no layout.
+          let layout: PageLayout | null = null;
+          const resolve = async (a: ToolAnchor): Promise<Anchor | string> => {
+            if (a.kind !== 'block') return a;
+            layout ??= await cachedLayout(deps.db, deps.library.getLive(id).filePath, id, page);
+            const box = findLayoutBox(layout, a.id);
+            return box ? { kind: 'rect', ...box } : a.id;
+          };
+          const resolved: PointerShape[] = [];
+          const unknown: string[] = [];
+          for (const s of shapes) {
+            const anchor = await resolve(s.anchor);
+            const to = s.to ? await resolve(s.to) : undefined;
+            if (typeof anchor === 'string') unknown.push(anchor);
+            if (typeof to === 'string') unknown.push(to);
+            if (typeof anchor === 'string' || typeof to === 'string') continue;
+            resolved.push({
+              type: s.type,
+              anchor,
+              ...(to && { to }),
+              ...(s.label && { label: s.label }),
+            });
+          }
+          if (unknown.length) {
+            return fail(
+              `Unknown block id(s) on page ${page}: ${unknown.join(', ')}. Call get_page_layout for this page and use its ids.`,
+            );
+          }
+
+          const group: PointerGroup = {
+            id: `m${++marks}`,
+            messageId: ctx.messageId,
+            docId: id,
+            page,
+            shapes: resolved,
+            ...(now ? {} : { deferred: true }),
+          };
+          ctx.emit({ type: 'pointer', threadId: ctx.threadId, group });
+          ctx.recordPointer?.(group);
+          const n = `${resolved.length} mark${resolved.length > 1 ? 's' : ''}`;
           return text(
-            `Shown on page ${page} (${shapes.length} mark${shapes.length > 1 ? 's' : ''}).`,
+            now
+              ? `Shown on page ${page} (${n}), id ${group.id}: write [[mark:${group.id}]] where you talk about it.`
+              : `Mark ${group.id} ready on page ${page} (${n}). Write [[mark:${group.id}]] at the start of the sentence that explains it; it appears on the page there.`,
           );
         },
       ),
@@ -400,7 +521,17 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
     ),
     tool(
       'highlight_key_ideas',
-      'Propose highlights of the key ideas (of a page, chapter or the document). They appear in your colour as proposals the student accepts or discards. Quote each idea verbatim (3 to 40 consecutive words from the page) and give a short reason.',
+      [
+        "Highlight passages of the PDF in the student's own highlighter colours, e.g. when they ask you to highlight the most important parts of some pages or sections. The highlights are saved directly (the student can undo them from the chat).",
+        `Colours and what they mean to this student: ${deps.settings
+          .palette()
+          .map((p) => `${p.key} = "${p.meaning}"`)
+          .join(
+            ', ',
+          )}. Pick the colour whose meaning fits each passage (default ${deps.settings.palette()[0]?.key ?? 'yellow'}); never use a colour that describes the student's own state (not understanding, to review) unless they ask for it.`,
+        'Read the pages first. Highlight selectively: the key sentence of a paragraph, a definition, the core of an example — a few per page, not whole paragraphs.',
+        'Quote each passage verbatim (3 to 40 consecutive words from that page) and give a short reason.',
+      ].join(' '),
       {
         docId: z.string().optional(),
         highlights: z
@@ -408,6 +539,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
             z.object({
               page: z.number().int().min(1),
               quote: z.string().min(3).max(1000),
+              color: z.enum(HIGHLIGHT_KEYS).optional(),
               reason: z.string().max(300).optional(),
             }),
           )
@@ -418,31 +550,34 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
         ctx,
         'highlight_key_ideas',
         ({ highlights }) => `(${highlights.length})`,
-        async ({ docId, highlights }) => {
+        async ({ docId, highlights }, extra) => {
           const id = docId ?? ctx.docId;
           if (!id) return fail('docId is required here (no document is open).');
           deps.library.getLive(id);
+          const fallback = deps.settings.palette()[0]?.key ?? 'yellow';
           const created = deps.annotations.create(
             id,
             highlights.map((h) => ({
               type: 'highlight' as const,
               page: h.page,
-              color: 'claude',
+              color: h.color ?? fallback,
               content: h.reason ?? null,
               anchor: { quote: h.quote },
             })),
-            { author: 'claude', status: 'proposed' },
+            { author: 'claude' },
           );
-          changed();
+          // A quote not found on its page has nothing to highlight: drop it.
           const missing = created.filter((a) => !(a.anchor as { rects?: unknown[] }).rects?.length);
+          if (missing.length) deps.annotations.delete(missing.map((m) => m.id));
+          const kept = created.filter((a) => !missing.includes(a));
+          if (kept.length) extra.annotationIds = kept.map((a) => a.id);
+          changed();
           const warn = missing.length
             ? ` ${missing.length} quote(s) were not found verbatim on their page (pages ${missing
                 .map((m) => m.page)
-                .join(', ')}): check the exact wording and propose them again.`
+                .join(', ')}) and were not highlighted: check the exact wording and try again.`
             : '';
-          return text(
-            `Proposed ${created.length} highlight(s); the student can accept or discard them.${warn}`,
-          );
+          return text(`Highlighted ${kept.length} passage(s).${warn}`);
         },
       ),
     ),

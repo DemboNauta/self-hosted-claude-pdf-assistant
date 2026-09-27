@@ -30,6 +30,7 @@ To change the schema:
 | `0012_users`                 | `users`, `invitations`, `user_settings`; `user_id` on every owned table (hand-edited, see below) |
 | `0013_drop_display_name`     | drops `users.display_name`                                                                       |
 | `0014_flashcard_distractors` | `flashcards.distractors_json` (wrong options for multiple choice)                                |
+| `0015_message_pointers`      | `messages.pointers_json` (Claude's marks on the PDF, shown again from the chat)                  |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
@@ -84,7 +85,12 @@ text, text_layer_json, viewed_at`.
 - **threads** `id, document_id | topic_id | subject_id (exactly one, cascade),
 claude_session_id, title (first question), updated_at`.
 - **messages** `thread_id (cascade), role, content, context_json ({mode,
-context}), tool_events_json, status (complete|interrupted|error), error_code`.
+context}), tool_events_json, pointers_json, status (complete|interrupted|error),
+error_code`.
+  `tool_events_json` items carry `annotationIds` when the tool created annotations
+  (Claude's highlights, for "Deshacer"). `pointers_json` is the answer's
+  `PointerGroup[]` (block anchors already resolved to rects), so its marks can be
+  shown again after a reload.
   `context.selection.rects` (normalised) places the question marks on the page.
   Order is `created_at, rowid`.
 - **annotations**:

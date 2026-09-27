@@ -162,6 +162,13 @@ test('Claude points at the page and the marks clear with the next question', asy
   await composer.press('Enter');
   await expect(page.getByTestId('assistant-message')).toHaveCount(2);
   await expect(page.locator('[data-testid="claude-pointers"]')).toHaveCount(0);
+
+  // The answer keeps its marks: its [[mark:ID]] chip (or the replay line) shows them again.
+  const first = page.getByTestId('assistant-message').first();
+  await expect(first.getByTestId('replay-marks')).toBeVisible();
+  await first.getByTestId('mark-chip').click();
+  await expect(page.locator('[data-page="1"] [data-testid="claude-pointers"]')).toBeVisible();
+  await expect(first.getByTestId('replay-marks')).toBeHidden();
 });
 
 // Once the answer is over the marks fade back and can be dismissed from the page itself.

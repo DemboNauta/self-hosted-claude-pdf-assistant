@@ -25,3 +25,11 @@ describe('citations in chat messages', () => {
     expect(prepareMarkdown('Texto [[cite:ab12:3|"los clo', false)).toContain('[[cite');
   });
 });
+
+describe('mark references in chat messages', () => {
+  it('turns [[mark:ID]] into a mark link and hides an unfinished one while streaming', () => {
+    expect(prepareMarkdown('[[mark:m2]] Fíjate aquí.')).toBe('[→](mark:m2) Fíjate aquí.');
+    expect(prepareMarkdown('Texto [[mark:m', true)).toBe('Texto ');
+    expect(prepareMarkdown('Texto [[ma', true)).toBe('Texto ');
+  });
+});

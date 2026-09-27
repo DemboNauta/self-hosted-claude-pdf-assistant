@@ -208,6 +208,8 @@ export const messages = sqliteTable(
     contextJson: text('context_json'),
     /** Assistant turns: tools Claude used while answering. */
     toolEventsJson: text('tool_events_json'),
+    /** Assistant turns: marks Claude drew on the PDF (PointerGroup[]), to show them again. */
+    pointersJson: text('pointers_json'),
     status: text('status', { enum: ['complete', 'interrupted', 'error'] })
       .notNull()
       .default('complete'),

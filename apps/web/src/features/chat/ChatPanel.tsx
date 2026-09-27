@@ -57,6 +57,7 @@ function ToolLine({ event }: { event: ToolEvent }) {
         {label}
         {event.summary && ` ${event.summary}`}
       </span>
+      {event.status === 'done' && extraToolActions(event)}
     </li>
   );
 }
@@ -84,8 +85,28 @@ function CopyButton({ text }: { text: string }) {
 /** "Claude pointed at p. N — Go · Clear" under the answer that drew the marks. */
 function PointerBar({ messageId }: { messageId: string }) {
   const groups = useChat(useShallow((s) => s.pointers.filter((g) => g.messageId === messageId)));
+  const drawn = useChat((s) => s.messages.find((m) => m.id === messageId)?.pointers);
+  const running = useChat((s) => s.running);
   const clear = useChat((s) => s.clearPointers);
-  if (!groups.length) return null;
+  if (!groups.length) {
+    // Marks shown earlier (or before a reload) can be brought back.
+    if (!drawn?.length || running) return null;
+    const pages = [...new Set(drawn.map((g) => g.page))].map((p) => `p. ${p}`).join(', ');
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent(CITATION_EVENT));
+          useChat.getState().showMarks(messageId);
+        }}
+        className="text-text-muted hover:text-text flex items-center gap-1.5 text-xs"
+        data-testid="replay-marks"
+      >
+        <MousePointer2 size={12} aria-hidden className="text-orange-600" />
+        {t.chat.pointers.replay(pages)}
+      </button>
+    );
+  }
   const pages = [...new Set(groups.map((g) => g.page))];
   return (
     <div className="border-border flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-2 py-1.5 text-xs">
@@ -120,6 +141,12 @@ function PointerBar({ messageId }: { messageId: string }) {
 let extraPointerActions: (messageId: string) => ReactNode = () => null;
 export function setPointerActions(fn: (messageId: string) => ReactNode) {
   extraPointerActions = fn;
+}
+
+/** Hook for actions on a finished tool line (undoing Claude's highlights). */
+let extraToolActions: (event: ToolEvent) => ReactNode = () => null;
+export function setToolActions(fn: (event: ToolEvent) => ReactNode) {
+  extraToolActions = fn;
 }
 
 /** Reads an answer aloud with Claude's voice (outside voice mode). */
@@ -199,7 +226,7 @@ function MessageItem({ message }: { message: ChatMessage }) {
         </ul>
       )}
       {message.content ? (
-        <Markdown text={message.content} streaming={streaming} />
+        <Markdown text={message.content} streaming={streaming} messageId={message.id} />
       ) : streaming ? (
         <p className="text-text-muted flex items-center gap-2 text-sm">
           <Loader2 size={14} aria-hidden className="animate-spin" />

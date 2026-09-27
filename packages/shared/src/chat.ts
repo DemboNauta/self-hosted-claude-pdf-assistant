@@ -94,6 +94,8 @@ export interface ToolEvent {
   /** Short human-readable summary of the input (e.g. "p. 3–5"). */
   summary: string;
   status: 'running' | 'done' | 'error';
+  /** Annotations the tool created (Claude's highlights), so the chat can undo them. */
+  annotationIds?: string[];
 }
 
 export interface ChatMessage {
@@ -104,6 +106,8 @@ export interface ChatMessage {
   mode?: StudyMode;
   context?: ChatContext;
   toolEvents?: ToolEvent[];
+  /** Assistant turns: the marks Claude drew on the PDF, kept so they can be shown again. */
+  pointers?: PointerGroup[];
   status: 'complete' | 'interrupted' | 'error' | 'streaming';
   errorCode?: ChatErrorCode | null;
   createdAt: string;
@@ -176,11 +180,29 @@ export const pointerShapeSchema = z.object({
 export type PointerShape = z.infer<typeof pointerShapeSchema>;
 
 export interface PointerGroup {
+  /** Mark id within the answer ("m1", "m2"…), referenced in the text as `[[mark:m1]]`. */
+  id: string;
   /** Assistant message that produced the shapes (F-POINT-02). */
   messageId: string;
   docId: string;
   page: number;
   shapes: PointerShape[];
+  /**
+   * Shown when the answer reaches `[[mark:ID]]` (written, or spoken in voice mode)
+   * instead of as soon as Claude draws it; unreferenced ones show when the answer ends.
+   */
+  deferred?: boolean;
+}
+
+/**
+ * Where an answer refers to a set of marks (`[[mark:m2]]`): the marks appear at that
+ * point of the explanation, and the reference is a chip that shows them again.
+ */
+export const MARK_RE = /\[\[mark:(m\d{1,3})\]\]/g;
+
+/** Mark ids referenced in a piece of answer text, in order. */
+export function markRefs(text: string): string[] {
+  return [...text.matchAll(MARK_RE)].map((m) => m[1]!);
 }
 
 export type ServerChatEvent =

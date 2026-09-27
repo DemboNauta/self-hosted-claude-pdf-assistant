@@ -41,7 +41,8 @@ test('highlight, comment, undo, accept Claude proposals and export', async ({ pa
   expect((await exported.body()).includes(Buffer.from('/Highlight'))).toBe(true);
   await panel.getByRole('button', { name: 'Cerrar panel' }).click();
 
-  // Claude proposes key ideas (F-ANN-04): shown dashed until accepted.
+  // Claude highlights key ideas (F-ANN-04) in the student's colours, saved directly;
+  // "Deshacer" in the chat removes them.
   // Closing the panel re-lays out the page (the text layer is rebuilt): retry the selection.
   await expect(async () => {
     await selectInPdf(page, 'El ciclo de Calvin fija');
@@ -53,9 +54,12 @@ test('highlight, comment, undo, accept Claude proposals and export', async ({ pa
   await composer.press('Enter');
   await expect(highlights).toHaveCount(2);
   await openPanel(page, 'Anotaciones');
-  await panel.getByRole('button', { name: 'Aceptar todas' }).click();
   await expect(panel.getByText('propuesta de Claude')).toHaveCount(0);
   await expect(panel).toContainText('De Claude');
+  await panel.getByRole('button', { name: 'Cerrar panel' }).click();
+  await page.getByRole('button', { name: 'Quitar el subrayado de Claude' }).click();
+  await expect(page.getByText('Subrayados quitados')).toBeVisible();
+  await expect(highlights).toHaveCount(1);
 });
 
 // Claude writes in the margin (proposals) and connects parts of the page with arrows.

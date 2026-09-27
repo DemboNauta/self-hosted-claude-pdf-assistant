@@ -19,6 +19,23 @@ change them if he disagrees.
 
 ## Other owner decisions
 
+- **Visual interaction with the PDF (2026-09-27).** The owner asked how Claude could
+  interact better visually and chose, in this order: precise pointing
+  (`get_page_layout`), marks tied to the explanation (`[[mark:ID]]`) and marks that
+  can be shown again (done); then a **whiteboard**; then follow mode, split view and
+  richer shapes. His answers for what comes next:
+  - Whiteboard: a **tab next to the chat** (with a button to enlarge it),
+    **hand-drawn style** (Excalidraw; accepted that it looks different from the
+    minimalist UI), and **the student draws too and Claude corrects** (it gets the
+    board as an image).
+  - Follow mode: Claude moves the viewer **only while a "seguir" toggle is on**;
+    otherwise it offers an "Ir a p. X" button.
+- **Claude's highlights (2026-09-27).** When asked "subráyame lo más importante de
+  las páginas X", Claude highlights **directly** (saved as active, not proposals) in
+  the **student's semantic colours** (yellow important, green definition…; not the
+  student's own states such as "no lo entiendo" unless asked), author Claude. The
+  chat offers **"Deshacer"** to remove that answer's highlights in one go.
+
 - **Voice mode (2026-09-26, F-CHAT-09).** The owner asked for talking to Claude like
   Gemini Live / Claude voice: free, a good voice, responsive, microphone always
   open, able to cut Claude off with a question and have it carry on. Decisions:
@@ -219,6 +236,17 @@ change them if he disagrees.
     A block cut short (skip/reset) after at least a minute adds focus time only. The
     block is credited to the PDF open in the reader when it ends.
   - Focus time is shown apart from reading time (no double counting).
+
+- **Marks timing (2026-09-27, Claude).** `point_at` marks are deferred by default
+  and appear when the answer reaches their `[[mark:ID]]`; a mark never referenced
+  appears when the answer ends (so a forgotten reference only delays it), and
+  `now: true` keeps the old immediate behaviour. A mark shows on its own once: if
+  the student dismisses it, only the chip or "Volver a mostrar…" brings it back.
+- **Page layout (2026-09-27, Claude).** Built on demand from the stored text items
+  plus the PDF operator list (image placements and path bounds), not at ingestion:
+  vector clusters with a single stroke or under 3 % of the page in both directions
+  count as decoration; text inside a figure becomes its labels. Tables drawn with
+  rules therefore show up as figures with labels.
 
 ## Technical decisions worth knowing
 

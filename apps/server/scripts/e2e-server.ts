@@ -133,32 +133,42 @@ const fakeChat = ((args: {
         {},
       );
     }
+    // Marks drawn with point_at, referenced in the answer as Claude is told to.
+    const markIds: string[] = [];
+    const noteMark = (result: unknown) => {
+      const id = /\[\[mark:(m\d+)\]\]/.exec(JSON.stringify(result))?.[1];
+      if (id) markIds.push(id);
+    };
     // "Conecta" makes the fake draw an arrow from the selection to the top of the page.
     if (/conecta/i.test(question) && tools?.point_at && quote) {
-      await tools.point_at.handler(
-        {
-          page: Number(page),
-          shapes: [
-            {
-              type: 'arrow',
-              anchor: { kind: 'text', quote },
-              to: { kind: 'rect', x: 0.6, y: 0.05, w: 0.2, h: 0.05 },
-            },
-          ],
-        },
-        {},
+      noteMark(
+        await tools.point_at.handler(
+          {
+            page: Number(page),
+            shapes: [
+              {
+                type: 'arrow',
+                anchor: { kind: 'text', quote },
+                to: { kind: 'rect', x: 0.6, y: 0.05, w: 0.2, h: 0.05 },
+              },
+            ],
+          },
+          {},
+        ),
       );
     }
     if (/señala/i.test(question) && tools?.point_at && quote) {
-      await tools.point_at.handler(
-        {
-          page: Number(page),
-          shapes: [
-            { type: 'circle', anchor: { kind: 'text', quote }, label: 'Aquí' },
-            { type: 'arrow', anchor: { kind: 'text', quote } },
-          ],
-        },
-        {},
+      noteMark(
+        await tools.point_at.handler(
+          {
+            page: Number(page),
+            shapes: [
+              { type: 'circle', anchor: { kind: 'text', quote }, label: 'Aquí' },
+              { type: 'arrow', anchor: { kind: 'text', quote } },
+            ],
+          },
+          {},
+        ),
       );
     }
     yield {
@@ -208,6 +218,7 @@ const fakeChat = ((args: {
       ...(marked
         ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]
         : []),
+      ...markIds.map((id) => `[[mark:${id}]] Mira lo que te señalo. `),
       'Respuesta de prueba: ',
       'la idea principal está en la página ',
       `${page} ${cite}.`,

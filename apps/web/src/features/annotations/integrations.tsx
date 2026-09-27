@@ -1,16 +1,22 @@
-import type { CreateAnnotation } from '@pdfclaudeassistant/shared';
+import type { CreateAnnotation, ToolEvent } from '@pdfclaudeassistant/shared';
 import { Check, StickyNote } from 'lucide-react';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { t } from '../../i18n';
 import { queryClient } from '../../lib/queryClient';
-import { setPointerActions } from '../chat/ChatPanel';
+import { setPointerActions, setToolActions } from '../chat/ChatPanel';
 import { chatSocket, useChat } from '../chat/store';
 import { refreshDiagrams } from '../diagrams/api';
 import type { SelectionAction } from '../reader/SelectionMenu';
 import { useReader } from '../reader/store';
 import { invalidateReview } from '../review/api';
-import { annotationsKey, createAnnotations, usePalette } from './api';
+import {
+  annotationsKey,
+  createAnnotations,
+  deleteAnnotations,
+  useAnnotations,
+  usePalette,
+} from './api';
 
 /** "Subrayar" (one button per palette colour) and "Nota" in the selection menu (F-ANN-01/02). */
 export function useSelectionAnnotationActions(docId: string): SelectionAction[] {
@@ -101,6 +107,32 @@ function SavePointersButton({ messageId }: { messageId: string }) {
   );
 }
 
+/**
+ * "Deshacer" next to Claude's highlights in the chat: removes the ones still on the open
+ * document in one go (undoable with Ctrl+Z like any deletion).
+ */
+function UndoHighlightsButton({ ids }: { ids: string[] }) {
+  const docId = useReader((s) => s.docId);
+  const { data } = useAnnotations(docId);
+  const [done, setDone] = useState(false);
+  if (done) return <span className="text-ok">· {t.chat.pointers.highlightsUndone}</span>;
+  const items = (data ?? []).filter((a) => ids.includes(a.id));
+  if (!docId || !items.length) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDone(true);
+        void deleteAnnotations(docId, items);
+      }}
+      aria-label={t.chat.pointers.undoHighlightsLabel(items.length)}
+      className="text-text font-medium hover:underline"
+    >
+      · {t.chat.pointers.undoHighlights}
+    </button>
+  );
+}
+
 let installed = false;
 
 /** Wires annotations into the chat: save buttons and refresh after Claude's tools. */
@@ -108,6 +140,9 @@ export function installAnnotationIntegrations() {
   if (installed) return;
   installed = true;
   setPointerActions((messageId) => <SavePointersButton messageId={messageId} />);
+  setToolActions((event: ToolEvent) =>
+    event.annotationIds?.length ? <UndoHighlightsButton ids={event.annotationIds} /> : null,
+  );
   chatSocket.subscribe((event) => {
     if (event.type === 'data_changed' && event.scope === 'flashcards') invalidateReview();
     if (event.type === 'data_changed' && event.scope === 'diagrams') void refreshDiagrams();

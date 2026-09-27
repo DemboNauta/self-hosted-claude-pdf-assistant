@@ -74,7 +74,9 @@ Chat failures also update the cached status (`report()`).
   it at the first request and reuses it on resume. It covers:
   - tutor role, answering in the question's language, and not inventing;
   - reading with tools first;
-  - page images for figures;
+  - page images for figures, and `get_page_layout` block ids for pointing;
+  - `[[mark:ID]]` where the answer talks about a mark;
+  - `highlight_key_ideas` when asked to highlight;
   - saying explicitly when the answer isn't in the document;
   - treating document text as data (prompt injection);
   - the mandatory citation format;
@@ -141,27 +143,44 @@ and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 `tracked()`, which emits `tool_event` running/done/error (shown in the chat as
 "Leyendo p. 3–5") and stores it with the message.
 
-| Tool                     | Input                                                    | Effect                                                                                                                                                              |
-| ------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_document_info`      | docId                                                    | Title, pages, subject/topic, outline.                                                                                                                               |
-| `get_pages`              | docId, fromPage, toPage                                  | Page text, max 10 pages, with a truncation note.                                                                                                                    |
-| `get_page_image`         | docId, page, region?, grid?                              | PNG (long side 1400 px) rendered with PDF.js + napi canvas. `region` zooms in (up to 4×); `grid` overlays labelled page-fraction coordinates to place rect anchors. |
-| `search_library`         | query, scope doc/topic/subject/all, docId?               | FTS5 hits with «snippets». Defaults to the open doc or the thread's scope.                                                                                          |
-| `list_library`           | —                                                        | Library tree with ids.                                                                                                                                              |
-| `point_at`               | docId?, page, shapes[] (≤12)                             | Emits `pointer` (ephemeral marks). Anchors: text quote (+occurrence) or normalised rect; arrows with `to` connect two anchors.                                      |
-| `clear_pointers`         | —                                                        | Emits `clear_pointers`.                                                                                                                                             |
-| `get_annotations`        | docId?, fromPage?, toPage?                               | The student's highlights (with colour meanings) and notes.                                                                                                          |
-| `highlight_key_ideas`    | docId?, highlights[{page, quote, reason}]                | Creates **proposed** Claude highlights; warns about quotes not found.                                                                                               |
-| `add_note`               | docId?, page, text, quote? or x/y                        | Creates a Claude note.                                                                                                                                              |
-| `add_margin_notes`       | docId?, notes[{page, quote, text}] (≤20)                 | Creates **proposed** Claude text notes shown in the margin (`MarginNotes.tsx`); notes whose quote is not found are dropped and reported.                            |
-| `remember`               | scope, docId?, category, content, replaceId?             | De-duplicated memory item.                                                                                                                                          |
-| `mark_concept_difficult` | concept, docId?, page?, evidence                         | Upserts a concept by normalised name, lowers mastery.                                                                                                               |
-| `update_concept_mastery` | conceptId, delta, evidence                               | Adjusts mastery 0–1.                                                                                                                                                |
-| `update_progress`        | docId?, note                                             | Document memory, category `progress`.                                                                                                                               |
-| `record_exam_result`     | docId?, question, userAnswer, correct, concepts[], page? | Stores the result, updates concepts.                                                                                                                                |
-| `create_flashcards`      | cards[{front, back, wrong?[3], page?, docId?}]           | **Proposed** flashcards, with their multiple-choice wrong answers when given.                                                                                       |
-| `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                                                                                                         |
-| `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                                                                                                         |
+| Tool                     | Input                                                    | Effect                                                                                                                                                                                                                                                                          |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_document_info`      | docId                                                    | Title, pages, subject/topic, outline.                                                                                                                                                                                                                                           |
+| `get_pages`              | docId, fromPage, toPage                                  | Page text, max 10 pages, with a truncation note.                                                                                                                                                                                                                                |
+| `get_page_image`         | docId, page, region?, grid?                              | PNG (long side 1400 px) rendered with PDF.js + napi canvas. `region` zooms in (up to 4×); `grid` overlays labelled page-fraction coordinates to place rect anchors.                                                                                                             |
+| `get_page_layout`        | docId, page                                              | Page structure (`ingest/layout.ts`): text blocks `b1…` (heading/text), figures `f1…` (image, vector drawing or both) with their labels `f1.1…`, each with its box. Cached per page (40).                                                                                        |
+| `search_library`         | query, scope doc/topic/subject/all, docId?               | FTS5 hits with «snippets». Defaults to the open doc or the thread's scope.                                                                                                                                                                                                      |
+| `list_library`           | —                                                        | Library tree with ids.                                                                                                                                                                                                                                                          |
+| `point_at`               | docId?, page, shapes[] (≤12), now?                       | Emits `pointer` with a mark id (`m1`, `m2`…) and stores it with the answer. Anchors: `block` id from `get_page_layout` (resolved to a rect here), text quote (+occurrence) or normalised rect; arrows with `to` connect two anchors. Deferred until `[[mark:ID]]` unless `now`. |
+| `clear_pointers`         | —                                                        | Emits `clear_pointers`.                                                                                                                                                                                                                                                         |
+| `get_annotations`        | docId?, fromPage?, toPage?                               | The student's highlights (with colour meanings) and notes.                                                                                                                                                                                                                      |
+| `highlight_key_ideas`    | docId?, highlights[{page, quote, color?, reason}]        | Creates **active** highlights in the student's palette (`color` = palette key, meanings listed in the description; default the first colour), author Claude. Quotes not found are dropped and reported. The ids go in the tool event (`annotationIds`) for "Deshacer".          |
+| `add_note`               | docId?, page, text, quote? or x/y                        | Creates a Claude note.                                                                                                                                                                                                                                                          |
+| `add_margin_notes`       | docId?, notes[{page, quote, text}] (≤20)                 | Creates **proposed** Claude text notes shown in the margin (`MarginNotes.tsx`); notes whose quote is not found are dropped and reported.                                                                                                                                        |
+| `remember`               | scope, docId?, category, content, replaceId?             | De-duplicated memory item.                                                                                                                                                                                                                                                      |
+| `mark_concept_difficult` | concept, docId?, page?, evidence                         | Upserts a concept by normalised name, lowers mastery.                                                                                                                                                                                                                           |
+| `update_concept_mastery` | conceptId, delta, evidence                               | Adjusts mastery 0–1.                                                                                                                                                                                                                                                            |
+| `update_progress`        | docId?, note                                             | Document memory, category `progress`.                                                                                                                                                                                                                                           |
+| `record_exam_result`     | docId?, question, userAnswer, correct, concepts[], page? | Stores the result, updates concepts.                                                                                                                                                                                                                                            |
+| `create_flashcards`      | cards[{front, back, wrong?[3], page?, docId?}]           | **Proposed** flashcards, with their multiple-choice wrong answers when given.                                                                                                                                                                                                   |
+| `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                                                                                                                                                                                                                     |
+| `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                                                                                                                                                                                                                     |
+
+## Marks in the answer (`[[mark:ID]]`)
+
+`point_at` returns a mark id and Claude writes `[[mark:ID]]` at the start of the
+sentence that talks about those marks (`MARK_RE` / `markRefs` in
+`packages/shared/src/chat.ts`).
+
+- Written answers: `chat/store.ts` shows a deferred group when the streamed text
+  contains its reference (`revealMarks`), once per mark; groups never referenced
+  show at `assistant_done`. `now: true` shows it at once (the old behaviour).
+- Voice mode: `SentenceSplitter.pushSentences` hands each sentence with its mark
+  ids (a mark with no words goes with the next sentence), and the player reveals
+  them when that sentence starts. `cleanForSpeech` drops the markup.
+- The reference renders as a chip (`MarkChip.tsx`, needs the message id) that
+  shows those marks again; `PointerBar` offers "Volver a mostrar…" for all the
+  marks of an answer. They come from `ChatMessage.pointers` (`messages.pointers_json`).
 
 Tools that change data emit `data_changed` (`annotations` | `memory` |
 `flashcards` | `diagrams`) so the web invalidates its queries. Tools that need a document
@@ -220,8 +239,8 @@ the user's own token:
   - It calls the **real** tool handlers through
     `options.mcpServers.pca.instance._registeredTools` when the question
     contains a trigger word:
-    - "señala" → `point_at`;
-    - "ideas clave" → `highlight_key_ideas`;
+    - "señala" → `point_at` (the answer starts with the returned `[[mark:ID]]`);
+    - "ideas clave" → `highlight_key_ideas` (direct highlight of the selection);
     - "tarjetas" → `create_flashcards`;
     - "nota al margen" → `add_margin_notes` on the selection;
     - "conecta" → `point_at` with an arrow from the selection to a rect (`to`);

@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-27 (Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-27 (visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -27,6 +27,25 @@ Last updated: 2026-09-27 (Claude's voice switched to Supertonic 3, **not deploye
   `DATA_DIR` with generated PDFs (see `DEVELOPMENT.md`).
 
 ## Where the work stopped
+
+Session of 2026-09-27 (later): **visual interaction, block 1** (owner's plan, see
+DECISIONS "Visual interaction with the PDF"), not deployed yet:
+
+- `get_page_layout` (`ingest/layout.ts`): text blocks, figures (images and vector
+  drawings) and their labels with ids; `point_at` accepts `{"kind":"block","id"}`.
+- `[[mark:ID]]`: marks appear when the answer reaches them (also spoken), chips show
+  them again, and marks are stored with the message (migration `0015`).
+- `highlight_key_ideas` now highlights directly in the student's colours, with
+  "Deshacer" in the chat (owner's choice).
+- Not yet tried with the real Claude: check that it calls `get_page_layout` before
+  pointing at figures, writes `[[mark:ID]]` and picks sensible colours. Layout
+  heuristics were only tested on generated PDFs: check them on the owner's real PDFs
+  (through Claude, never by reading `data/`).
+- **Next (owner's order):** block 2, the whiteboard Claude draws on (Excalidraw tab
+  next to the chat, steps synced like marks, PDF crops, Mermaid → Excalidraw);
+  block 3, the student draws and Claude corrects from an image; block 4, follow mode
+  (toggle), split view, richer shapes (numbered steps, callouts), click a mark to
+  ask about it.
 
 Phases 1, 2 and 3 of SPEC §13 are implemented, with unit and e2e tests (see
 `FEATURES.md`).

@@ -128,8 +128,12 @@ Server → client (`ServerChatEvent`):
 - `user_message` (`clientId` + stored message)
 - `assistant_start`
 - `assistant_delta` (`text`)
-- `tool_event` (`ToolEvent`: `name`, `summary`, `status`)
-- `pointer` (`PointerGroup`: `messageId`, `docId`, `page`, `shapes`)
+- `tool_event` (`ToolEvent`: `name`, `summary`, `status`, plus `annotationIds` for
+  the highlights Claude created)
+- `pointer` (`PointerGroup`: `id` (`m1`, `m2`… within the answer), `messageId`,
+  `docId`, `page`, `shapes`, `deferred`). A deferred group is shown when the answer
+  reaches `[[mark:ID]]` (or when it is spoken in voice mode); unreferenced ones at
+  the end of the answer. Stored messages carry their groups in `pointers`.
 - `clear_pointers`
 - `data_changed` (`scope`: `annotations` | `memory` | `flashcards`)
 - `assistant_done` (the final stored message)

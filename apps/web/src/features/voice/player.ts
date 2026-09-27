@@ -5,6 +5,8 @@ export interface Chunk {
   text: string;
   messageId: string;
   index: number;
+  /** Claude's marks this sentence refers to (`[[mark:ID]]`): shown when it starts. */
+  marks?: string[];
 }
 
 interface Queued extends Chunk {

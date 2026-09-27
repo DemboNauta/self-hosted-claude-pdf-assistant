@@ -4,6 +4,7 @@ import type {
   ChatErrorCode,
   DrawingAnchor,
   DrawingMark,
+  PointerGroup,
   ChatMessage,
   ServerChatEvent,
   StudyMode,
@@ -117,6 +118,7 @@ export class ChatService {
     emit({ type: 'assistant_start', threadId: thread.id, message: assistant });
 
     const toolEvents: ToolEvent[] = [];
+    const pointers: PointerGroup[] = [];
     let content = '';
     const turn = {
       emitDelta: (text: string) => {
@@ -129,6 +131,7 @@ export class ChatService {
       const message: ChatMessage = svc.threads.finishAssistantMessage(assistant.id, {
         content,
         toolEvents,
+        pointers,
         status,
         errorCode,
       });
@@ -159,6 +162,7 @@ export class ChatService {
           emit,
           onText: turn.emitDelta,
           onTool: (e) => toolEvents.push(e),
+          onPointer: (g) => pointers.push(g),
         });
 
       try {
@@ -260,6 +264,7 @@ export class ChatService {
       emit: (event: ServerChatEvent) => void;
       onText: (text: string) => void;
       onTool: (event: ToolEvent) => void;
+      onPointer: (group: PointerGroup) => void;
     },
   ) {
     const { server, allowedTools } = buildStudyServer(svc, {
@@ -269,6 +274,7 @@ export class ChatService {
       scope: t.scope,
       emit: t.emit,
       record: t.onTool,
+      recordPointer: t.onPointer,
     });
     const q = this.runQuery({
       prompt: t.prompt,

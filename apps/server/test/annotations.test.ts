@@ -1,4 +1,9 @@
-import type { Annotation, AppSettings, HighlightAnchor } from '@pdfclaudeassistant/shared';
+import type {
+  Annotation,
+  AppSettings,
+  HighlightAnchor,
+  ToolEvent,
+} from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
 import type { PDFArray } from 'pdf-lib';
 import { PDFDocument, PDFName } from 'pdf-lib';
@@ -145,48 +150,41 @@ describe('annotations', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('lets Claude propose key ideas that the student accepts or rejects', async () => {
+  it("lets Claude highlight passages in the student's colours, dropping quotes not found", async () => {
     const events: unknown[] = [];
+    const recorded: ToolEvent[] = [];
     const ctx: ToolContext = {
       threadId: 't',
       messageId: 'm',
       docId,
       scope: { kind: 'document', id: docId },
       emit: (e) => events.push(e),
-      record: () => {},
+      record: (e) => recorded.push(e),
     };
     const deps = servicesOf(app);
     const tool = annotationTools(deps, ctx).find((t) => t.name === 'highlight_key_ideas')!;
+    expect(tool.description).toContain('green = "Definición"');
     const result = await tool.handler(
       {
         highlights: [
           { page: 1, quote: 'La fotosíntesis ocurre en los cloroplastos', reason: 'Idea central' },
+          { page: 1, quote: 'El ciclo de Calvin fija el CO2', color: 'green' },
           { page: 1, quote: 'texto que no existe' },
         ],
       } as never,
       {},
     );
+    expect(JSON.stringify(result)).toContain('Highlighted 2 passage(s)');
     expect(JSON.stringify(result)).toContain('not found verbatim');
     expect(events).toContainEqual({ type: 'data_changed', threadId: 't', scope: 'annotations' });
 
-    const proposals = await list();
-    expect(proposals.map((a) => [a.author, a.status, a.color])).toEqual([
-      ['claude', 'proposed', 'claude'],
-      ['claude', 'proposed', 'claude'],
+    const saved = await list();
+    expect(saved.map((a) => [a.author, a.status, a.color])).toEqual([
+      ['claude', 'active', 'yellow'],
+      ['claude', 'active', 'green'],
     ]);
-    await app.inject({
-      method: 'POST',
-      url: '/api/annotations/status',
-      headers,
-      payload: { ids: [proposals[0]!.id], status: 'active' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: '/api/annotations/status',
-      headers,
-      payload: { ids: [proposals[1]!.id], status: 'rejected' },
-    });
-    expect((await list()).map((a) => a.status)).toEqual(['active']);
+    // The tool event keeps the ids so the chat can undo them in one go.
+    expect(recorded[0]!.annotationIds).toEqual(saved.map((a) => a.id));
 
     const read = annotationTools(deps, ctx).find((t) => t.name === 'get_annotations')!;
     expect(JSON.stringify(await read.handler({} as never, {}))).toContain('Idea central');

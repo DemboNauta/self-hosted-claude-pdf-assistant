@@ -1,0 +1,1 @@
+ALTER TABLE `messages` ADD `pointers_json` text;

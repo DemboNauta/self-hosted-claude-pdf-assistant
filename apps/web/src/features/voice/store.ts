@@ -9,11 +9,11 @@ import {
 import { create } from 'zustand';
 import { t } from '../../i18n';
 import { api } from '../../lib/api';
-import { chatSocket, useChat } from '../chat/store';
+import { chatSocket, revealMarks, useChat } from '../chat/store';
 import { useReader } from '../reader/store';
 import { Listener } from './listener';
 import { VoicePlayer, type Chunk } from './player';
-import { isEcho, SentenceSplitter, splitSentences, voiceCommand } from './speech';
+import { isEcho, SentenceSplitter, splitSentences, voiceCommand, type Sentence } from './speech';
 
 export type VoicePhase = 'off' | 'listening' | 'thinking' | 'speaking' | 'paused';
 
@@ -108,6 +108,8 @@ const get = () => useVoice.getState();
 
 const player = new VoicePlayer({
   onStart: (c) => {
+    // Claude's marks appear as the sentence that talks about them is spoken.
+    if (c.marks?.length) revealMarks(c.messageId, c.marks);
     previousHeard = lastHeard ?? '';
     lastHeard = c.text;
     if (get().active) set({ phase: 'speaking' });
@@ -226,14 +228,18 @@ export async function previewVoice(settings: VoiceSettings) {
   player.enqueue({ text: t.voice.sample, messageId: 'preview', index: 0 });
 }
 
-function feed(messageId: string, sentences: string[]) {
+function feed(messageId: string, sentences: Sentence[]) {
   const list = chunks.get(messageId) ?? [];
   chunks.set(messageId, list);
-  for (const text of sentences) {
-    const index = list.push(text) - 1;
-    if (!muted.has(messageId) && speaking === messageId && get().phase !== 'paused') {
-      player.enqueue({ text, messageId, index });
+  for (const { text, marks } of sentences) {
+    const voiced = !muted.has(messageId) && speaking === messageId && get().phase !== 'paused';
+    // Marks with nothing to say, or in an answer that is not spoken, show right away.
+    if (!text || !voiced) {
+      if (marks.length) revealMarks(messageId, marks);
+      if (!text) continue;
     }
+    const index = list.push(text) - 1;
+    if (voiced) player.enqueue({ text, messageId, index, ...(marks.length && { marks }) });
   }
 }
 
@@ -380,13 +386,13 @@ chatSocket.subscribe((event) => {
     }
     case 'assistant_delta': {
       const splitter = splitters.get(event.messageId);
-      if (splitter) feed(event.messageId, splitter.push(event.text));
+      if (splitter) feed(event.messageId, splitter.pushSentences(event.text));
       break;
     }
     case 'assistant_done': {
       const id = event.message.id;
       const splitter = splitters.get(id);
-      if (splitter) feed(id, splitter.flush());
+      if (splitter) feed(id, splitter.flushSentences());
       finished.add(id);
       if (event.message.content.includes(VOICE_END)) ended.add(id);
       if (!player.busy && speaking === id && get().phase !== 'paused') afterAnswer(id);

@@ -3,6 +3,7 @@ import type {
   ChatErrorCode,
   ChatMessage,
   DocumentQuestion,
+  PointerGroup,
   StudyMode,
   ThreadScope,
   ThreadSummary,
@@ -34,6 +35,7 @@ function toMessage(row: MessageRow): ChatMessage {
     content: row.content,
     ...(ctx ? { mode: ctx.mode, context: ctx.context } : {}),
     ...(row.toolEventsJson ? { toolEvents: JSON.parse(row.toolEventsJson) as ToolEvent[] } : {}),
+    ...(row.pointersJson ? { pointers: JSON.parse(row.pointersJson) as PointerGroup[] } : {}),
     status: row.status,
     errorCode: (row.errorCode as ChatErrorCode | null) ?? null,
     createdAt: row.createdAt,
@@ -168,6 +170,7 @@ export class ThreadService {
     patch: {
       content: string;
       toolEvents: ToolEvent[];
+      pointers?: PointerGroup[];
       status: 'complete' | 'interrupted' | 'error';
       errorCode?: ChatErrorCode;
     },
@@ -177,6 +180,7 @@ export class ThreadService {
       .set({
         content: patch.content,
         toolEventsJson: patch.toolEvents.length ? JSON.stringify(patch.toolEvents) : null,
+        pointersJson: patch.pointers?.length ? JSON.stringify(patch.pointers) : null,
         status: patch.status,
         errorCode: patch.errorCode ?? null,
       })

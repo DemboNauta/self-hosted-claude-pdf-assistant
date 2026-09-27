@@ -186,6 +186,45 @@ describe('chat', () => {
     expect(list[0]).toMatchObject({ title: '¿Dónde ocurre la fotosíntesis?', messageCount: 4 });
   });
 
+  it('stores the marks Claude drew with the answer, to show them again later', async () => {
+    script = async function* (call) {
+      yield { type: 'system', subtype: 'init', session_id: 's', apiKeySource: 'none' };
+      const tools = (
+        call.options as {
+          mcpServers: {
+            pca: {
+              instance: {
+                _registeredTools: Record<
+                  string,
+                  { handler: (args: unknown, extra: unknown) => Promise<unknown> }
+                >;
+              };
+            };
+          };
+        }
+      ).mcpServers.pca.instance._registeredTools;
+      await tools.point_at!.handler(
+        { page: 1, shapes: [{ type: 'circle', anchor: { kind: 'text', quote: 'fotosíntesis' } }] },
+        {},
+      );
+      for (const m of streamText('[[mark:m1]] Aquí está.')) yield m;
+      yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' };
+    };
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const events = await ask(thread.id, 'Señálalo');
+    expect(events.find((e) => e.type === 'pointer')).toMatchObject({
+      group: { id: 'm1', page: 1, deferred: true },
+    });
+    const history = (
+      await app.inject({ url: `/api/threads/${thread.id}/messages`, headers })
+    ).json<{ messages: ChatMessage[] }>().messages;
+    expect(history[1]!.pointers).toEqual([
+      expect.objectContaining({ id: 'm1', docId, page: 1, messageId: history[1]!.id }),
+    ]);
+  });
+
   it('lists the questions asked about passages, with their answers', async () => {
     const thread = (
       await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
