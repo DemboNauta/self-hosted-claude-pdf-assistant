@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-26 (multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-27 (Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -58,6 +58,12 @@ Session of 2026-09-27 (owner's requests, deployed after each commit):
 - After the owner's first real cards: "Pedir pista a Claude" (P) during multiple
   choice (right after a hint = «Difícil»); the cards prompt forbids questions about
   the notes' structure/order; new cards are shuffled.
+- Voice (2026-09-27): the owner found Piper robotic; Claude now speaks with
+  Supertonic 3 (F1/M1, 5 steps, see DECISIONS "Voice mode"). Not deployed yet: the
+  next deploy downloads ~400 MB into `runtime/supertonic` and removes
+  `runtime/piper`. After it, check on the VPS how long the first sentence takes and
+  the service's memory (`systemctl status pdfclaudeassistant`) with voice mode and
+  Claude running together.
 - Pending, asked by the owner: improve how Claude talks in voice mode (owner not
   convinced by it). Two flaky/failing e2e tests were flagged as separate tasks
   (review.spec desktop Home brief; reader.spec mobile selection menu).
@@ -118,9 +124,9 @@ Then the owner asked for a single name per account (the username; migration `001
 drops `display_name`) and for **voice mode** (F-CHAT-09, see `DECISIONS.md` "Voice
 mode"): always-open microphone, Claude explains out loud (teaching with examples,
 never reading the PDF), can be interrupted with a question and then carries on.
-Claude's voice is Piper on the VPS (voices picked by the owner: sharvard female,
-davefx male); listening is the browser's speech recognition. Tested with a fake
-microphone/voice/Claude (e2e) and the real Piper on Windows; **not yet tried on the
+Claude's voice is Supertonic 3 on the VPS since 2026-09-27 (voices picked by the
+owner by ear: F1 female, M1 male; it replaced Piper, see DECISIONS); listening is the browser's speech recognition. Tested with a fake
+microphone/voice/Claude (e2e) and the real Supertonic on Windows; **not yet tried on the
 owner's Android** nor with real Claude in voice mode. Things to watch there: whether
 Claude's voice triggers false interruptions (the text echo filter in
 `features/voice/speech.ts` `isEcho` is the safety net; headphones avoid it),

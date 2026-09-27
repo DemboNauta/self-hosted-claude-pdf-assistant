@@ -28,7 +28,7 @@ import { registerAnnotationRoutes } from './routes/annotations.js';
 import { registerDiagramRoutes } from './routes/diagrams.js';
 import { registerFocusRoutes } from './routes/focus.js';
 import { UploadService } from './services/uploads.js';
-import { PiperTts, type Synthesize } from './services/tts.js';
+import { SupertonicTts, type Synthesize } from './services/tts.js';
 import { registerTtsRoutes } from './routes/tts.js';
 
 export interface AppDeps {
@@ -43,7 +43,7 @@ export interface AppDeps {
   ocr?: OcrRunner | null;
   /** Replaces the Agent SDK `query` (tests and the e2e server use a fake Claude). */
   claudeQuery?: typeof query;
-  /** Speech synthesis; defaults to Piper when PIPER_DIR is complete (tests inject a fake). */
+  /** Speech synthesis; defaults to Supertonic when SUPERTONIC_DIR is complete (tests inject a fake). */
   synthesize?: Synthesize | null;
 }
 
@@ -120,10 +120,11 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   await registerFocusRoutes(app, svc);
   const chat = new ChatService(config, credentials, claudeStatus, app.log, runQuery);
   await registerChatRoutes(app, svc, chat);
-  const piper = deps.synthesize === undefined ? PiperTts.detect(config.piperDir, app.log) : null;
+  const tts =
+    deps.synthesize === undefined ? SupertonicTts.detect(config.supertonicDir, app.log) : null;
   await registerTtsRoutes(
     app,
-    deps.synthesize !== undefined ? deps.synthesize : (piper?.synthesize ?? null),
+    deps.synthesize !== undefined ? deps.synthesize : (tts?.synthesize ?? null),
   );
   if (config.webDir) await registerWebApp(app, config.webDir);
 
@@ -131,7 +132,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
     clearInterval(purgeTimer);
     clearInterval(uploadsTimer);
     chat.stopAll();
-    piper?.close();
+    await tts?.close();
     db.$client.close();
   });
   return app;

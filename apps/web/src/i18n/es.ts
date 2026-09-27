@@ -715,7 +715,7 @@ export const es = {
       title: 'Voz de Claude',
       help: 'La voz con la que Claude te habla en el modo voz y al leer respuestas en voz alta.',
       voice: 'Voz',
-      voices: { 'sharvard-f': 'Chica (España)', davefx: 'Chico (España)' },
+      voices: { f1: 'Chica', m1: 'Chico' },
       rate: 'Velocidad',
       preview: 'Probar voz',
     },

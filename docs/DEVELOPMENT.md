@@ -2,12 +2,13 @@
 
 ## Tooling quirks
 
-- **Voice mode locally:** download `piper_windows_amd64.zip` (rhasspy/piper
-  release 2023.11.14-2) and the two voices listed in `scripts/deploy-remote.sh`
-  into one folder (`piper.exe`, `voices/*.onnx(.json)`) and set `PIPER_DIR` to it
-  in `.env`. Without it voice mode uses the browser's voices. The first sentence
-  after a start takes a few seconds on Windows (model load); the web warms it up
-  when voice mode starts.
+- **Voice mode locally:** download the Supertonic 3 files listed in
+  `scripts/deploy-remote.sh` (`SUPERTONIC_FILES`, same folders: `onnx/`,
+  `voice_styles/`) from Hugging Face into one folder and set `SUPERTONIC_DIR` to it
+  in `.env`. Do not take them from a Windows git clone of the model repo: git
+  converts `tts.json` to CRLF (harmless, but the hash differs). Without it voice
+  mode uses the browser's voices. The first sentence after a start takes ~2 s
+  (model load); the web warms it up when voice mode starts.
 
 - **Node:** the PC's nvm default is Node 24, which is what works locally. With
   Node 22.13 the prebuilt `better-sqlite3` binary segfaults on load, and its

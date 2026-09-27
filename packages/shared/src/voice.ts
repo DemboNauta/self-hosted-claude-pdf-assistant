@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
 /**
- * Voices Claude can speak with in voice mode (F-CHAT-09). Piper neural voices from
- * Spain, synthesised on the server (see apps/server/src/services/tts.ts).
+ * Voices Claude can speak with in voice mode (F-CHAT-09). Supertonic 3 presets F1
+ * (female) and M1 (male), picked by the owner, synthesised on the server (see
+ * apps/server/src/services/tts.ts).
  */
-export const VOICE_IDS = ['sharvard-f', 'davefx'] as const;
+export const VOICE_IDS = ['f1', 'm1'] as const;
 export type VoiceId = (typeof VOICE_IDS)[number];
 
 export interface VoiceSettings {
@@ -13,7 +14,10 @@ export interface VoiceSettings {
   rate: number;
 }
 
-export const DEFAULT_VOICE: VoiceSettings = { voice: 'sharvard-f', rate: 1 };
+export const DEFAULT_VOICE: VoiceSettings = { voice: 'f1', rate: 1 };
+
+/** Piper voices saved before the switch to Supertonic, mapped to their replacement. */
+export const LEGACY_VOICES: Record<string, VoiceId> = { 'sharvard-f': 'f1', davefx: 'm1' };
 
 export const voiceSettingsSchema = z.object({
   voice: z.enum(VOICE_IDS),
@@ -33,7 +37,7 @@ export type TtsRequest = z.infer<typeof ttsRequestSchema>;
  */
 export const VOICE_END = '[[voice-end]]';
 
-/** Whether the server can synthesise speech (Piper installed). */
+/** Whether the server can synthesise speech (Supertonic installed). */
 export interface TtsStatus {
   available: boolean;
 }

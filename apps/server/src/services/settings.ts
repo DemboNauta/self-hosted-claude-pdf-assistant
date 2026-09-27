@@ -2,6 +2,8 @@ import {
   DEFAULT_PALETTE,
   DEFAULT_STUDY_TIMER,
   DEFAULT_VOICE,
+  LEGACY_VOICES,
+  VOICE_IDS,
   HIGHLIGHT_KEYS,
   type AppSettings,
   type PaletteEntry,
@@ -56,8 +58,14 @@ export class SettingsService {
         ...DEFAULT_STUDY_TIMER,
         ...this.read<Partial<StudyTimerSettings>>('study_timer'),
       },
-      voice: { ...DEFAULT_VOICE, ...this.read<Partial<VoiceSettings>>('voice') },
+      voice: this.voice(),
     };
+  }
+
+  private voice(): VoiceSettings {
+    const saved = { ...DEFAULT_VOICE, ...this.read<Partial<VoiceSettings>>('voice') };
+    if (VOICE_IDS.includes(saved.voice)) return saved;
+    return { ...saved, voice: LEGACY_VOICES[saved.voice] ?? DEFAULT_VOICE.voice };
   }
 
   update(patch: Partial<AppSettings>): AppSettings {

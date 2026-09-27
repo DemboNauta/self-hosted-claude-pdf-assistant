@@ -30,10 +30,12 @@ follows the same pattern:
   domain, so the site address has the `http://` prefix.
 - OCR packages (`ocrmypdf`, `tesseract-ocr-spa/eng`) are installed system-wide
   by the first deploy.
-- Piper (text to speech for voice mode) and its two Spanish voices go to
-  `runtime/piper` (`ensure_piper`, pinned SHA-256; ~130 MB), and the unit sets
-  `PIPER_DIR`. Each voice's model stays loaded ~10 min after use (~100 MB RAM).
-  The Docker image does not include Piper: there voice mode uses the browser's
+- Supertonic 3 (text to speech for voice mode) and its two voices (F1, M1) go to
+  `runtime/supertonic` (`ensure_supertonic`, pinned Hugging Face revision and
+  SHA-256; ~400 MB), and the unit sets `SUPERTONIC_DIR`. The model runs inside the
+  server with `onnxruntime-node` and stays loaded ~10 min after use (~550 MB RAM,
+  within the unit's `MemoryMax`). The first deploy with it removes the old
+  `runtime/piper`. The Docker image does not include it: there voice mode uses the browser's
   voices.
 - Docker (`docker/`, `docker-compose.yml`) stays in the repo as an alternative
   for other hosts.

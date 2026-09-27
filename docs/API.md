@@ -164,10 +164,10 @@ The chat context also accepts `pageRange: { from, to }` (the scope of a diagram)
 
 ## Voice (F-CHAT-09)
 
-| Method | Path       | Notes                                                                                           |
-| ------ | ---------- | ----------------------------------------------------------------------------------------------- |
-| GET    | `/api/tts` | `{ available }`: Piper is installed (`PIPER_DIR`). Otherwise the web uses the browser's voices. |
-| POST   | `/api/tts` | `{ text (≤1000), voice: "sharvard-f"                                                            | "davefx" }`→`audio/wav`. One sentence per request; 240/min. `503` without Piper. |
+| Method | Path       | Notes                                                                                                     |
+| ------ | ---------- | --------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/tts` | `{ available }`: Supertonic is installed (`SUPERTONIC_DIR`). Otherwise the web uses the browser's voices. |
+| POST   | `/api/tts` | `{ text (≤1000), voice: "f1"                                                                              | "m1" }`→`audio/wav`(44.1 kHz). One sentence per request, synthesised one at a time; 240/min.`503` without Supertonic. |
 
 The chat context also accepts `voice: true` (spoken, tutor-style answer) and
 `interruptedAfter` (the last sentence heard before the student cut in). Settings

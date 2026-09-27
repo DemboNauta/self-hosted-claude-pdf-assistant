@@ -17,7 +17,7 @@ const PREFETCH = 3;
 
 /**
  * Plays Claude's sentences one after another (voice mode, F-CHAT-09). Audio comes from
- * the server's Piper voices and plays inside the page, so the microphone's echo
+ * the server's Supertonic voices and plays inside the page, so the microphone's echo
  * cancellation removes it and Claude does not interrupt itself. Without server voices
  * (or if a sentence fails) it falls back to the browser's speech synthesis.
  */
@@ -29,7 +29,7 @@ export class VoicePlayer {
   /** Ends the sentence playing now (used by `stop()`). */
   private finishCurrent: (() => void) | null = null;
   serverVoices = true;
-  settings: VoiceSettings = { voice: 'sharvard-f', rate: 1 };
+  settings: VoiceSettings = { voice: 'f1', rate: 1 };
 
   constructor(private readonly events: { onStart: (c: Chunk) => void; onIdle: () => void }) {
     this.el.preload = 'auto';

@@ -93,44 +93,39 @@ ensure_node() {
   ln -sfn "$DIR/runtime/${file%.tar.xz}" "$DIR/runtime/node"
 }
 
-# Piper (free neural text to speech) and the two Spanish voices of voice mode, checked
-# against pinned hashes. Reinstalled only when a file is missing.
-PIPER_RELEASE=https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
-PIPER_SHA=a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992
-VOICES_URL=https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES
-VOICE_FILES=(
-  "davefx/medium/es_ES-davefx-medium.onnx 6658b03b1a6c316ee4c265a9896abc1393353c2d9e1bca7d66c2c442e222a917"
-  "davefx/medium/es_ES-davefx-medium.onnx.json 0e0dda87c732f6f38771ff274a6380d9252f327dca77aa2963d5fbdf9ec54842"
-  "sharvard/medium/es_ES-sharvard-medium.onnx 40febfb1679c69a4505ff311dc136e121e3419a13a290ef264fdf43ddedd0fb1"
-  "sharvard/medium/es_ES-sharvard-medium.onnx.json 7438c9b699c72b0c3388dae1b68d3f364dc66a2150fe554a1c11f03372957b2c"
+# Supertonic 3 (free, local text to speech) for voice mode: the model and the two
+# voices the owner picked (F1, M1), from a pinned revision and checked against pinned
+# hashes. Model weights under the OpenRAIL-M License (accepted by the owner). Files
+# are downloaded only when missing.
+SUPERTONIC_URL=https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/aafc6e32416a594460b32413efc49d7fe4ce6d46
+SUPERTONIC_FILES=(
+  "onnx/duration_predictor.onnx c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db"
+  "onnx/text_encoder.onnx c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff"
+  "onnx/vector_estimator.onnx 883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c"
+  "onnx/vocoder.onnx 085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba"
+  "onnx/tts.json 42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09"
+  "onnx/unicode_indexer.json 9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f"
+  "voice_styles/F1.json bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2"
+  "voice_styles/M1.json e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b"
+  "LICENSE -"
 )
 
-ensure_piper() {
-  local dir=$DIR/runtime/piper tmp entry file sum
-  if [ ! -x "$dir/piper" ]; then
-    log "Installing Piper (text to speech)..."
-    tmp=$(mktemp -d)
-    curl -fsSL "$PIPER_RELEASE" -o "$tmp/piper.tgz"
-    echo "$PIPER_SHA  $tmp/piper.tgz" | sha256sum -c --quiet - || die "Piper checksum mismatch."
-    tar -xzf "$tmp/piper.tgz" -C "$tmp"
-    rm -rf "$dir.new"
-    mv "$tmp/piper" "$dir.new"
-    [ -d "$dir/voices" ] && mv "$dir/voices" "$dir.new/voices"
-    rm -rf "$dir" "$tmp"
-    mv "$dir.new" "$dir"
-  fi
-  mkdir -p "$dir/voices"
-  for entry in "${VOICE_FILES[@]}"; do
+ensure_supertonic() {
+  local dir=$DIR/runtime/supertonic entry file sum
+  for entry in "${SUPERTONIC_FILES[@]}"; do
     file=${entry%% *}
     sum=${entry##* }
-    [ -f "$dir/voices/$(basename "$file")" ] && continue
-    log "Downloading voice $(basename "$file")..."
-    curl -fsSL "$VOICES_URL/$file" -o "$dir/voices/$(basename "$file").part"
-    echo "$sum  $dir/voices/$(basename "$file").part" | sha256sum -c --quiet - ||
-      die "Checksum mismatch for $(basename "$file")."
-    mv "$dir/voices/$(basename "$file").part" "$dir/voices/$(basename "$file")"
+    [ -f "$dir/$file" ] && continue
+    log "Downloading Supertonic $file..."
+    mkdir -p "$(dirname "$dir/$file")"
+    curl -fsSL "$SUPERTONIC_URL/$file" -o "$dir/$file.part"
+    [ "$sum" = - ] || echo "$sum  $dir/$file.part" | sha256sum -c --quiet - ||
+      die "Checksum mismatch for Supertonic $file."
+    mv "$dir/$file.part" "$dir/$file"
   done
   chmod -R a+rX "$dir"
+  # Piper voiced voice mode before Supertonic.
+  rm -rf "$DIR/runtime/piper"
 }
 
 ensure_env() {
@@ -265,7 +260,7 @@ cmd_deploy() {
   ensure_user
   ensure_packages
   ensure_node
-  ensure_piper
+  ensure_supertonic
   ensure_env "$port_arg"
   secure_env
   mkdir -p "$DIR/data/claude-home"

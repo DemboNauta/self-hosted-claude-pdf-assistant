@@ -108,7 +108,7 @@ idea; spoken sentences without Markdown or LaTeX; citations still written (shown
 not spoken); point at the page while explaining; about 120–250 words. With
 `context.interruptedAfter` Claude is told the student cut in after that sentence
 and must answer briefly without continuing the old explanation: the web resumes
-it itself (`features/voice/store.ts`). Speech comes from Piper
+it itself (`features/voice/store.ts`). Speech comes from Supertonic 3
 (`services/tts.ts`), never from Anthropic.
 
 ## Images in the user message
