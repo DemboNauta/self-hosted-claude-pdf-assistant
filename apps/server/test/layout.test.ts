@@ -169,4 +169,17 @@ describe('layout tools', () => {
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad)).toContain('get_page_layout');
   });
+
+  it('takes the student to a page, or opens one side by side', async () => {
+    const tools = pointerTools(servicesOf(app), ctx);
+    const go = tools.find((t) => t.name === 'go_to_page')!;
+    const side = tools.find((t) => t.name === 'show_side_by_side')!;
+    await go.handler({ page: 1, quote: 'Primera línea' } as never, {});
+    await side.handler({ page: 1 } as never, {});
+    expect(events.filter((e) => e.type === 'navigate')).toEqual([
+      { type: 'navigate', threadId: 't', docId, page: 1, quote: 'Primera línea' },
+      { type: 'navigate', threadId: 't', docId, page: 1, side: true },
+    ]);
+    expect((await go.handler({ page: 9 } as never, {})).isError).toBe(true);
+  });
 });

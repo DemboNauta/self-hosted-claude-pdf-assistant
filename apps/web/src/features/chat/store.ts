@@ -4,6 +4,7 @@ import {
   type ChatMessage,
   type ClientChatEvent,
   type DrawingMark,
+  type PointedMark,
   type PointerGroup,
   type ServerChatEvent,
   type StudyMode,
@@ -101,6 +102,8 @@ interface ChatState {
   attached: TextSelection | null;
   /** Area marked with drawings, attached to the next question (instead of a selection). */
   attachedMark: DrawingMark | null;
+  /** One of Claude's marks the student clicked to ask about it. */
+  attachedPointed: PointedMark | null;
   /** Claude's temporary marks on the PDF (F-POINT-03: gone with the next question). */
   pointers: PointerGroup[];
   /** Voice mode (F-CHAT-09): questions ask for a spoken, tutor-style answer. */
@@ -131,6 +134,7 @@ interface ChatState {
   setDiagramRange: (range: { from: number; to: number } | null) => void;
   attach: (selection: TextSelection | null) => void;
   attachMark: (mark: DrawingMark | null) => void;
+  attachPointed: (pointed: PointedMark | null) => void;
   dismissError: () => void;
   clearPointers: (messageId?: string) => void;
   /**
@@ -159,6 +163,7 @@ export const useChat = create<ChatState>((set, get) => ({
   diagramRange: null,
   attached: null,
   attachedMark: null,
+  attachedPointed: null,
   pointers: [],
   voice: false,
 
@@ -175,6 +180,7 @@ export const useChat = create<ChatState>((set, get) => ({
       error: null,
       attached: null,
       attachedMark: null,
+      attachedPointed: null,
       pointers: [],
     });
     chatSocket.connect();
@@ -219,6 +225,7 @@ export const useChat = create<ChatState>((set, get) => ({
     if (!threadId || !scope || running) return;
     const selection = opts.selection === undefined ? get().attached : opts.selection;
     const mark = opts.mark === undefined ? get().attachedMark : opts.mark;
+    const pointed = get().attachedPointed;
     const mode = opts.mode ?? get().mode;
     const clientId = crypto.randomUUID();
     const context = {
@@ -229,6 +236,7 @@ export const useChat = create<ChatState>((set, get) => ({
           : { subjectId: scope.id }),
       ...(selection ? { selection } : {}),
       ...(mark && scope.kind === 'document' ? { mark } : {}),
+      ...(pointed && !selection && !mark && scope.kind === 'document' ? { pointed } : {}),
       ...(mode === 'summary' ? { summaryFormat: get().summaryFormat } : {}),
       ...(mode === 'diagram' && !selection && scope.kind === 'document' && get().diagramRange
         ? { pageRange: get().diagramRange! }
@@ -253,6 +261,7 @@ export const useChat = create<ChatState>((set, get) => ({
       error: null,
       attached: null,
       attachedMark: null,
+      attachedPointed: null,
       pointers: [],
     });
     chatSocket.send({ type: 'user_message', threadId, clientId, text, mode, context });
@@ -266,8 +275,12 @@ export const useChat = create<ChatState>((set, get) => ({
   setMode: (mode) => set({ mode }),
   setSummaryFormat: (summaryFormat) => set({ summaryFormat }),
   setDiagramRange: (diagramRange) => set({ diagramRange }),
-  attach: (attached) => set({ attached, ...(attached ? { attachedMark: null } : {}) }),
-  attachMark: (attachedMark) => set({ attachedMark, ...(attachedMark ? { attached: null } : {}) }),
+  attach: (attached) =>
+    set({ attached, ...(attached ? { attachedMark: null, attachedPointed: null } : {}) }),
+  attachMark: (attachedMark) =>
+    set({ attachedMark, ...(attachedMark ? { attached: null, attachedPointed: null } : {}) }),
+  attachPointed: (attachedPointed) =>
+    set({ attachedPointed, ...(attachedPointed ? { attached: null, attachedMark: null } : {}) }),
   dismissError: () => set({ error: null }),
   setVoice: (voice) => set({ voice }),
   clearPointers: (messageId) =>
@@ -279,7 +292,12 @@ export const useChat = create<ChatState>((set, get) => ({
     if (!groups.length) return;
     for (const g of groups) revealed.add(`${messageId}:${g.id}`);
     set({ pointers: groups });
-    jumpTo(groups[0]!);
+    // The student asked for them: go there whatever "seguir a Claude" says.
+    const g = groups[0]!;
+    const reader = useReader.getState();
+    if (g.docId === reader.docId) reader.goTo(g.page);
+    else if (reader.side?.docId === g.docId) reader.setSidePage(g.page);
+    else reader.setOffer({ docId: g.docId, page: g.page });
   },
 }));
 
@@ -296,10 +314,31 @@ export function setBoardRevealer(fn: BoardRevealer) {
   boardRevealer = fn;
 }
 
-/** Jumps to the page of a mark (F-POINT-05), unless the reader is already there. */
-function jumpTo(group: PointerGroup) {
+/**
+ * Brings a page Claude refers to into view (F-POINT-05): with "seguir a Claude" on the
+ * reader (or the split view showing that document) moves there; otherwise the student
+ * gets a button to go (owner's choice).
+ */
+function navigateTo(target: { docId: string; page: number; quote?: string; side?: boolean }) {
   const reader = useReader.getState();
-  if (group.docId === reader.docId && reader.currentPage !== group.page) reader.goTo(group.page);
+  const { docId, page, quote, side } = target;
+  if (side) {
+    if (reader.follow && window.matchMedia('(min-width: 1024px)').matches) {
+      reader.openSide(docId, page);
+    } else reader.setOffer({ docId, page, side: true });
+    return;
+  }
+  if (reader.side?.docId === docId && reader.side.docId !== reader.docId) {
+    if (reader.side.page !== page) reader.setSidePage(page);
+    return;
+  }
+  if (docId === reader.docId && reader.currentPage === page && !quote) return;
+  if (reader.follow && docId === reader.docId) reader.goTo(page, quote);
+  else reader.setOffer({ docId, page, ...(quote && { quote }) });
+}
+
+function jumpTo(group: PointerGroup) {
+  navigateTo({ docId: group.docId, page: group.page });
 }
 
 /**
@@ -403,6 +442,9 @@ chatSocket.subscribe((event) => {
     }
     case 'clear_pointers':
       useChat.setState({ pointers: [] });
+      break;
+    case 'navigate':
+      navigateTo(event);
       break;
     case 'error':
       useChat.setState({

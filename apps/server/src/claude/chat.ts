@@ -4,6 +4,7 @@ import type {
   ChatErrorCode,
   DrawingAnchor,
   DrawingMark,
+  PointedMark,
   PointerGroup,
   ChatMessage,
   ServerChatEvent,
@@ -14,7 +15,7 @@ import type {
 import type { FastifyBaseLogger } from 'fastify';
 import { FORBIDDEN_CLAUDE_ENV_VARS } from '../auth-guard.js';
 import type { AppConfig } from '../config.js';
-import { renderMarkImage } from '../ingest/extract.js';
+import { renderMarkImage, renderPageImage } from '../ingest/extract.js';
 import { HttpError } from '../services/errors.js';
 import type { UserServices } from '../services/scope.js';
 import type { ClaudeAuth, ClaudeCredentials } from './credentials.js';
@@ -139,7 +140,12 @@ export class ChatService {
     };
 
     try {
-      const markImage = docId && ctx.mark ? await this.markImage(svc, docId, ctx.mark) : null;
+      const markImage =
+        docId && ctx.mark
+          ? await this.markImage(svc, docId, ctx.mark)
+          : docId && ctx.pointed
+            ? await this.pointedImage(svc, docId, ctx.pointed)
+            : null;
       const prompt = (recoveredTranscript?: string) =>
         buildTurnPrompt({
           text: input.text,
@@ -225,6 +231,30 @@ export class ChatService {
       return (await renderMarkImage(row.filePath, mark.page, mark.rect, strokes)).png;
     } catch (err) {
       this.log.warn({ err }, 'Could not render the marked area; asking without the image');
+      return null;
+    }
+  }
+
+  /** Image of the area of one of Claude's marks the student clicked, or null. */
+  private async pointedImage(
+    svc: UserServices,
+    docId: string,
+    pointed: PointedMark,
+  ): Promise<Buffer | null> {
+    const pad = 0.03;
+    const x = Math.max(0, pointed.rect.x - pad);
+    const y = Math.max(0, pointed.rect.y - pad);
+    const region = {
+      x,
+      y,
+      w: Math.max(0.05, Math.min(1 - x, pointed.rect.w + pad * 2)),
+      h: Math.max(0.05, Math.min(1 - y, pointed.rect.h + pad * 2)),
+    };
+    try {
+      const row = svc.library.getLive(docId);
+      return (await renderPageImage(row.filePath, pointed.page, { region, maxSide: 1200 })).png;
+    } catch (err) {
+      this.log.warn({ err }, 'Could not render the pointed area; asking without the image');
       return null;
     }
   }

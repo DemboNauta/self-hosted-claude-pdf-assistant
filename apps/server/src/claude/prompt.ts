@@ -35,7 +35,8 @@ Every statement about a document's content must carry a citation in exactly this
 # Acting on the document
 When the tools are available you can point at things on the page while explaining (arrows, circles, boxes, highlights, labels) and record what the student finds hard in memory. Point only when it genuinely helps to see where something is; keep marks few and precise. Prefer text anchors with a short exact quote for passages; for figures, formulas and their parts use the block ids of get_page_layout.
 Each point_at call returns a mark id: write [[mark:ID]] at the start of the sentence that talks about those marks, so they appear on the page exactly when the student reads (or hears) that part, and can be shown again later.
-When you explain a figure or diagram, walk through it: get_page_layout for the figure and its labels (and get_page_image with the figure box as "region" to see it), one point_at per step (connect related parts with arrows "to"), then explain step by step with the [[mark:ID]] of each.
+When you explain a figure or diagram, walk through it: get_page_layout for the figure and its labels (and get_page_image with the figure box as "region" to see it), one point_at per step (connect related parts with arrows "to"), then explain step by step with the [[mark:ID]] of each. Number the steps of a process with "number" badges, and use a "callout" for a short explanation right beside a passage.
+To compare or connect two places (another document, a distant page), open one next to the reader with show_side_by_side and point at both.
 When the student asks you to highlight the important parts of some pages or sections, read them and use highlight_key_ideas: highlights are saved in the student's own colours.
 When a clarification would be worth keeping next to the text (a subtle point, a link to another idea, a common mistake), propose it with add_margin_notes; don't flood the page, a few well-placed notes are better.
 
@@ -156,6 +157,21 @@ export function buildTurnPrompt(input: {
         .join('\n'),
     );
   }
+  if (context.pointed) {
+    const r = context.pointed.rect;
+    const pct = (v: number) => Math.round(v * 100);
+    lines.push(
+      [
+        `The student clicked one of the marks you drew on page ${context.pointed.page} to ask about it${context.pointed.labels ? ` (your labels: ${context.pointed.labels})` : ''}: the area from ${pct(r.x)}% to ${pct(r.x + r.w)}% of the page width and ${pct(r.y)}% to ${pct(r.y + r.h)}% of its height.`,
+        input.markImage ? 'An image of that area is attached to this message.' : '',
+        context.pointed.text
+          ? `Text inside the area:\n"""\n${context.pointed.text}\n"""`
+          : 'The area has no text layer (a figure or formula): rely on the image.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
   if (context.pageRange) {
     const { from, to } = context.pageRange;
     lines.push(from === to ? `Scope: page ${from}.` : `Scope: pages ${from} to ${to}.`);
@@ -194,10 +210,12 @@ export function buildTurnPrompt(input: {
     text.trim() ||
     (context.selection
       ? '(No question typed: apply the mode to the selected text.)'
-      : context.mark
-        ? mode === 'free'
-          ? '(No question typed: explain what the student marked.)'
-          : '(No question typed: apply the mode to what the student marked.)'
-        : '(No question typed.)');
+      : context.pointed
+        ? '(No question typed: explain in more detail what you marked there.)'
+        : context.mark
+          ? mode === 'free'
+            ? '(No question typed: explain what the student marked.)'
+            : '(No question typed: apply the mode to what the student marked.)'
+          : '(No question typed.)');
   return `<context>\n${lines.join('\n\n')}\n</context>\n\n${question}`;
 }

@@ -305,6 +305,29 @@ describe('chat', () => {
     expect(prompt).not.toContain('looking at page');
   });
 
+  it("asks about one of Claude's marks with an image of its area", async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const pointed = {
+      page: 1,
+      rect: { x: 0.1, y: 0.1, w: 0.3, h: 0.05 },
+      labels: 'Aquí',
+      text: 'la fotosintesis',
+    };
+    await ask(thread.id, '', { context: { docId, currentPage: 1, pointed } });
+    const prompt = calls[0]!.prompt as unknown as AsyncIterable<{
+      message: { content: { type: string; text?: string }[] };
+    }>;
+    const messages = [];
+    for await (const m of prompt) messages.push(m);
+    const [image, text] = messages[0]!.message.content;
+    expect(image!.type).toBe('image');
+    expect(text!.text).toContain('clicked one of the marks you drew on page 1');
+    expect(text!.text).toContain('your labels: Aquí');
+    expect(text!.text).toContain('explain in more detail what you marked');
+  });
+
   it('asks about a freehand mark with an image of the marked area', async () => {
     const thread = (
       await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })

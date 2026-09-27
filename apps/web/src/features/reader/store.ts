@@ -23,6 +23,28 @@ export interface NavRequest {
   nonce: number;
 }
 
+/**
+ * Somewhere Claude wants to take the student while "seguir a Claude" is off: a button
+ * to go there (or to open it next to the reader).
+ */
+export interface NavOffer {
+  docId: string;
+  page: number;
+  quote?: string;
+  /** Open it in the split view instead of moving the reader. */
+  side?: boolean;
+  nonce: number;
+}
+
+const FOLLOW_KEY = 'pca.reader.follow';
+function readFollow() {
+  try {
+    return localStorage.getItem(FOLLOW_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 interface ReaderState {
   docId: string | null;
   pageCount: number;
@@ -43,6 +65,11 @@ interface ReaderState {
   activeAnnotation: string | null;
   /** Drawings made since the last question about them ("Preguntar sobre lo marcado"). */
   drawn: { page: number; ids: string[] } | null;
+  /** "Seguir a Claude": Claude may move the reader (owner's choice: off unless turned on). */
+  follow: boolean;
+  offer: NavOffer | null;
+  /** Split view: another page (of this or another document) next to the reader. */
+  side: { docId: string; page: number } | null;
 
   open: (docId: string, pageCount: number) => void;
   setCurrentPage: (page: number) => void;
@@ -59,6 +86,11 @@ interface ReaderState {
   /** Records a new drawing; one on another page starts a new mark. */
   addDrawn: (page: number, id: string) => void;
   clearDrawn: () => void;
+  setFollow: (follow: boolean) => void;
+  setOffer: (offer: Omit<NavOffer, 'nonce'> | null) => void;
+  openSide: (docId: string, page: number) => void;
+  setSidePage: (page: number) => void;
+  closeSide: () => void;
 }
 
 let nonce = 0;
@@ -78,6 +110,9 @@ export const useReader = create<ReaderState>((set, get) => ({
   filter: { visible: true, mine: true, claude: true, hiddenColors: [] },
   activeAnnotation: null,
   drawn: null,
+  follow: readFollow(),
+  offer: null,
+  side: null,
 
   open: (docId, pageCount) =>
     set({
@@ -90,6 +125,8 @@ export const useReader = create<ReaderState>((set, get) => ({
       tool: 'select',
       activeAnnotation: null,
       drawn: null,
+      offer: null,
+      side: null,
     }),
   setCurrentPage: (currentPage) => {
     if (get().currentPage !== currentPage) set({ currentPage });
@@ -117,6 +154,21 @@ export const useReader = create<ReaderState>((set, get) => ({
     set({ drawn: d && d.page === page ? { page, ids: [...d.ids, id] } : { page, ids: [id] } });
   },
   clearDrawn: () => set({ drawn: null }),
+  setFollow: (follow) => {
+    try {
+      localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+    set({ follow, ...(follow ? { offer: null } : {}) });
+  },
+  setOffer: (offer) => set({ offer: offer ? { ...offer, nonce: ++nonce } : null }),
+  openSide: (docId, page) => set({ side: { docId, page: Math.max(1, page) } }),
+  setSidePage: (page) => {
+    const side = get().side;
+    if (side) set({ side: { ...side, page: Math.max(1, page) } });
+  },
+  closeSide: () => set({ side: null }),
 }));
 
 export const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];

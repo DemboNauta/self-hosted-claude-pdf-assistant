@@ -175,6 +175,10 @@ One board per chat thread (`Whiteboard` in `packages/shared/src/whiteboard.ts`).
 | GET    | `/api/threads/:id/whiteboard` | `{ threadId, scene, steps, applied, updatedAt }` (`scene` null until first drawn).                                                         |
 | PUT    | `/api/threads/:id/whiteboard` | `{ scene: { elements, files }, applied, snapshot?: { png, bounds } \| null, studentEdited? }` from the browser; body limit 25 MB (images). |
 
+WebSocket `navigate` (`docId`, `page`, `quote?`, `side?`): `go_to_page` /
+`show_side_by_side`. The chat context also accepts `pointed` (`page`, `rect`,
+`labels?`, `text`): one of Claude's marks the student clicked "?" on.
+
 WebSocket: `board_step` (`BoardStep`: `id` `w1`…, `messageId`, `elements`, `mermaid?`,
 `files?`, `clear?`) when Claude draws; the browser draws it when the answer reaches
 `[[mark:wN]]` and saves the scene.

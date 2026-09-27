@@ -377,10 +377,10 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
     tool(
       'point_at',
       [
-        'Draw temporary marks on a page of the PDF while you explain: arrow, circle, rect (box), highlight or label.',
+        'Draw temporary marks on a page of the PDF while you explain: arrow, circle, rect (box), highlight, label, number (a numbered badge: label "1", "2"… to number the steps of a process or the parts of a figure) or callout (a speech bubble with the label, placed beside the passage and linked to it: a short explanation right on the page).',
         'Each shape has an anchor: {"kind":"block","id":"f1"} with an id from get_page_layout (most precise for figures, formulas, labels and paragraphs), {"kind":"text","quote":"exact words from the page"} (2 to 12 consecutive words copied verbatim, add "occurrence" when the words repeat on the page) or {"kind":"rect","x":0.1,"y":0.2,"w":0.3,"h":0.1} in page fractions (origin top-left), e.g. read off get_page_image with "grid".',
         'An arrow with "to" (another anchor) connects two parts, e.g. one state of a diagram to the next.',
-        'Use "label" for a short note shown next to the mark.',
+        'Use "label" for a short note shown next to the mark (for callout it is the bubble text, one or two short sentences).',
         'The call returns a mark id (m1, m2…). Write [[mark:ID]] in your answer at the start of the sentence that talks about those marks: they appear on the page at that moment of the explanation (also when it is spoken) and the student can click it later to see them again.',
         'To walk through a figure step by step, call point_at once per step first, then explain each step with its [[mark:ID]].',
         'Marks without a reference in the answer appear when it ends. Set "now": true to show them immediately instead. The viewer jumps to the page when they appear.',
@@ -461,6 +461,69 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
             now
               ? `Shown on page ${page} (${n}), id ${group.id}: write [[mark:${group.id}]] where you talk about it.`
               : `Mark ${group.id} ready on page ${page} (${n}). Write [[mark:${group.id}]] at the start of the sentence that explains it; it appears on the page there.`,
+          );
+        },
+      ),
+    ),
+    tool(
+      'go_to_page',
+      'Take the student to a page (and flash a short quote on it), e.g. to show where something is explained before pointing at it. If the student has "follow Claude" on, the viewer moves; otherwise they get a button to go there. point_at already brings its page into view, so you rarely need this with it.',
+      {
+        docId: z.string().optional().describe('Default: the open document'),
+        page: z.number().int().min(1),
+        quote: z.string().max(300).optional().describe('3 to 15 words from that page to flash'),
+      },
+      tracked(
+        ctx,
+        'go_to_page',
+        ({ page }) => `p. ${page}`,
+        async ({ docId, page, quote }) => {
+          const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
+          let doc;
+          try {
+            doc = deps.library.detail(id);
+          } catch {
+            return fail(`Unknown document ${id}.`);
+          }
+          if (doc.pageCount && page > doc.pageCount)
+            return fail(`The document has ${doc.pageCount} pages.`);
+          ctx.emit({
+            type: 'navigate',
+            threadId: ctx.threadId,
+            docId: id,
+            page,
+            ...(quote && { quote }),
+          });
+          return text(`Showing page ${page} of "${doc.title}".`);
+        },
+      ),
+    ),
+    tool(
+      'show_side_by_side',
+      'Open a page next to the one the student is reading (split view): another document, or another page of the same one, to compare or connect them. You can then point_at on it with its docId and page. On small screens the student gets a button to open it instead.',
+      {
+        docId: z.string().optional().describe('Default: the open document'),
+        page: z.number().int().min(1),
+      },
+      tracked(
+        ctx,
+        'show_side_by_side',
+        ({ page }) => `p. ${page}`,
+        async ({ docId, page }) => {
+          const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
+          let doc;
+          try {
+            doc = deps.library.detail(id);
+          } catch {
+            return fail(`Unknown document ${id}.`);
+          }
+          if (doc.pageCount && page > doc.pageCount)
+            return fail(`The document has ${doc.pageCount} pages.`);
+          ctx.emit({ type: 'navigate', threadId: ctx.threadId, docId: id, page, side: true });
+          return text(
+            `Page ${page} of "${doc.title}" is open next to the reader. point_at with docId ${id} to mark things on it.`,
           );
         },
       ),

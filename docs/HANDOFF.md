@@ -47,9 +47,11 @@ DECISIONS "Visual interaction with the PDF"), not deployed yet:
 - **Block 3 done (same day):** the student draws and Claude looks (`whiteboard_view`,
   snapshot saved by the browser, migration `0017`) and corrects on the board;
   "Revisar mi pizarra". Not tried with real Claude.
-- **Next (owner's order):** block 4, follow mode
-  (toggle), split view, richer shapes (numbered steps, callouts), click a mark to
-  ask about it.
+- **Block 4 done (same day):** "Seguir a Claude" toggle (off: offer button),
+  `go_to_page`, split view (`show_side_by_side`), `number` / `callout` marks, "?" on
+  Claude's marks to ask about them. Not tried with real Claude.
+- **Next:** try all four blocks with the real Claude and the owner's PDFs, then deploy
+  (migrations `0015`–`0017`; the web build now carries Excalidraw's fonts).
 
 Phases 1, 2 and 3 of SPEC §13 are implemented, with unit and e2e tests (see
 `FEATURES.md`).

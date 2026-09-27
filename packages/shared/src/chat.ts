@@ -40,6 +40,18 @@ export const markSchema = z.object({
 });
 export type DrawingMark = z.infer<typeof markSchema>;
 
+/**
+ * One of Claude's own marks the student clicked to ask about it: the area it covers
+ * (the server sends Claude an image of it), its labels and the text inside.
+ */
+export const pointedSchema = z.object({
+  page: z.number().int().min(1),
+  rect: rectSchema,
+  labels: z.string().max(1000).optional(),
+  text: z.string().max(8000),
+});
+export type PointedMark = z.infer<typeof pointedSchema>;
+
 /** Per-turn context: goes in the user message, never the system prompt (see CLAUDE.md). */
 export const chatContextSchema = z
   .object({
@@ -50,6 +62,7 @@ export const chatContextSchema = z
     currentPage: z.number().int().min(1).optional(),
     selection: selectionSchema.optional(),
     mark: markSchema.optional(),
+    pointed: pointedSchema.optional(),
     summaryFormat: z.enum(SUMMARY_FORMATS).optional(),
     /** Pages the question is about (e.g. the scope of a diagram); absent = not limited. */
     pageRange: z
@@ -170,7 +183,19 @@ export const anchorSchema = z.union([
 ]);
 export type Anchor = z.infer<typeof anchorSchema>;
 
-export const POINTER_SHAPES = ['arrow', 'circle', 'rect', 'highlight', 'label'] as const;
+/**
+ * `number` is a numbered badge (the label is the number, e.g. step 1, 2, 3 of a process);
+ * `callout` a speech bubble with the label, next to the anchor and linked to it.
+ */
+export const POINTER_SHAPES = [
+  'arrow',
+  'circle',
+  'rect',
+  'highlight',
+  'label',
+  'number',
+  'callout',
+] as const;
 export const pointerShapeSchema = z.object({
   type: z.enum(POINTER_SHAPES),
   anchor: anchorSchema,
@@ -215,6 +240,15 @@ export type ServerChatEvent =
   | { type: 'pointer'; threadId: string; group: PointerGroup }
   | { type: 'clear_pointers'; threadId: string }
   | { type: 'board_step'; threadId: string; step: BoardStep }
+  | {
+      /** Claude takes the reader to a page (`side`: in the split view next to it). */
+      type: 'navigate';
+      threadId: string;
+      docId: string;
+      page: number;
+      quote?: string;
+      side?: boolean;
+    }
   | {
       type: 'data_changed';
       threadId: string;

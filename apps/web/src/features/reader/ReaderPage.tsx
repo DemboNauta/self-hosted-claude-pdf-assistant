@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReadingTimer } from './readingTimer';
 import { useParams, useSearchParams } from 'react-router';
-import { MessageSquare, PenTool } from 'lucide-react';
+import { Columns2, LocateFixed, MessageSquare, PenTool } from 'lucide-react';
 import { t } from '../../i18n';
 import { api } from '../../lib/api';
 import { AnnotationOverlay, AnnotationUnderlay } from '../annotations/AnnotationLayer';
@@ -20,35 +20,16 @@ import { MemoryPanel } from '../memory/MemoryPanel';
 import { FlashcardDialog, flashcardAction } from '../review/FlashcardDialog';
 import { useChat } from '../chat/store';
 import { libraryKey } from '../library/api';
-import { openPdf, type PDFDocumentProxy } from './pdf';
 import { PdfViewer, type ReadingPositionUpdate } from './PdfViewer';
+import { NavOfferBar } from './NavOfferBar';
 import { PointerLayer } from './PointerLayer';
 import { ReaderToolbar } from './ReaderToolbar';
 import { SelectionMenu } from './SelectionMenu';
 import { ShortcutsHelp, useReaderShortcuts } from './shortcuts';
+import { SidePane } from './SidePane';
 import { OutlinePanel, SearchPanel, ThumbnailsPanel } from './SidePanels';
 import { useReader } from './store';
-
-/** Loads the PDF with PDF.js; the proxy is destroyed when the document changes. */
-function usePdf(docId: string | undefined, enabled: boolean) {
-  const [state, setState] = useState<{ pdf: PDFDocumentProxy | null; error: boolean }>({
-    pdf: null,
-    error: false,
-  });
-  useEffect(() => {
-    if (!docId || !enabled) return;
-    const task = openPdf(docId);
-    task.promise.then(
-      (pdf) => setState({ pdf, error: false }),
-      () => setState({ pdf: null, error: true }),
-    );
-    return () => {
-      setState({ pdf: null, error: false });
-      void task.destroy();
-    };
-  }, [docId, enabled]);
-  return state;
-}
+import { usePdf } from './usePdf';
 
 installAnnotationIntegrations();
 
@@ -74,6 +55,8 @@ export function ReaderPage() {
   const ready = detail.data?.status === 'ready';
   const { pdf, error } = usePdf(documentId, ready);
   const panel = useReader((s) => s.panel);
+  const follow = useReader((s) => s.follow);
+  const splitOpen = useReader((s) => s.side !== null);
 
   useEffect(() => {
     if (!detail.data) return;
@@ -127,6 +110,30 @@ export function ReaderPage() {
         backTo={backTo}
         trailing={
           <>
+            <button
+              type="button"
+              onClick={() => useReader.getState().setFollow(!follow)}
+              aria-label={t.reader.follow.toggle}
+              title={`${t.reader.follow.toggle}: ${t.reader.follow.toggleHint}`}
+              aria-pressed={follow}
+              className="text-text-muted hover:text-text hover:bg-surface-muted aria-pressed:bg-surface-muted aria-pressed:text-text ml-1 rounded-md p-2"
+            >
+              <LocateFixed size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const r = useReader.getState();
+                if (r.side) r.closeSide();
+                else r.openSide(doc.id, r.currentPage);
+              }}
+              aria-label={t.reader.side.toggle}
+              title={t.reader.side.toggle}
+              aria-pressed={splitOpen}
+              className="text-text-muted hover:text-text hover:bg-surface-muted aria-pressed:bg-surface-muted aria-pressed:text-text ml-1 hidden rounded-md p-2 lg:block"
+            >
+              <Columns2 size={18} aria-hidden />
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -186,7 +193,9 @@ export function ReaderPage() {
             />
           )}
           {showTools && pdf && <AnnotationTools />}
+          <NavOfferBar />
         </div>
+        <SidePane />
         <ChatDock />
       </div>
       <SelectionMenu root={scroller} extra={[flashcardAction(doc.id), ...selectionActions]} />

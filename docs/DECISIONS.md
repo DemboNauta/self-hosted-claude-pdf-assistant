@@ -182,7 +182,8 @@ change them if he disagrees.
 
 - **Pointer marks jump the viewer** to the page Claude points at (F-POINT-05
   offered "jump or show a notice"). The chat also shows "Claude ha señalado en la
-  p. N · Ir".
+  p. N · Ir". **Superseded 2026-09-27 by the owner:** the viewer only moves with
+  "Seguir a Claude" on (off by default); otherwise a button offers to go.
 - **Daily brief** ("Repaso de hoy"): Claude writes it once per local day,
   automatically when Home opens and there is something to review. It is cached
   in `settings.daily_brief` and can be regenerated with a button. This costs one
@@ -255,6 +256,13 @@ change them if he disagrees.
   since it last looked, and looks with `whiteboard_view`. A save counts as the
   student's when it follows their pointer or key input on the board by less than 3 s.
   "Revisar mi pizarra" (under the board) asks Claude to check the work.
+- **Block 4 details (2026-09-27, Claude).** "Seguir a Claude" is a reader toolbar
+  toggle kept in the browser. Offers expire after 15 s. Replaying marks from the chat
+  (chip, "Volver a mostrar…") always moves the reader: the student asked for it. The
+  split view shows one page at a time (with page buttons) and Claude's marks on it;
+  it is desktop only (phones get the offer, which opens the page in the reader); no
+  arrows between the two panes. Numbered badges sit in the left margin of the
+  passage; callouts go beside it where there is room (right, then left, else below).
 - **Page layout (2026-09-27, Claude).** Built on demand from the stored text items
   plus the PDF operator list (image placements and path bounds), not at ingestion:
   vector clusters with a single stroke or under 3 % of the page in both directions

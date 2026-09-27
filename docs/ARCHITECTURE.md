@@ -75,6 +75,8 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
     - `store.ts` (Zustand): current page, zoom, panels, navigation requests,
       flash, tools and filters.
     - `readingTimer.ts`, `shortcuts.tsx`, `SelectionMenu.tsx`,
+      `NavOfferBar.tsx` ("Claude te lleva a…" while "Seguir a Claude" is off),
+      `SidePane.tsx` (split view), `usePdf.ts`,
       `PointerLayer.tsx` (Claude's marks; which ones are visible lives in the
       chat store, see `CLAUDE_INTEGRATION.md` "Marks in the answer").
   - `chat/`:

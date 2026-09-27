@@ -190,6 +190,7 @@ function MessageItem({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
     const sel = message.context?.selection;
     const mark = message.context?.mark;
+    const pointed = message.context?.pointed;
     const mode = message.mode && message.mode !== 'free' ? t.chat.modes[message.mode] : null;
     const quoted = sel?.text ?? mark?.text;
     return (
@@ -199,9 +200,14 @@ function MessageItem({ message }: { message: ChatMessage }) {
         data-role="user"
         data-message-id={message.id}
       >
-        {(mode || sel || mark) && (
+        {(mode || sel || mark || pointed) && (
           <span className="text-text-muted text-xs">
-            {[mode, sel && t.chat.attached(sel.page), mark && t.chat.attachedMark(mark.page)]
+            {[
+              mode,
+              sel && t.chat.attached(sel.page),
+              mark && t.chat.attachedMark(mark.page),
+              pointed && t.chat.pointers.attached(pointed.page),
+            ]
               .filter(Boolean)
               .join(' · ')}
           </span>
@@ -480,6 +486,8 @@ function Composer() {
   const running = useChat((s) => s.running);
   const attached = useChat((s) => s.attached);
   const attachedMark = useChat((s) => s.attachedMark);
+  const attachedPointed = useChat((s) => s.attachedPointed);
+  const attachPointed = useChat((s) => s.attachPointed);
   const mode = useChat((s) => s.mode);
   const { send, stop, attach, attachMark } = useChat.getState();
   const area = useRef<HTMLTextAreaElement>(null);
@@ -500,7 +508,11 @@ function Composer() {
 
   const canSend =
     !running &&
-    (text.trim().length > 0 || attached !== null || attachedMark !== null || mode !== 'free');
+    (text.trim().length > 0 ||
+      attached !== null ||
+      attachedMark !== null ||
+      attachedPointed !== null ||
+      mode !== 'free');
   const submit = () => {
     if (!canSend) return;
     dictation.stop();
@@ -554,6 +566,28 @@ function Composer() {
           </button>
         </div>
       )}
+      {attachedPointed && (
+        <div
+          className="bg-surface-muted flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs"
+          data-testid="attached-pointed"
+        >
+          <MousePointer2 size={12} aria-hidden className="mt-0.5 shrink-0 text-orange-600" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{t.chat.pointers.attached(attachedPointed.page)}</p>
+            <p className="text-text-muted line-clamp-2">
+              {attachedPointed.labels || attachedPointed.text || t.chat.markNoText}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => attachPointed(null)}
+            aria-label={t.chat.pointers.removeAttached}
+            className="text-text-muted hover:text-text rounded p-0.5"
+          >
+            <X size={14} aria-hidden />
+          </button>
+        </div>
+      )}
       <VoiceBar />
       {dictation.listening && (
         <p className="text-text-muted text-xs italic" aria-live="polite">
@@ -578,7 +612,9 @@ function Composer() {
               ? t.chat.placeholderSelection
               : attachedMark
                 ? t.chat.placeholderMark
-                : t.chat.placeholder
+                : attachedPointed
+                  ? t.chat.pointers.placeholder
+                  : t.chat.placeholder
           }
           aria-label={t.chat.placeholder}
           className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"

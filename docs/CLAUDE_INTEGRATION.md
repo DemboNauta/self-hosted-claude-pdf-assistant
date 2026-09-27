@@ -113,6 +113,13 @@ and must answer briefly without continuing the old explanation: the web resumes
 it itself (`features/voice/store.ts`). Speech comes from Supertonic 3
 (`services/tts.ts`), never from Anthropic.
 
+## Asking about one of Claude's marks
+
+"?" next to a set of marks attaches `context.pointed` (area, labels, text inside
+from the text layer). `ChatService.pointedImage` renders that area (padded) and it
+goes with the question like a drawing mark; the prompt says the student clicked one
+of Claude's marks.
+
 ## Images in the user message
 
 When the student asks about an area marked with freehand drawings
@@ -152,6 +159,8 @@ and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 | `search_library`         | query, scope doc/topic/subject/all, docId?               | FTS5 hits with «snippets». Defaults to the open doc or the thread's scope.                                                                                                                                                                                                      |
 | `list_library`           | —                                                        | Library tree with ids.                                                                                                                                                                                                                                                          |
 | `point_at`               | docId?, page, shapes[] (≤12), now?                       | Emits `pointer` with a mark id (`m1`, `m2`…) and stores it with the answer. Anchors: `block` id from `get_page_layout` (resolved to a rect here), text quote (+occurrence) or normalised rect; arrows with `to` connect two anchors. Deferred until `[[mark:ID]]` unless `now`. |
+| `go_to_page`             | docId?, page, quote?                                     | Emits `navigate`: the reader moves there with "Seguir a Claude" on, otherwise the student gets a button.                                                                                                                                                                        |
+| `show_side_by_side`      | docId?, page                                             | Emits `navigate` with `side`: opens that page in the split view (desktop, same follow rule).                                                                                                                                                                                    |
 | `clear_pointers`         | —                                                        | Emits `clear_pointers`.                                                                                                                                                                                                                                                         |
 | `get_annotations`        | docId?, fromPage?, toPage?                               | The student's highlights (with colour meanings) and notes.                                                                                                                                                                                                                      |
 | `highlight_key_ideas`    | docId?, highlights[{page, quote, color?, reason}]        | Creates **active** highlights in the student's palette (`color` = palette key, meanings listed in the description; default the first colour), author Claude. Quotes not found are dropped and reported. The ids go in the tool event (`annotationIds`) for "Deshacer".          |
@@ -263,6 +272,8 @@ the user's own token:
     - "conecta" → `point_at` with an arrow from the selection to a rect (`to`);
     - "larga" → 40 more paragraphs streamed (chat scrolling tests);
     - "recuerda …" → `remember` + `mark_concept_difficult`;
+    - "ve a la página" → `go_to_page` 2; "al lado" → `show_side_by_side` 2; "numera" →
+      `point_at` with two numbered badges and a callout on page 1;
     - "pizarra" → two `whiteboard_draw` steps (boxes, then an arrow and a formula);
     - "revisa" → `whiteboard_view`, then a red correction below the drawing ("He mirado
       tu pizarra");

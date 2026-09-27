@@ -351,12 +351,43 @@ export function AnnotationOverlay({
             return (
               <rect key={a.id} x={x} y={y} width={w} height={h} rx={5} stroke={c} strokeWidth={2} />
             );
+          if (s.shape === 'callout')
+            return (
+              <rect
+                key={a.id}
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                rx={5}
+                stroke={c}
+                strokeWidth={2}
+                strokeDasharray="4 4"
+              />
+            );
+          if (s.shape === 'number')
+            return (
+              <g key={a.id}>
+                <circle cx={Math.max(12, x - 14)} cy={Math.max(12, y + h / 2)} r={11} fill={c} />
+                <text
+                  x={Math.max(12, x - 14)}
+                  y={Math.max(12, y + h / 2)}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="white"
+                  fontSize={12}
+                  fontWeight={700}
+                >
+                  {(a.content ?? '•').slice(0, 3)}
+                </text>
+              </g>
+            );
           return null;
         })}
       </svg>
 
       {shapes
-        .filter((a) => a.content)
+        .filter((a) => a.content && (a.anchor as ShapeAnchor).shape !== 'number')
         .map((a) => {
           const b = boxOf(a)!;
           return (

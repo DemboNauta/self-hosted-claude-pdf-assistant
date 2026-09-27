@@ -139,6 +139,33 @@ const fakeChat = ((args: {
       const id = /\[\[mark:([mw]\d+)\]\]/.exec(JSON.stringify(result))?.[1];
       if (id) markIds.push(id);
     };
+    // Block 4 triggers: "ve a la página" → go_to_page 2, "al lado" → page 2 side by side,
+    // "numera" → numbered badges and a callout on page 1.
+    if (/ve a la p[aá]gina/i.test(question) && tools?.go_to_page) {
+      await tools.go_to_page.handler({ page: 2 }, {});
+    }
+    if (/al lado/i.test(question) && tools?.show_side_by_side) {
+      await tools.show_side_by_side.handler({ page: 2 }, {});
+    }
+    if (/numera/i.test(question) && tools?.point_at) {
+      noteMark(
+        await tools.point_at.handler(
+          {
+            page: 1,
+            shapes: [
+              { type: 'number', anchor: { kind: 'rect', x: 0.1, y: 0.08, w: 0.3, h: 0.03 } },
+              { type: 'number', anchor: { kind: 'rect', x: 0.1, y: 0.12, w: 0.3, h: 0.03 } },
+              {
+                type: 'callout',
+                anchor: { kind: 'rect', x: 0.1, y: 0.08, w: 0.3, h: 0.03 },
+                label: 'Aquí empieza el proceso',
+              },
+            ],
+          },
+          {},
+        ),
+      );
+    }
     // "Revisa … pizarra" makes the fake look at the board and write a correction in red.
     let boardSeen = '';
     if (/revisa/i.test(question) && tools?.whiteboard_view && tools.whiteboard_draw) {

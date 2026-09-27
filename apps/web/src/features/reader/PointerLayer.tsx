@@ -1,8 +1,9 @@
 import type { Anchor, PointerGroup, PointerShape } from '@pdfclaudeassistant/shared';
-import { X } from 'lucide-react';
+import { MessageCircleQuestion, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { t } from '../../i18n';
+import { useChatDock } from '../chat/ChatDock';
 import { useChat } from '../chat/store';
 import { useVoice } from '../voice/store';
 import type { PageLayers } from './PdfPage';
@@ -76,8 +77,48 @@ export function connectorPath(a: Box, b: Box, gap = 4) {
   return { d: `M${s.x},${s.y} Q${q.x},${q.y} ${e.x},${e.y}`, head: `${e.x},${e.y} ${p1} ${p2}` };
 }
 
+/** Text of the page inside a normalised rectangle (what one of Claude's marks covers). */
+export function textInRect(layers: PageLayers, rect: NormRect): string {
+  if (!layers.textLayer || !layers.pageEl) return '';
+  const page = layers.pageEl.getBoundingClientRect();
+  if (!page.width || !page.height) return '';
+  const pad = 0.005;
+  const out: string[] = [];
+  for (const span of layers.textLayer.querySelectorAll('span')) {
+    if (span.children.length) continue;
+    const r = span.getBoundingClientRect();
+    const cx = (r.left + r.width / 2 - page.left) / page.width;
+    const cy = (r.top + r.height / 2 - page.top) / page.height;
+    if (
+      cx >= rect.x - pad &&
+      cx <= rect.x + rect.w + pad &&
+      cy >= rect.y - pad &&
+      cy <= rect.y + rect.h + pad &&
+      span.textContent?.trim()
+    ) {
+      out.push(span.textContent.trim());
+    }
+  }
+  return out.join(' ').slice(0, 8000);
+}
+
+const BUBBLE_W = 190;
+
 /** One mark, in CSS pixels of the page (`w`×`h`). */
-function Mark({ r, w, h, delay }: { r: Resolved; w: number; h: number; delay: number }) {
+function Mark({
+  r,
+  w,
+  h,
+  delay,
+  index,
+}: {
+  r: Resolved;
+  w: number;
+  h: number;
+  delay: number;
+  /** Position among the group's numbered badges (their number when none is given). */
+  index: number;
+}) {
   const pad = 6;
   const bx = r.box.x * w - pad;
   const by = r.box.y * h - pad;
@@ -180,6 +221,77 @@ function Mark({ r, w, h, delay }: { r: Resolved; w: number; h: number; delay: nu
       );
       break;
     }
+    case 'number': {
+      // In the left margin of the passage, like the number of a step.
+      const cx = Math.max(12, bx - 14);
+      const cy = Math.max(12, by + bh / 2);
+      shape = (
+        <g className="pointer-fade" style={style}>
+          <circle cx={cx} cy={cy} r={11} fill={CLAUDE} stroke="white" strokeWidth={2} />
+          <text
+            x={cx}
+            y={cy}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="white"
+            stroke="none"
+            fontSize={12}
+            fontWeight={700}
+          >
+            {(r.shape.label ?? String(index)).slice(0, 3)}
+          </text>
+        </g>
+      );
+      break;
+    }
+    case 'callout': {
+      // Beside the passage where there is room (right, then left), else below it.
+      const right = w - (bx + bw) > BUBBLE_W + 16;
+      const left = !right && bx > BUBBLE_W + 16;
+      const tx = right
+        ? bx + bw + 14
+        : left
+          ? bx - BUBBLE_W - 14
+          : Math.min(Math.max(4, bx), w - BUBBLE_W - 4);
+      // Below the row of buttons (? and ×) that sits over the top right corner.
+      const ty = right || left ? by + 8 : by + bh + 14;
+      const sx = right ? bx + bw : left ? bx : bx + bw / 2;
+      const sy = right || left ? by + bh / 2 : by + bh;
+      const ex = right ? tx : left ? tx + BUBBLE_W : tx + 24;
+      const ey = right || left ? ty + 14 : ty;
+      shape = (
+        <g>
+          <rect
+            x={bx}
+            y={by}
+            width={bw}
+            height={bh}
+            rx={6}
+            strokeDasharray="5 4"
+            className="pointer-fade"
+            style={style}
+          />
+          <path d={`M${sx},${sy} L${ex},${ey}`} className="pointer-fade" style={style} />
+          <foreignObject
+            x={tx}
+            y={ty}
+            width={BUBBLE_W}
+            height={200}
+            className="pointer-fade overflow-visible"
+            style={style}
+          >
+            <span
+              className="bg-surface text-text inline-block max-w-full rounded-lg border-2 px-2 py-1 text-xs leading-snug shadow"
+              style={{ borderColor: CLAUDE }}
+              data-testid="pointer-callout"
+            >
+              {r.shape.label}
+            </span>
+          </foreignObject>
+        </g>
+      );
+      break;
+    }
     case 'label':
       break;
   }
@@ -187,7 +299,7 @@ function Mark({ r, w, h, delay }: { r: Resolved; w: number; h: number; delay: nu
   return (
     <g>
       {shape}
-      {r.shape.label && (
+      {r.shape.label && r.shape.type !== 'callout' && r.shape.type !== 'number' && (
         <foreignObject
           x={Math.min(Math.max(4, bx), w - 224)}
           y={labelY - 22}
@@ -247,7 +359,33 @@ export function PointerLayer({
   const talking = useVoice((s) => s.phase === 'thinking' || s.phase === 'speaking');
   const clear = useChat((s) => s.clearPointers);
 
-  const marks = resolved.flatMap(({ group, marks }) => marks.map((m) => ({ group, m })));
+  const marks = resolved.flatMap(({ group, marks }) => {
+    let n = 0;
+    return marks.map((m) => ({ group, m, index: m.shape.type === 'number' ? ++n : 0 }));
+  });
+
+  /** "?" next to a set of marks: ask Claude about what it marked there. */
+  const ask = (group: PointerGroup, rects: NormRect[]) => {
+    const box = unionRect(rects);
+    if (!box) return;
+    const labels = group.shapes
+      .map((s) => s.label)
+      .filter(Boolean)
+      .join(' · ');
+    useChat.getState().attachPointed({
+      page: group.page,
+      rect: {
+        x: Math.max(0, box.x),
+        y: Math.max(0, box.y),
+        w: Math.min(1, box.w),
+        h: Math.min(1, box.h),
+      },
+      ...(labels && { labels: labels.slice(0, 1000) }),
+      text: textInRect(layers, box),
+    });
+    useChatDock.getState().show();
+    window.dispatchEvent(new CustomEvent('pca:focus-composer'));
+  };
   if (!marks.length) return null;
   return (
     <div
@@ -266,33 +404,62 @@ export function PointerLayer({
         strokeLinecap="round"
         data-testid="claude-pointers"
       >
-        {marks.map(({ group, m }, i) => (
-          <Mark key={`${group.messageId}-${i}`} r={m} w={width} h={height} delay={i * 180} />
+        {marks.map(({ group, m, index }, i) => (
+          <Mark
+            key={`${group.messageId}-${group.id}-${i}`}
+            r={m}
+            w={width}
+            h={height}
+            delay={i * 180}
+            index={index}
+          />
         ))}
       </svg>
       {resolved.map(({ group, marks }) => {
         const box = unionRect(marks.map((m) => m.box));
         if (!box) return null;
         return (
-          <button
-            key={group.messageId}
-            type="button"
-            data-annotation-ui
-            aria-label={t.chat.pointers.dismiss}
-            title={t.chat.pointers.dismiss}
-            onClick={(e) => {
-              e.stopPropagation();
-              clear(group.messageId);
-            }}
-            className="pointer-dismiss pointer-events-auto absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow"
+          <div
+            key={`${group.messageId}-${group.id}`}
+            className="pointer-events-none absolute flex -translate-y-1/2 gap-1"
             style={{
-              left: `min(calc(${(box.x + box.w) * 100}% + 10px), calc(100% - 14px))`,
+              left: `min(calc(${(box.x + box.w) * 100}% + 4px), calc(100% - 56px))`,
               top: `max(calc(${box.y * 100}% - 10px), 14px)`,
-              background: CLAUDE,
             }}
           >
-            <X size={14} aria-hidden />
-          </button>
+            <button
+              type="button"
+              data-annotation-ui
+              aria-label={t.chat.pointers.ask}
+              title={t.chat.pointers.ask}
+              onClick={(e) => {
+                e.stopPropagation();
+                ask(
+                  group,
+                  marks.map((m) => m.box),
+                );
+              }}
+              className="pointer-dismiss pointer-events-auto flex size-6 items-center justify-center rounded-full text-white shadow"
+              style={{ background: CLAUDE }}
+              data-testid="pointer-ask"
+            >
+              <MessageCircleQuestion size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              data-annotation-ui
+              aria-label={t.chat.pointers.dismiss}
+              title={t.chat.pointers.dismiss}
+              onClick={(e) => {
+                e.stopPropagation();
+                clear(group.messageId);
+              }}
+              className="pointer-dismiss pointer-events-auto flex size-6 items-center justify-center rounded-full text-white shadow"
+              style={{ background: CLAUDE }}
+            >
+              <X size={14} aria-hidden />
+            </button>
+          </div>
         );
       })}
     </div>
