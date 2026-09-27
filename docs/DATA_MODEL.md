@@ -108,7 +108,7 @@ to_page?, updated_at`.
 - **whiteboards** `thread_id (PK, cascade), user_id, scene_json (Excalidraw
 elements + files, saved by the browser), steps_json (BoardStep[] Claude drew, last
 300), applied_json (step keys `messageId:wN` already merged into the scene),
-updated_at`, plus `snapshot_png` (data URL of the whole drawing on white, ≤1400 px,
+updated_at` (a step may carry `remove`: ids it takes off the board), plus `snapshot_png` (data URL of the whole drawing on white, ≤1400 px,
   made by the browser on each save) with `snapshot_bounds_json` (board area it shows),
   `student_edited_at` (the student changed it) and `seen_at` (Claude last called
   `whiteboard_view`). PDF crops travel as PNG data URLs inside the steps and the scene.

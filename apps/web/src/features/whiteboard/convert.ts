@@ -123,7 +123,18 @@ export function stepSkeletons(step: BoardStep, existing: Map<string, Box>): Skel
             backgroundColor: FILL[e.color ?? 'black'],
             fillStyle: 'hachure',
           }),
-          ...(e.label && { label: { text: e.label, fontSize: 20, strokeColor: stroke } }),
+          // A heading alone is centred; with a body, both go top left and the box grows.
+          ...(e.text
+            ? {
+                label: {
+                  text: e.label ? `${e.label}\n${e.text}` : e.text,
+                  fontSize: 16,
+                  strokeColor: stroke,
+                  textAlign: 'left',
+                  verticalAlign: 'top',
+                },
+              }
+            : e.label && { label: { text: e.label, fontSize: 20, strokeColor: stroke } }),
         });
         break;
       case 'pdf':

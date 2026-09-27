@@ -19,7 +19,7 @@ COPY apps/server apps/server
 RUN pnpm --filter @pdfclaudeassistant/web build
 RUN pnpm --filter @pdfclaudeassistant/server build \
  && pnpm --filter @pdfclaudeassistant/server deploy --prod --legacy /out \
- && cp -r apps/server/dist apps/server/drizzle /out/ \
+ && cp -r apps/server/dist apps/server/drizzle apps/server/assets /out/ \
  && cp -r apps/web/dist /out/public
 
 FROM node:22-bookworm-slim AS runtime

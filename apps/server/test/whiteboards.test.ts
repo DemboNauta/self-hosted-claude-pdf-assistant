@@ -76,6 +76,29 @@ describe('whiteboard', () => {
     expect(board.steps.map((s) => s.id)).toEqual(['w1', 'w2']);
     expect(board.scene).toBeNull();
 
+    // The result shows the board and points out problems; amend fixes the same step.
+    const crowded = JSON.stringify(
+      await draw!.handler(
+        {
+          elements: [{ type: 'text', id: 'nota', x: 110, y: 60, text: 'Encima de la caja' }],
+        } as never,
+        {},
+      ),
+    );
+    expect(crowded).toContain('"type":"image"');
+    expect(crowded).toContain('already has text');
+    const fixed = JSON.stringify(
+      await draw!.handler(
+        {
+          amend: 'w3',
+          elements: [{ type: 'text', id: 'nota', x: 110, y: 400, text: 'Debajo de la caja' }],
+        } as never,
+        {},
+      ),
+    );
+    expect(fixed).toContain('Step w3 changed');
+    expect(fixed).toContain('No overlaps found');
+
     // Bad Mermaid is refused before anything is stored.
     const bad = await draw!.handler({ mermaid: 'pie\n "a": 1' } as never, {});
     expect(bad.isError).toBe(true);

@@ -61,6 +61,15 @@ export class WhiteboardService {
     this.upsert(threadId, { stepsJson: JSON.stringify(steps) });
   }
 
+  /** Changes a step Claude drew earlier in the same answer (`amend`). */
+  replaceStep(threadId: string, step: BoardStep): void {
+    const board = this.get(threadId);
+    const steps = board.steps.map((s) =>
+      s.messageId === step.messageId && s.id === step.id ? step : s,
+    );
+    this.upsert(threadId, { stepsJson: JSON.stringify(steps) });
+  }
+
   /** The scene as the browser has it now, with the steps it has merged and a snapshot. */
   save(threadId: string, input: SaveBoard): Whiteboard {
     this.row(threadId);

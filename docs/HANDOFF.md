@@ -50,6 +50,9 @@ DECISIONS "Visual interaction with the PDF"), not deployed yet:
 - **Block 4 done (same day):** "Seguir a Claude" toggle (off: offer button),
   `go_to_page`, split view (`show_side_by_side`), `number` / `callout` marks, "?" on
   Claude's marks to ask about them. Not tried with real Claude.
+- Owner's first real board had overlapping text: `whiteboard_draw` now returns a
+  preview image and the overlaps (`claude/board.ts`), boxes take a body `text`, and
+  `amend` fixes a step in place. The deploy copies `apps/server/assets` (font).
 - **Next:** try all four blocks with the real Claude and the owner's PDFs, then deploy
   (migrations `0015`–`0017`; the web build now carries Excalidraw's fonts).
 

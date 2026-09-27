@@ -251,6 +251,13 @@ change them if he disagrees.
   change. Mermaid on the board goes through `@excalidraw/mermaid-to-excalidraw`,
   which brings its own Mermaid 11 (only in the lazy board chunk). Excalidraw's fonts
   are served by the app (CJK font left out, 13 MB).
+- **Whiteboard preview (2026-09-27, owner's report: "Claude no ve lo que hace, el
+  texto se solapa").** Every `whiteboard_draw` returns a server-rendered preview of
+  Claude's drawing and a list of overlaps, and Claude fixes them with `amend` before
+  explaining. Boxes take a body `text` under their heading and grow to fit it. The
+  preview shows only Claude's elements (the student's strokes are not in it) and
+  approximates the hand-drawn look with straight lines; text is measured with the
+  real font. Costs one small image per drawing call.
 - **Student drawings (2026-09-27, Claude).** Claude does not get the board with every
   question (quota): it is told in the turn context when the student changed the board
   since it last looked, and looks with `whiteboard_view`. A save counts as the

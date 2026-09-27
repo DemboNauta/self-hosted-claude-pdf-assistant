@@ -181,7 +181,7 @@ build_release() {
     corepack pnpm --filter @pdfclaudeassistant/web build >/dev/null
     corepack pnpm --filter @pdfclaudeassistant/server build >/dev/null
     corepack pnpm --filter @pdfclaudeassistant/server deploy --prod --legacy "$out" >/dev/null
-    cp -r apps/server/dist apps/server/drizzle "$out/"
+    cp -r apps/server/dist apps/server/drizzle apps/server/assets "$out/"
     cp -r apps/web/dist "$out/public"
     mkdir -p "$out/deploy"
     cp "deploy/$SERVICE.service" "$out/deploy/"

@@ -65,4 +65,30 @@ describe('whiteboard steps → Excalidraw skeletons', () => {
     expect(out[1]).not.toHaveProperty('start');
     expect(out[2]).toMatchObject({ type: 'line', x: 10, y: 10, endArrowhead: null });
   });
+
+  it('puts a box heading and its body together, top left', () => {
+    const [box] = stepSkeletons(
+      step([
+        {
+          type: 'rect',
+          id: 't',
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 50,
+          label: 'Tipo 1',
+          text: 'El camino importa',
+        },
+      ]),
+      new Map(),
+    );
+    expect(box).toMatchObject({
+      label: {
+        text: 'Tipo 1\nEl camino importa',
+        fontSize: 16,
+        textAlign: 'left',
+        verticalAlign: 'top',
+      },
+    });
+  });
 });

@@ -40,7 +40,10 @@ export const boardElementSchema = z.discriminatedUnion('type', [
     y: coord,
     w: size,
     h: size,
+    /** Title of the box (alone: centred; with `text`: the first line). */
     label,
+    /** Body text inside the box, under the label; the box grows to fit it. */
+    text: z.string().max(2000).optional(),
     color,
     /** Filled with a light tint of the colour. */
     fill: z.boolean().optional(),
@@ -96,6 +99,8 @@ export interface BoardStep {
   messageId: string;
   /** Wipe the board before drawing. */
   clear?: boolean;
+  /** Ids of Claude's elements to take off the board. */
+  remove?: string[];
   elements: ResolvedBoardElement[];
   /** A Mermaid diagram drawn on the board (converted in the browser), below the rest. */
   mermaid?: string;

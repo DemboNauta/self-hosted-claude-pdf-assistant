@@ -30,6 +30,7 @@ import {
   type PageLayout,
 } from '../ingest/layout.js';
 import { pageItems } from '../services/anchoring.js';
+import { boardElements, findProblems, place, renderPreview } from './board.js';
 import { newId } from '../services/ids.js';
 import { checkDiagramSource, MAX_DIAGRAM_SOURCE } from '../services/diagrams.js';
 import type { UserServices } from '../services/scope.js';
@@ -1004,37 +1005,6 @@ export function diagramTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
-/** Rough box of a board element in board units, to tell Claude where there is room. */
-function boardBox(e: ResolvedBoardElement): { x: number; y: number; w: number; h: number } | null {
-  switch (e.type) {
-    case 'text': {
-      const px = { s: 16, m: 20, l: 28, xl: 36 }[e.size ?? 'm'];
-      const lines = e.text.split('\n');
-      const longest = Math.max(...lines.map((l) => l.length));
-      return { x: e.x, y: e.y, w: longest * px * 0.55, h: lines.length * px * 1.25 };
-    }
-    case 'rect':
-    case 'ellipse':
-    case 'diamond':
-    case 'pdf':
-      return { x: e.x, y: e.y, w: e.w, h: e.h };
-    case 'freehand':
-    case 'arrow':
-    case 'line': {
-      const pts = e.points ?? [];
-      if (!pts.length) return null;
-      const xs = pts.map((p) => p[0]);
-      const ys = pts.map((p) => p[1]);
-      return {
-        x: Math.min(...xs),
-        y: Math.min(...ys),
-        w: Math.max(...xs) - Math.min(...xs),
-        h: Math.max(...ys) - Math.min(...ys),
-      };
-    }
-  }
-}
-
 /** Whiteboard next to the chat (visual interaction, blocks 2 and 3). */
 export function whiteboardTools(deps: ToolDeps, ctx: ToolContext) {
   let steps = 0;
@@ -1068,22 +1038,31 @@ export function whiteboardTools(deps: ToolDeps, ctx: ToolContext) {
       'whiteboard_draw',
       [
         `Draw on the hand-drawn whiteboard next to the chat, like a teacher at the blackboard: diagrams, worked steps, sketches of graphs, comparisons, a figure of the PDF annotated. Coordinates are board units: x from 0 to ${BOARD_WIDTH} (left to right), y from 0 downwards without limit.`,
-        'Elements: text {x,y,text,size s|m|l|xl}; rect / ellipse / diamond {id,x,y,w,h,label,fill}; arrow / line {from,to} connecting element ids (or {points:[[x,y],…]}), with label and dashed; freehand {points}; pdf {page,region,x,y,w} pastes a crop of a PDF page (region in page fractions, e.g. a figure box from get_page_layout) to annotate it with arrows and text.',
-        'Colours: black, blue, red, green, orange, purple, gray. Give ids to things you will connect or change later; drawing an id again replaces that element. There are no LaTeX formulas: write maths with Unicode (x², √, π, ∑, ∫, →, ≤).',
-        'Each call is one step of the explanation and returns a step id (w1, w2…): write [[mark:ID]] at the start of the sentence that explains it, and it is drawn at that moment (also when spoken). Build complex drawings in several steps. "mermaid" draws a flowchart or mind map below the rest; "clear": true wipes the board first (only for a new topic).',
-        'The student sees the board and may draw on it too.',
+        'Elements: text {id,x,y,text,size s|m|l|xl}; rect / ellipse / diamond {id,x,y,w,h,label,text,fill}; arrow / line {id,from,to} connecting element ids (or {points:[[x,y],…]}), with label and dashed; freehand {points}; pdf {id,page,region,x,y,w} pastes a crop of a PDF page (region in page fractions, e.g. a figure box from get_page_layout) to annotate it with arrows and text.',
+        'A box with a heading and some lines: ONE rect with label (the heading) and text (the body, "\\n" between lines); the box grows to fit. Never place separate text elements over a box that has a label or text. The font is wide: at size m (20) a character is about 11 units, at s (16) about 9.',
+        'Colours: black, blue, red, green, orange, purple, gray. Give every element an id: drawing an id again replaces that element, and "remove" takes ids off the board. No LaTeX: write maths with Unicode (x², √, π, ∑, ∫, →, ≤).',
+        'Each call is one step of the explanation and returns a step id (w1, w2…): write [[mark:ID]] at the start of the sentence that explains it, and it is drawn at that moment (also when spoken). "mermaid" draws a flowchart or mind map below the rest; "clear": true wipes the board first (only for a new topic).',
+        'The result has a preview image of the board and the overlaps found: check it and fix any problem before explaining, with "amend": the step id (it changes that step instead of adding one).',
       ].join(' '),
       {
         elements: z.array(boardElementSchema).max(80).default([]),
+        remove: z.array(z.string().max(32)).max(80).optional(),
+        amend: z
+          .string()
+          .regex(/^w\d{1,3}$/)
+          .optional()
+          .describe('Fix a step you drew in this answer instead of adding a new one'),
         mermaid: z.string().max(MAX_DIAGRAM_SOURCE).optional(),
         clear: z.boolean().optional(),
       },
       tracked(
         ctx,
         'whiteboard_draw',
-        () => '',
-        async ({ elements, mermaid, clear }) => {
-          if (!elements.length && !mermaid && !clear) return fail('Nothing to draw.');
+        ({ amend }) => (amend ? '✎' : ''),
+        async ({ elements, remove, amend, mermaid, clear }) => {
+          if (!elements.length && !mermaid && !clear && !remove?.length) {
+            return fail('Nothing to draw.');
+          }
           if (mermaid) {
             const problem = checkDiagramSource(mermaid);
             if (problem) return fail(problem);
@@ -1117,40 +1096,83 @@ export function whiteboardTools(deps: ToolDeps, ctx: ToolContext) {
             files[fileId] = `data:image/png;base64,${img.png.toString('base64')}`;
             resolved.push({ ...e, docId, fileId, h: Math.round((e.w * img.height) / img.width) });
           }
+          // Boxes grow to fit their text, as the browser will draw them.
+          const grown = place(resolved).map((pl) =>
+            (pl.el.type === 'rect' || pl.el.type === 'ellipse' || pl.el.type === 'diamond') &&
+            pl.box &&
+            pl.box.h > pl.el.h
+              ? { ...pl.el, h: Math.ceil(pl.box.h) }
+              : pl.el,
+          );
 
-          const step: BoardStep = {
-            id: `w${++steps}`,
-            messageId: ctx.messageId,
-            ...(clear && { clear: true }),
-            elements: resolved,
-            ...(mermaid && { mermaid }),
-            ...(Object.keys(files).length && { files }),
-            createdAt: new Date().toISOString(),
-          };
-          deps.whiteboards.addStep(ctx.threadId, step);
+          let step: BoardStep;
+          const previous = amend
+            ? deps.whiteboards
+                .get(ctx.threadId)
+                .steps.find((st) => st.messageId === ctx.messageId && st.id === amend)
+            : undefined;
+          if (amend && !previous) return fail(`No step ${amend} in this answer.`);
+          if (previous) {
+            // The step changes: replaced and removed elements go, new ones are added.
+            const gone = new Set([
+              ...(remove ?? []),
+              ...grown.map((e) => ('id' in e ? e.id : undefined)).filter(Boolean),
+            ]);
+            step = {
+              ...previous,
+              elements: [
+                ...previous.elements.filter((e) => !('id' in e && e.id && gone.has(e.id))),
+                ...grown,
+              ],
+              remove: [...new Set([...(previous.remove ?? []), ...(remove ?? [])])],
+              ...(mermaid !== undefined && { mermaid }),
+              ...(clear && { clear: true }),
+              files: { ...(previous.files ?? {}), ...files },
+            };
+            deps.whiteboards.replaceStep(ctx.threadId, step);
+          } else {
+            step = {
+              id: `w${++steps}`,
+              messageId: ctx.messageId,
+              ...(clear && { clear: true }),
+              ...(remove?.length && { remove }),
+              elements: grown,
+              ...(mermaid && { mermaid }),
+              ...(Object.keys(files).length && { files }),
+              createdAt: new Date().toISOString(),
+            };
+            deps.whiteboards.addStep(ctx.threadId, step);
+          }
           ctx.emit({ type: 'board_step', threadId: ctx.threadId, step });
 
-          // Where the board has room, from what Claude drew since the last clear.
-          const all = deps.whiteboards.get(ctx.threadId).steps;
-          const since = all.slice(Math.max(0, all.map((s) => !!s.clear).lastIndexOf(true)));
-          const boxes = since
-            .flatMap((s) => s.elements)
-            .map(boardBox)
-            .filter((b): b is NonNullable<typeof b> => b !== null);
-          const bottom = boxes.length ? Math.max(...boxes.map((b) => b.y + b.h)) : 0;
-          const ids = since
-            .flatMap((s) => s.elements)
-            .map((e) => ('id' in e ? e.id : undefined))
-            .filter(Boolean);
-          return text(
-            [
-              `Step ${step.id} ready. Write [[mark:${step.id}]] at the start of the sentence that explains it.`,
-              `Your drawings reach y ≈ ${Math.round(bottom)}${mermaid ? ' plus the Mermaid diagram below them' : ''}; put new things below unless they belong next to existing ones.`,
-              ids.length ? `Ids on the board: ${[...new Set(ids)].join(', ')}.` : '',
-            ]
-              .filter(Boolean)
-              .join(' '),
-          );
+          // What the board looks like now, and what is wrong with it.
+          const board = boardElements(deps.whiteboards.get(ctx.threadId).steps);
+          const placed = place(board.elements);
+          const problems = findProblems(placed);
+          const preview = await renderPreview(placed, board.files, board.mermaid);
+          const bottom = Math.max(0, ...placed.map((pl) => (pl.box ? pl.box.y + pl.box.h : 0)));
+          const ids = board.elements.map((e) => ('id' in e ? e.id : undefined)).filter(Boolean);
+          return {
+            content: [
+              { type: 'image', data: preview.png.toString('base64'), mimeType: 'image/png' },
+              {
+                type: 'text',
+                text: [
+                  previous
+                    ? `Step ${step.id} changed.`
+                    : `Step ${step.id} ready. Write [[mark:${step.id}]] at the start of the sentence that explains it.`,
+                  'The image is a rough preview of your drawings on the board (the student sees them hand-drawn; their own strokes are not shown).',
+                  problems.length
+                    ? `Fix these first with amend "${step.id}" (move, resize, or put text in a box's "text"):\n- ${problems.join('\n- ')}`
+                    : 'No overlaps found.',
+                  `Your drawings reach y ≈ ${Math.round(bottom)}${board.mermaid ? ' plus the Mermaid diagram below them' : ''}; put new things below unless they belong next to existing ones.`,
+                  ids.length ? `Ids on the board: ${[...new Set(ids)].join(', ')}.` : '',
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
+              },
+            ],
+          };
         },
       ),
     ),

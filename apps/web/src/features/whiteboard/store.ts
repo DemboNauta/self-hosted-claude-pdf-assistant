@@ -9,10 +9,34 @@ import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { create } from 'zustand';
 import { api as http } from '../../lib/api';
 import { chatSocket, setBoardRevealer, useChat } from '../chat/store';
-import { bottomOf, stepSkeletons, type Box } from './convert';
+import { bottomOf, sceneId, stepSkeletons, type Box } from './convert';
 
 /** Excalidraw is heavy: loaded only once the board is used. */
-const excalidraw = () => import('@excalidraw/excalidraw');
+const excalidraw = async () => {
+  await boardFont();
+  return import('@excalidraw/excalidraw');
+};
+
+let fontLoad: Promise<void> | null = null;
+/**
+ * Excalifont must be loaded before Excalidraw measures text: otherwise lines are wrapped
+ * with a narrower fallback font and overflow their boxes once drawn.
+ */
+function boardFont() {
+  fontLoad ??= (async () => {
+    try {
+      const face = new FontFace('Excalifont', 'url(/excalidraw/fonts/Excalifont-Latin.woff2)', {
+        unicodeRange:
+          'U+20-7e,U+a0-a3,U+a5-a6,U+a8-ab,U+ad-b1,U+b4,U+b6-b8,U+ba-ff,U+131,U+152-153,U+2013-2014,U+2018-201a,U+201c-201e,U+2022,U+2026,U+20ac',
+      });
+      document.fonts.add(face);
+      await face.load();
+    } catch (err) {
+      console.warn('[whiteboard] Excalifont could not be loaded', err);
+    }
+  })();
+  return fontLoad;
+}
 
 type SceneElement = {
   id: string;
@@ -249,15 +273,26 @@ function enqueue(steps: BoardStep[], opts: { focus: boolean }) {
   return queue;
 }
 
-async function apply(step: BoardStep, { focus }: { focus: boolean }) {
+async function apply(step: BoardStep, { focus, redo }: { focus: boolean; redo?: boolean }) {
   const key = boardStepKey(step);
   const state = useBoard.getState();
-  if (state.applied.includes(key)) return;
+  if (state.applied.includes(key) && !redo) return;
   const threadId = state.threadId;
   const ex = await excalidraw();
   if (useBoard.getState().threadId !== threadId) return;
 
   let elements = step.clear ? [] : currentElements();
+  // A step Claude fixed after it was drawn: its old elements go first.
+  const before = redo ? new Set(useBoard.getState().stepElements[key] ?? []) : null;
+  // Removed ids (and the text inside those boxes) leave the board.
+  const removed = new Set((step.remove ?? []).map(sceneId));
+  elements = elements.filter(
+    (e) =>
+      !before?.has(e.id) &&
+      !before?.has(e.containerId ?? '') &&
+      !removed.has(e.id) &&
+      !removed.has(e.containerId ?? ''),
+  );
   const boxes = new Map<string, Box>(elements.map((e) => [e.id, e]));
   const skeletons = stepSkeletons(step, boxes);
   const drawn = ex.convertToExcalidrawElements(skeletons as never, {
@@ -312,7 +347,7 @@ async function apply(step: BoardStep, { focus }: { focus: boolean }) {
   }
   useBoard.setState((s) => ({
     scene: { elements: next, files: { ...(s.scene?.files ?? {}), ...files } },
-    applied: [...s.applied, key],
+    applied: s.applied.includes(key) ? s.applied : [...s.applied, key],
     stepElements: { ...s.stepElements, [key]: [...drawn, ...extra].map((e) => e.id) },
   }));
   scheduleSave();
@@ -407,7 +442,19 @@ useChat.subscribe((s, prev) => {
 
 chatSocket.subscribe((event) => {
   if (event.type !== 'board_step' || event.threadId !== useBoard.getState().threadId) return;
-  useBoard.setState((s) => ({ steps: [...s.steps, event.step] }));
+  const key = boardStepKey(event.step);
+  const known = useBoard.getState().steps.some((s) => boardStepKey(s) === key);
+  // Claude fixed a step (amend): replace it, and redraw it if it is already on the board.
+  useBoard.setState((s) => ({
+    steps: known
+      ? s.steps.map((st) => (boardStepKey(st) === key ? event.step : st))
+      : [...s.steps, event.step],
+  }));
+  if (known && useBoard.getState().applied.includes(key)) {
+    queue = queue
+      .then(() => apply(event.step, { focus: false, redo: true }))
+      .catch((err) => console.error(err));
+  }
 });
 
 // A thread may already be open when the board module loads.

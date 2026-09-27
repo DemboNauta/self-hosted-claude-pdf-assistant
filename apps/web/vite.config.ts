@@ -17,6 +17,10 @@ function excalidrawFonts(): Plugin {
     'node_modules/@excalidraw/excalidraw/dist/prod/fonts',
   );
   const skip = new Set(['Xiaolai']);
+  // The Latin subset of Excalifont, also served under a stable name: the board loads it
+  // before measuring text (keep in sync with apps/server/assets/fonts).
+  const latin = 'Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2';
+  const stable = 'Excalifont-Latin.woff2';
   const files = () =>
     fs
       .readdirSync(src)
@@ -26,7 +30,8 @@ function excalidrawFonts(): Plugin {
     name: 'excalidraw-fonts',
     configureServer(server) {
       server.middlewares.use('/excalidraw/fonts', (req, res, next) => {
-        const rel = decodeURIComponent((req.url ?? '').split('?')[0]!).replace(/^\/+/, '');
+        const asked = decodeURIComponent((req.url ?? '').split('?')[0]!).replace(/^\/+/, '');
+        const rel = asked === stable ? latin : asked;
         const file = path.join(src, rel);
         if (!file.startsWith(src) || rel.startsWith('Xiaolai') || !fs.existsSync(file)) {
           next();
@@ -37,6 +42,11 @@ function excalidrawFonts(): Plugin {
       });
     },
     generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: `excalidraw/fonts/${stable}`,
+        source: fs.readFileSync(path.join(src, latin)),
+      });
       for (const rel of files()) {
         this.emitFile({
           type: 'asset',

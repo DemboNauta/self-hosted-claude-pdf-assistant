@@ -44,6 +44,12 @@ test('Claude draws on the whiteboard and the board is kept', async ({ page }, in
   ).json()) as Whiteboard;
   const ids = (board.scene?.elements ?? []).map((e) => (e as { id: string }).id);
   expect(ids).toEqual(expect.arrayContaining(['claude-luz', 'claude-azucar']));
+  // A box with a heading and a body: wrapped with the board's font (Excalifont), so the
+  // lines fit inside the box.
+  const body = (board.scene?.elements ?? []).find(
+    (e) => (e as { containerId?: string }).containerId === 'claude-nota',
+  ) as { text: string } | undefined;
+  expect(body?.text).toContain('Idea clave\nLa planta convierte la energía de la\nluz');
   await page.screenshot({ path: info.outputPath('whiteboard.png') });
 
   // The chat shows where each step is explained, and a chip brings the board back.
