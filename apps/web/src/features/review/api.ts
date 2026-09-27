@@ -38,6 +38,11 @@ export async function generateBrief() {
   const day = localDay();
   const brief = await api<DailyBrief>(`/review/today?day=${day}`, { method: 'POST' });
   queryClient.setQueryData(['brief', day], brief);
+  // Claude may have added today's cards along with the note.
+  if (brief.claudeCards) {
+    void queryClient.invalidateQueries({ queryKey: ['stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['review-queue'] });
+  }
   return brief;
 }
 
@@ -63,6 +68,16 @@ export async function createCards(
   cards: { front: string; back: string; documentId?: string; page?: number }[],
 ) {
   const created = await api<Flashcard[]>('/flashcards', { method: 'POST', json: { cards } });
+  invalidateReview();
+  return created;
+}
+
+/** Claude writes cards from what was read in these documents (last read when empty). */
+export async function generateCards(documentIds: string[], count: number) {
+  const created = await api<Flashcard[]>('/flashcards/generate', {
+    method: 'POST',
+    json: { ...(documentIds.length ? { documentIds } : {}), count },
+  });
   invalidateReview();
   return created;
 }

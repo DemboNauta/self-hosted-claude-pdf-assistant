@@ -43,9 +43,16 @@ Session of 2026-09-27 (owner's requests, deployed after each commit):
   (`MarginNotes.tsx`), outside the page when there is room, folded into a tab
   otherwise; accepting turns one into a regular note. Not yet tried with the
   real Claude.
-- Pending, asked by the owner: stats chart tooltips (hours/minutes on hover), a
-  minimum of stats on "Inicio", Claude-prepared review sessions shown there,
-  and improving how Claude talks in voice mode (owner not convinced by it).
+- Stats chart: per-day time, cards and pomodoros on hover/focus/tap.
+- Claude-written flashcards (owner's choice: new cards, ready to review, not
+  proposals): "Crear tarjetas con Claude" in Repaso (pick subjects/topics/PDFs;
+  only pages already read, uncovered pages first, existing cards not repeated)
+  and 5 a day with the Home brief on the first visit (`services/cardgen.ts`).
+  Home also shows mini stats (streak, cards, retention, weak concepts, 30-day
+  chart). Not yet tried with the real Claude.
+- Pending, asked by the owner: improve how Claude talks in voice mode (owner not
+  convinced by it). Two flaky/failing e2e tests were flagged as separate tasks
+  (review.spec desktop Home brief; reader.spec mobile selection menu).
 
 Session of 2026-09-26: the owner tried the app locally (fresh clone, see
 `DEVELOPMENT.md` "Fresh clone") and asked, **before the deployment**, for:

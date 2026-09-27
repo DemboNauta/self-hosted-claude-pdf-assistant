@@ -63,3 +63,27 @@ test('create flashcards, review them and see today and the stats', async ({ page
   await expect(detail).toContainText('Sin estudio');
   await expect(detail).not.toContainText('Hoy');
 });
+
+// Claude writes cards from what was read: on demand in "Repaso" (choosing the PDFs) and
+// a few every day with today's brief on "Inicio", ready to review.
+test('ask Claude for cards from what was read and see them on Home', async ({ page }, info) => {
+  await login(page);
+  const name = `Cartas ${info.project.name}`;
+  const docId = await seedDocument(page, name, tinyPdf('Las enzimas aceleran reacciones.'));
+  await page.request.put(`/api/documents/${docId}/position`, { data: { page: 1, scroll: 0 } });
+
+  await page.goto('/review');
+  await page.getByRole('button', { name: 'Crear tarjetas con Claude' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nuevas tarjetas con Claude' });
+  await dialog.getByRole('checkbox', { name: new RegExp(`${name} .*leído`) }).check();
+  await dialog.getByRole('button', { name: 'Crear tarjetas' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('status')).toContainText('Claude ha creado 1 tarjeta nueva');
+  await expect(page.getByTestId('flashcard')).toContainText('¿Qué dice la página 1?');
+
+  await page.goto('/');
+  await expect(page.getByTestId('claude-cards')).toContainText('Claude te ha preparado');
+  await expect(page.getByRole('group', { name: 'Últimos 30 días' })).toBeVisible();
+  await expect(page.getByText('Conceptos flojos')).toBeVisible();
+  await expect(page.getByText(/^[1-9]\d* pendientes?$/)).toBeVisible();
+});

@@ -41,9 +41,27 @@ type FakePrompt =
 
 const fakeChat = ((args: {
   prompt: FakePrompt;
-  options: { mcpServers?: Record<string, { instance?: { _registeredTools?: FakeTools } }> };
+  options: {
+    mcpServers?: Record<string, { instance?: { _registeredTools?: FakeTools } }>;
+    systemPrompt?: string;
+  };
 }) =>
   (async function* () {
+    // Flashcards from read pages: one card per page it was shown.
+    if (
+      typeof args.prompt === 'string' &&
+      args.options.systemPrompt?.includes('write flashcards')
+    ) {
+      const pages = args.prompt.matchAll(/--- (D\d+) p\. (\d+)[^\n]*\n([^\n]*)/g);
+      const cards = [...pages].map((m) => ({
+        ref: m[1],
+        page: Number(m[2]),
+        front: `¿Qué dice la página ${m[2]}?`,
+        back: m[3]!.slice(0, 200),
+      }));
+      yield { type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(cards) };
+      return;
+    }
     let prompt = '';
     let image = false;
     if (typeof args.prompt === 'string') prompt = args.prompt;

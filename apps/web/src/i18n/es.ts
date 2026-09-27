@@ -298,6 +298,25 @@ export const es = {
     save: 'Guardar',
     created: 'Tarjeta creada',
     remaining: (n: number) => `Quedan ${n}`,
+    generate: {
+      open: 'Crear tarjetas con Claude',
+      title: 'Nuevas tarjetas con Claude',
+      intro:
+        'Claude escribe tarjetas de las páginas que ya has leído, sin repetir las que tienes. Elige de dónde:',
+      nothingChosen: 'Si no eliges nada, usa lo último que has leído.',
+      unread: 'sin leer',
+      read: (pct: number) => `${pct}% leído`,
+      count: 'Cuántas',
+      submit: 'Crear tarjetas',
+      working: 'Claude está escribiendo las tarjetas…',
+      cancel: 'Cancelar',
+      done: (n: number) =>
+        n === 1
+          ? 'Claude ha creado 1 tarjeta nueva: ya está en tu repaso.'
+          : `Claude ha creado ${n} tarjetas nuevas: ya están en tu repaso.`,
+      nothingRead: 'Aún no has leído nada de lo que has elegido. Lee un poco y vuelve.',
+      failed: 'Claude no ha podido crear las tarjetas. Inténtalo más tarde.',
+    },
     shortcuts: 'Espacio: mostrar · 1–4: valorar',
   },
   home: {
@@ -314,7 +333,18 @@ export const es = {
     page: (p: number, pct: number) => `p. ${p} · ${pct}% leído`,
     stats: 'Tus estadísticas',
     streak: (n: number) => (n === 1 ? '1 día seguido' : `${n} días seguidos`),
-    studiedToday: (min: number) => `${min} min hoy`,
+    studiedToday: (time: string) => `${time} hoy`,
+    allStats: 'Ver todas',
+    dueShort: (n: number) => (n === 1 ? '1 pendiente' : `${n} pendientes`),
+    reviewedToday: (n: number) => (n === 1 ? '1 repasada hoy' : `${n} repasadas hoy`),
+    matureCards: (n: number) => (n === 1 ? '1 tarjeta consolidada' : `${n} consolidadas`),
+    weakConcepts: 'Conceptos flojos',
+    noConcepts: 'Ninguno registrado',
+    mastery: (pct: number) => `${pct}% de dominio medio`,
+    claudeCards: (n: number) =>
+      n === 1
+        ? 'Claude te ha preparado 1 tarjeta nueva de lo que has leído.'
+        : `Claude te ha preparado ${n} tarjetas nuevas de lo que has leído.`,
     welcome: 'Empieza subiendo un PDF a tu biblioteca.',
   },
   stats: {

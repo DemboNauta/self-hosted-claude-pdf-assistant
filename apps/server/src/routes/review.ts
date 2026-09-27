@@ -1,5 +1,6 @@
 import {
   createFlashcardsSchema,
+  generateFlashcardsSchema,
   reviewQuerySchema,
   reviewSchema,
   updateFlashcardSchema,
@@ -24,6 +25,10 @@ export async function registerReviewRoutes(app: FastifyInstance, svc: RequestSer
       .code(201)
       .send(svc(req).review.create(parse(createFlashcardsSchema, req.body).cards, 'user')),
   );
+  app.post('/api/flashcards/generate', async (req, reply) => {
+    const { count, ...source } = parse(generateFlashcardsSchema, req.body);
+    return reply.code(201).send(await svc(req).cardgen.generate(source, count));
+  });
   app.patch('/api/flashcards/:id', async (req) =>
     svc(req).review.update(id(req.params), parse(updateFlashcardSchema, req.body)),
   );

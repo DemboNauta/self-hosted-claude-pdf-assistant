@@ -9,13 +9,20 @@ let headers: Record<string, string>;
 let docId: string;
 let topicId: string;
 let briefCalls: number;
+let cardCalls: number;
+/** What the fake Claude answers when asked for flashcards. */
+let cardsAnswer: string;
 
 const today = new Date().toISOString().slice(0, 10);
 
 beforeEach(async () => {
   briefCalls = 0;
-  const fakeQuery = (() => {
-    briefCalls++;
+  cardCalls = 0;
+  cardsAnswer = '[]';
+  const fakeQuery = ((args: { prompt: string; options: { systemPrompt?: string } }) => {
+    const cards = args.options.systemPrompt?.includes('flashcards') ?? false;
+    if (cards) cardCalls++;
+    else briefCalls++;
     return (async function* () {
       yield {
         type: 'system',
@@ -28,7 +35,7 @@ beforeEach(async () => {
         type: 'result',
         subtype: 'success',
         is_error: false,
-        result: '**Derivada:** repasa la regla de la cadena.',
+        result: cards ? cardsAnswer : '**Derivada:** repasa la regla de la cadena.',
       };
     })();
   }) as never;
@@ -95,5 +102,63 @@ describe('flashcards and FSRS review', () => {
     brief = await req<DailyBrief>('GET', `/api/review/today?day=${today}`);
     expect(brief.text).toContain('regla de la cadena');
     expect(briefCalls).toBe(1);
+  });
+});
+
+describe('flashcards written by Claude', () => {
+  const read = (id: string, page = 1) =>
+    app.inject({
+      method: 'PUT',
+      url: `/api/documents/${id}/position`,
+      headers,
+      payload: { page, scroll: 0 },
+    });
+
+  it('needs something read first', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/flashcards/generate',
+      headers,
+      payload: { documentIds: [docId], count: 3 },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(cardCalls).toBe(0);
+  });
+
+  it('writes cards from the read pages of the chosen documents, ready to review', async () => {
+    const other = await seedDocument(app, headers, [['Integrales por partes y sustitución.']]);
+    await read(docId);
+    await read(other.docId);
+    cardsAnswer =
+      'Aquí tienes:\n```json\n[{"ref":"D1","page":1,"front":"¿Qué son las derivadas?","back":"Tasas de cambio."},' +
+      '{"ref":"D1","page":9,"front":"Otra","back":"Página que no se envió"},' +
+      '{"ref":"D7","page":1,"front":"Documento desconocido","back":"x"}]\n```';
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/flashcards/generate',
+      headers,
+      payload: { topicIds: [topicId], count: 5 },
+    });
+    expect(res.statusCode).toBe(201);
+    const cards = res.json<Flashcard[]>();
+    expect(cards.map((c) => [c.front, c.page, c.author, c.documentId])).toEqual([
+      ['¿Qué son las derivadas?', 1, 'claude', docId],
+      ['Otra', null, 'claude', docId],
+    ]);
+    // Ready to review straight away (not proposals).
+    const queue = await req<ReviewQueue>('GET', '/api/review/queue');
+    expect(queue.due).toHaveLength(2);
+  });
+
+  it("adds a few cards with today's brief, only once a day", async () => {
+    await read(docId);
+    cardsAnswer = '[{"ref":"D1","page":1,"front":"¿Derivada?","back":"Tasa de cambio."}]';
+    let brief = await req<DailyBrief>('POST', `/api/review/today?day=${today}`);
+    expect(brief).toMatchObject({ claudeCards: 1, dueCount: 1 });
+    brief = await req<DailyBrief>('POST', `/api/review/today?day=${today}`);
+    expect(brief.claudeCards).toBe(1);
+    expect(cardCalls).toBe(1);
+    expect(briefCalls).toBe(2);
+    expect((await req<ReviewQueue>('GET', '/api/review/queue')).due).toHaveLength(1);
   });
 });

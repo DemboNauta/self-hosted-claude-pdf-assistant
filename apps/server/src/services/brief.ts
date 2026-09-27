@@ -9,6 +9,7 @@ import { documents } from '../db/schema.js';
 import type { LibraryService } from './library.js';
 import type { MemoryService } from './memory.js';
 import type { ReviewService } from './review.js';
+import type { CardGenService } from './cardgen.js';
 import type { SettingsService } from './settings.js';
 import { HttpError } from './errors.js';
 
@@ -20,10 +21,15 @@ Structure:
 2. A final line starting with "**Hoy te propongo:**" suggesting what to read or review next, based on the reading progress and pending notes.
 Do not invent facts about documents you have not seen; stay general when unsure.`;
 
+/** Cards Claude writes each day from what was read (on the first visit to Home). */
+const DAILY_CARDS = 5;
+
 interface Stored {
   day: string;
   text: string;
   generatedAt: string;
+  /** Flashcards Claude created that day. */
+  cards?: number;
 }
 
 /** "Repaso de hoy" (F-REV-03): due cards, weak concepts and a short note by Claude. */
@@ -35,6 +41,7 @@ export class BriefService {
     private readonly memory: MemoryService,
     private readonly library: LibraryService,
     private readonly settings: SettingsService,
+    private readonly cardgen: CardGenService,
     private readonly runQuery: QueryFn,
     private readonly credentials: ClaudeCredentials,
     private readonly userId: string,
@@ -59,6 +66,7 @@ export class BriefService {
       concepts,
       text: stored?.day === day ? stored.text : null,
       generatedAt: stored?.day === day ? stored.generatedAt : null,
+      claudeCards: stored?.day === day ? (stored.cards ?? 0) : 0,
       continueReading: this.continueReading(),
     };
   }
@@ -82,6 +90,18 @@ export class BriefService {
       memory ? `What you know about the student:\n${memory}` : '',
     ].join('\n');
 
+    // Today's cards, once a day (regenerating the note does not add more), in parallel
+    // with the note. A failure there must not cost the student the note.
+    const before = this.stored();
+    const cardsDone = before?.day === day && before.cards !== undefined;
+    const cards =
+      cardsDone || !this.cardgen.hasReadPages()
+        ? Promise.resolve(cardsDone ? before.cards! : 0)
+        : this.cardgen.generate({}, DAILY_CARDS).then(
+            (created) => created.length,
+            () => 0,
+          );
+
     let text = '';
     const q = this.runQuery({
       prompt: facts,
@@ -99,8 +119,14 @@ export class BriefService {
         text = msg.result.trim();
       }
     }
+    const created = await cards;
     if (!text) throw new HttpError(502, 'claude_failed');
-    const stored: Stored = { day, text, generatedAt: new Date().toISOString() };
+    const stored: Stored = {
+      day,
+      text,
+      generatedAt: new Date().toISOString(),
+      cards: created,
+    };
     this.settings.write('daily_brief', stored);
     return this.today(day);
   }

@@ -6,7 +6,9 @@ import { Link, useSearchParams } from 'react-router';
 import { Page } from '../../components/Page';
 import { t } from '../../i18n';
 import { Markdown } from '../chat/Markdown';
+import { canUseClaude, useCurrentUser } from '../auth/session';
 import { useLibrary } from '../library/api';
+import { GenerateCards } from './GenerateCards';
 import { deleteCard, invalidateReview, rate, updateCard, useQueue, type ReviewFilter } from './api';
 
 function FilterSelect({
@@ -181,6 +183,8 @@ export function ReviewPage() {
   const [shown, setShown] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const claude = canUseClaude(useCurrentUser());
   const card = queue.data?.due[0];
 
   const answer = async (rating: 1 | 2 | 3 | 4) => {
@@ -228,7 +232,21 @@ export function ReviewPage() {
         {queue.data && (
           <p className="text-text-muted text-sm">{t.review.due(queue.data.due.length)}</p>
         )}
+        {claude && (
+          <GenerateCards
+            tree={library.data}
+            onDone={(message) => {
+              setNotice(message);
+              void queue.refetch();
+            }}
+          />
+        )}
       </div>
+      {notice && (
+        <p role="status" className="bg-surface-muted mb-4 rounded-lg px-3 py-2 text-sm">
+          {notice}
+        </p>
+      )}
 
       {queue.data && <Proposals cards={queue.data.proposed} />}
 

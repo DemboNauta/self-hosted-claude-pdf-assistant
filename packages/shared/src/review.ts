@@ -75,7 +75,18 @@ export interface DailyBrief {
   text: string | null;
   continueReading: { id: string; title: string; lastPage: number; progressPct: number } | null;
   generatedAt: string | null;
+  /** Flashcards Claude wrote today from what was read (ready to review). */
+  claudeCards: number;
 }
+
+/** "Crear tarjetas con Claude": from what was read in these subjects/topics/documents. */
+export const generateFlashcardsSchema = z.object({
+  subjectIds: z.array(z.string().min(1).max(64)).max(100).optional(),
+  topicIds: z.array(z.string().min(1).max(64)).max(200).optional(),
+  documentIds: z.array(z.string().min(1).max(64)).max(500).optional(),
+  count: z.number().int().min(1).max(30).default(10),
+});
+export type GenerateFlashcards = z.infer<typeof generateFlashcardsSchema>;
 
 export interface StudyStats {
   streakDays: number;

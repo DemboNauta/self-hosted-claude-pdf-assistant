@@ -5,6 +5,7 @@ import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { AnnotationService } from './annotations.js';
 import { BriefService } from './brief.js';
+import { CardGenService } from './cardgen.js';
 import { DiagramService } from './diagrams.js';
 import { FocusService } from './focus.js';
 import { LibraryService } from './library.js';
@@ -34,6 +35,7 @@ export interface UserServices {
   focus: FocusService;
   stats: StatsService;
   brief: BriefService;
+  cardgen: CardGenService;
 }
 
 export type ServicesFor = (userId: string) => UserServices;
@@ -50,6 +52,7 @@ export function servicesFactory(
     const settings = new SettingsService(db, userId);
     const memory = new MemoryService(db, userId);
     const review = new ReviewService(db, userId);
+    const cardgen = new CardGenService(db, config, review, settings, runQuery, credentials, userId);
     return {
       userId,
       db,
@@ -63,6 +66,7 @@ export function servicesFactory(
       diagrams: new DiagramService(db, userId),
       focus: new FocusService(db, userId),
       stats: new StatsService(db, library, userId),
+      cardgen,
       brief: new BriefService(
         db,
         config,
@@ -70,6 +74,7 @@ export function servicesFactory(
         memory,
         library,
         settings,
+        cardgen,
         runQuery,
         credentials,
         userId,
