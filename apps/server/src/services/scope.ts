@@ -15,6 +15,7 @@ import { SearchService } from './search.js';
 import { SettingsService } from './settings.js';
 import { StatsService } from './stats.js';
 import { ThreadService } from './threads.js';
+import { WhiteboardService } from './whiteboards.js';
 
 /**
  * The services of one user. Every service is bound to the user's id and only reads or
@@ -32,6 +33,7 @@ export interface UserServices {
   memory: MemoryService;
   review: ReviewService;
   diagrams: DiagramService;
+  whiteboards: WhiteboardService;
   focus: FocusService;
   stats: StatsService;
   brief: BriefService;
@@ -49,6 +51,7 @@ export function servicesFactory(
 ): ServicesFor {
   return (userId) => {
     const library = new LibraryService(db, config, userId);
+    const threads = new ThreadService(db, userId);
     const settings = new SettingsService(db, userId);
     const memory = new MemoryService(db, userId);
     const review = new ReviewService(db, userId);
@@ -58,7 +61,8 @@ export function servicesFactory(
       db,
       library,
       search: new SearchService(db, userId),
-      threads: new ThreadService(db, userId),
+      threads,
+      whiteboards: new WhiteboardService(db, userId, threads),
       annotations: new AnnotationService(db, userId),
       settings,
       memory,

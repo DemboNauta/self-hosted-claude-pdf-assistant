@@ -403,3 +403,19 @@ export const focusSessions = sqliteTable(
   },
   (t) => [index('focus_sessions_day_idx').on(t.userId, t.day)],
 );
+
+/**
+ * Chat whiteboards (visual interaction, block 2): one per thread. `scene_json` is the
+ * Excalidraw scene saved by the browser; `steps_json` what Claude drew (BoardStep[]),
+ * merged into the scene by the browser (`applied_json` lists the merged step keys).
+ */
+export const whiteboards = sqliteTable('whiteboards', {
+  threadId: text('thread_id')
+    .primaryKey()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  userId: userId(),
+  sceneJson: text('scene_json'),
+  stepsJson: text('steps_json').notNull().default('[]'),
+  appliedJson: text('applied_json').notNull().default('[]'),
+  updatedAt: text('updated_at').notNull(),
+});

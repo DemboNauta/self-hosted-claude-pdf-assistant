@@ -136,9 +136,43 @@ const fakeChat = ((args: {
     // Marks drawn with point_at, referenced in the answer as Claude is told to.
     const markIds: string[] = [];
     const noteMark = (result: unknown) => {
-      const id = /\[\[mark:(m\d+)\]\]/.exec(JSON.stringify(result))?.[1];
+      const id = /\[\[mark:([mw]\d+)\]\]/.exec(JSON.stringify(result))?.[1];
       if (id) markIds.push(id);
     };
+    // "Pizarra" makes the fake draw on the whiteboard: two boxes, then an arrow between them.
+    if (/pizarra/i.test(question) && tools?.whiteboard_draw) {
+      noteMark(
+        await tools.whiteboard_draw.handler(
+          {
+            elements: [
+              {
+                type: 'rect',
+                id: 'luz',
+                x: 60,
+                y: 40,
+                w: 180,
+                h: 70,
+                label: 'Luz',
+                color: 'orange',
+              },
+              { type: 'rect', id: 'azucar', x: 420, y: 40, w: 180, h: 70, label: 'Azúcar' },
+            ],
+          },
+          {},
+        ),
+      );
+      noteMark(
+        await tools.whiteboard_draw.handler(
+          {
+            elements: [
+              { type: 'arrow', from: 'luz', to: 'azucar', label: 'fotosíntesis', color: 'green' },
+              { type: 'text', x: 60, y: 160, text: 'CO₂ + H₂O → glucosa + O₂', size: 'l' },
+            ],
+          },
+          {},
+        ),
+      );
+    }
     // "Conecta" makes the fake draw an arrow from the selection to the top of the page.
     if (/conecta/i.test(question) && tools?.point_at && quote) {
       noteMark(

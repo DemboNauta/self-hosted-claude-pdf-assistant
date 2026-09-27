@@ -26,6 +26,7 @@ import { registerReviewRoutes } from './routes/review.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerAnnotationRoutes } from './routes/annotations.js';
 import { registerDiagramRoutes } from './routes/diagrams.js';
+import { registerWhiteboardRoutes } from './routes/whiteboards.js';
 import { registerFocusRoutes } from './routes/focus.js';
 import { UploadService } from './services/uploads.js';
 import { SupertonicTts, type Synthesize } from './services/tts.js';
@@ -117,6 +118,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   await registerReviewRoutes(app, svc);
   await registerAnnotationRoutes(app, svc, db, config);
   await registerDiagramRoutes(app, svc);
+  await registerWhiteboardRoutes(app, svc);
   await registerFocusRoutes(app, svc);
   const chat = new ChatService(config, credentials, claudeStatus, app.log, runQuery);
   await registerChatRoutes(app, svc, chat);

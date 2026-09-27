@@ -289,6 +289,13 @@ export const useChat = create<ChatState>((set, get) => ({
  */
 const revealed = new Set<string>();
 
+type BoardRevealer = (messageId: string, ids: string[] | null, exclude?: Set<string>) => void;
+let boardRevealer: BoardRevealer = () => {};
+/** The whiteboard registers how it draws Claude's steps when the answer reaches them. */
+export function setBoardRevealer(fn: BoardRevealer) {
+  boardRevealer = fn;
+}
+
 /** Jumps to the page of a mark (F-POINT-05), unless the reader is already there. */
 function jumpTo(group: PointerGroup) {
   const reader = useReader.getState();
@@ -302,8 +309,12 @@ function jumpTo(group: PointerGroup) {
 export function revealMarks(messageId: string, ids?: string[]) {
   const s = useChat.getState();
   const message = s.messages.find((m) => m.id === messageId);
-  if (!message?.pointers?.length) return;
+  if (!message) return;
   const referenced = ids ? null : new Set(markRefs(message.content));
+  // Whiteboard steps (`w…`) are drawn by the board.
+  const boardIds = ids?.filter((id) => id.startsWith('w'));
+  if (!ids || boardIds?.length) boardRevealer(messageId, boardIds ?? null, referenced ?? undefined);
+  if (!message.pointers?.length) return;
   const fresh = message.pointers.filter(
     (g) =>
       !revealed.has(`${messageId}:${g.id}`) && (ids ? ids.includes(g.id) : !referenced!.has(g.id)),

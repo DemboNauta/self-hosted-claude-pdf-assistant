@@ -525,6 +525,17 @@ export const es = {
       askMarkShort: 'Preguntar',
     },
   },
+  board: {
+    title: 'Pizarra',
+    chatTab: 'Conversación',
+    views: 'Vista del panel',
+    loading: 'Cargando la pizarra…',
+    answer: 'Explicación de Claude',
+    expand: 'Ampliar la pizarra',
+    shrink: 'Volver al panel',
+    showStep: 'Ver en la pizarra lo que Claude dibuja',
+    chip: 'Pizarra',
+  },
   chat: {
     title: 'Claude',
     scope: {
@@ -603,6 +614,7 @@ export const es = {
       get_pages: 'Leyendo',
       get_page_image: 'Mirando la imagen de la',
       get_page_layout: 'Estudiando la estructura de la',
+      whiteboard_draw: 'Dibujando en la pizarra',
       search_library: 'Buscando',
       list_library: 'Revisando la biblioteca',
       point_at: 'Señalando en la',

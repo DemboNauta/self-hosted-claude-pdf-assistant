@@ -13,10 +13,12 @@ import {
   Copy,
   History,
   Loader2,
+  MessageSquare,
   Mic,
   MousePointer2,
   PenLine,
   Plus,
+  Presentation,
   Quote,
   Square,
   Volume2,
@@ -37,6 +39,8 @@ import { t } from '../../i18n';
 import { useReader } from '../reader/store';
 import { useVoice } from '../voice/store';
 import { VoiceBar, VoiceToggle, voiceSupported } from '../voice/VoiceBar';
+import { useBoard } from '../whiteboard/store';
+import { WhiteboardPanel } from '../whiteboard/WhiteboardPanel';
 import { CITATION_EVENT } from './CitationChip';
 import { dictationSupported, useDictation } from './dictation';
 import { Markdown } from './Markdown';
@@ -682,8 +686,39 @@ function ThreadControls() {
 }
 
 /** Chat with Claude about the open document (F-CHAT-01/03/05/07). */
+/** Switches the panel between the conversation and the whiteboard. */
+function ViewTabs() {
+  const view = useBoard((s) => s.view);
+  const setView = useBoard((s) => s.setView);
+  const tab = (value: 'chat' | 'board', label: string, icon: ReactNode) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={view === value}
+      aria-label={label}
+      title={label}
+      onClick={() => setView(value)}
+      className={clsx(
+        'rounded-md p-1.5',
+        view === value
+          ? 'bg-surface-muted text-text'
+          : 'text-text-muted hover:text-text hover:bg-surface-muted',
+      )}
+    >
+      {icon}
+    </button>
+  );
+  return (
+    <div role="tablist" aria-label={t.board.views} className="flex items-center">
+      {tab('chat', t.board.chatTab, <MessageSquare size={16} aria-hidden />)}
+      {tab('board', t.board.title, <Presentation size={16} aria-hidden />)}
+    </div>
+  );
+}
+
 export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
   const connected = useChat((s) => s.connected);
+  const view = useBoard((s) => s.view);
   const title = useChat((s) => s.threads.find((th) => th.id === s.threadId)?.title);
 
   useEffect(() => {
@@ -701,11 +736,12 @@ export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
             <span className="text-text-muted ml-2 text-xs font-normal">{t.chat.offline}</span>
           )}
         </h2>
+        <ViewTabs />
         <ThreadControls />
         {headerActions}
       </header>
       <ErrorBanner />
-      <MessageList />
+      {view === 'board' ? <WhiteboardPanel /> : <MessageList />}
       <Composer />
     </section>
   );

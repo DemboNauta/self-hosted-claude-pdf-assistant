@@ -8,3 +8,4 @@ export * from './review.js';
 export * from './diagrams.js';
 export * from './focus.js';
 export * from './voice.js';
+export * from './whiteboard.js';

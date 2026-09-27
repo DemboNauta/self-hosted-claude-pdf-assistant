@@ -31,6 +31,7 @@ To change the schema:
 | `0013_drop_display_name`     | drops `users.display_name`                                                                       |
 | `0014_flashcard_distractors` | `flashcards.distractors_json` (wrong options for multiple choice)                                |
 | `0015_message_pointers`      | `messages.pointers_json` (Claude's marks on the PDF, shown again from the chat)                  |
+| `0016_whiteboards`           | `whiteboards` (one per thread)                                                                   |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
@@ -103,6 +104,10 @@ author (user|claude), status (active|proposed|rejected)`;
     annotation); `w, h` are CSS pixels (null = default / fit the content).
 - **diagrams** `document_id? (cascade), title, source (Mermaid), from_page?,
 to_page?, updated_at`.
+- **whiteboards** `thread_id (PK, cascade), user_id, scene_json (Excalidraw
+elements + files, saved by the browser), steps_json (BoardStep[] Claude drew, last
+300), applied_json (step keys `messageId:wN` already merged into the scene),
+updated_at`. PDF crops travel as PNG data URLs inside the steps and the scene.
 - **memory_items** `scope (global|document), document_id?, category, content`.
 - **concepts** `name, key (canonical name for merging), document_id?, page?,
 mastery 0–1, times_failed, last_evidence, last_seen_at`.

@@ -41,9 +41,10 @@ DECISIONS "Visual interaction with the PDF"), not deployed yet:
   pointing at figures, writes `[[mark:ID]]` and picks sensible colours. Layout
   heuristics were only tested on generated PDFs: check them on the owner's real PDFs
   (through Claude, never by reading `data/`).
-- **Next (owner's order):** block 2, the whiteboard Claude draws on (Excalidraw tab
-  next to the chat, steps synced like marks, PDF crops, Mermaid → Excalidraw);
-  block 3, the student draws and Claude corrects from an image; block 4, follow mode
+- **Block 2 done (same day):** the whiteboard ("Pizarra" tab, `features/whiteboard`,
+  `whiteboard_draw`, migration `0016`). Not tried with real Claude: check that it
+  draws readable layouts and uses `[[mark:wN]]`.
+- **Next (owner's order):** block 3, the student draws and Claude corrects from an image; block 4, follow mode
   (toggle), split view, richer shapes (numbered steps, callouts), click a mark to
   ask about it.
 

@@ -166,6 +166,19 @@ of PDFs in the trash are hidden; purging a PDF deletes them.
 
 The chat context also accepts `pageRange: { from, to }` (the scope of a diagram).
 
+## Whiteboard
+
+One board per chat thread (`Whiteboard` in `packages/shared/src/whiteboard.ts`).
+
+| Method | Path                          | Notes                                                                                  |
+| ------ | ----------------------------- | -------------------------------------------------------------------------------------- |
+| GET    | `/api/threads/:id/whiteboard` | `{ threadId, scene, steps, applied, updatedAt }` (`scene` null until first drawn).     |
+| PUT    | `/api/threads/:id/whiteboard` | `{ scene: { elements, files }, applied }` from the browser; body limit 25 MB (images). |
+
+WebSocket: `board_step` (`BoardStep`: `id` `w1`…, `messageId`, `elements`, `mermaid?`,
+`files?`, `clear?`) when Claude draws; the browser draws it when the answer reaches
+`[[mark:wN]]` and saves the scene.
+
 ## Voice (F-CHAT-09)
 
 | Method | Path       | Notes                                                                                                     |

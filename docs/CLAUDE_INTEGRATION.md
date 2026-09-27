@@ -164,6 +164,7 @@ and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 | `record_exam_result`     | docId?, question, userAnswer, correct, concepts[], page? | Stores the result, updates concepts.                                                                                                                                                                                                                                            |
 | `create_flashcards`      | cards[{front, back, wrong?[3], page?, docId?}]           | **Proposed** flashcards, with their multiple-choice wrong answers when given.                                                                                                                                                                                                   |
 | `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                                                                                                                                                                                                                     |
+| `whiteboard_draw`        | elements[] (≤80), mermaid?, clear?                       | Draws one step on the thread's whiteboard (`BoardElement`: text, rect/ellipse/diamond, arrow/line `from`/`to` ids or points, freehand, `pdf` crop rendered here as PNG). Returns `wN` and where the board has room. Ids are reusable: drawing one again replaces it.            |
 | `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                                                                                                                                                                                                                     |
 
 ## Marks in the answer (`[[mark:ID]]`)
@@ -194,6 +195,15 @@ To add a tool:
    `features/annotations/integrations.tsx`.
 4. Test the handler directly, as `test/chat.test.ts` and
    `test/annotations.test.ts` do.
+
+## Whiteboard
+
+The system prompt has a "Whiteboard" section (when drawing helps, several steps,
+each with its `[[mark:wN]]`). Steps are stored in `whiteboards.steps_json` and sent
+as `board_step`; `MARK_RE` accepts `w` ids, and `revealMarks` in the chat store
+hands them to the board (written answers: when the text reaches them; voice: when
+the sentence is spoken; unreferenced ones at the end). Claude does not see the
+student's drawings yet (block 3: the board sent as an image).
 
 ## Daily brief (`services/brief.ts`)
 
@@ -246,6 +256,7 @@ the user's own token:
     - "conecta" → `point_at` with an arrow from the selection to a rect (`to`);
     - "larga" → 40 more paragraphs streamed (chat scrolling tests);
     - "recuerda …" → `remember` + `mark_concept_difficult`;
+    - "pizarra" → two `whiteboard_draw` steps (boxes, then an arrow and a formula);
     - diagram mode → `create_diagram` with a small mind map, answered with
       `[[diagram:ID]]`.
   - Its `result` is the full text, used by the daily brief.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BoardStep } from './whiteboard.js';
 
 /** Study modes (F-CHAT-03). Each one is an instruction template sent with the question. */
 export const STUDY_MODES = ['free', 'eli5', 'summary', 'exam', 'relate', 'diagram'] as const;
@@ -196,9 +197,10 @@ export interface PointerGroup {
 
 /**
  * Where an answer refers to a set of marks (`[[mark:m2]]`): the marks appear at that
- * point of the explanation, and the reference is a chip that shows them again.
+ * point of the explanation, and the reference is a chip that shows them again. Ids
+ * `m…` are marks on the PDF, `w…` steps drawn on the whiteboard.
  */
-export const MARK_RE = /\[\[mark:(m\d{1,3})\]\]/g;
+export const MARK_RE = /\[\[mark:([mw]\d{1,3})\]\]/g;
 
 /** Mark ids referenced in a piece of answer text, in order. */
 export function markRefs(text: string): string[] {
@@ -212,6 +214,7 @@ export type ServerChatEvent =
   | { type: 'tool_event'; threadId: string; messageId: string; event: ToolEvent }
   | { type: 'pointer'; threadId: string; group: PointerGroup }
   | { type: 'clear_pointers'; threadId: string }
+  | { type: 'board_step'; threadId: string; step: BoardStep }
   | {
       type: 'data_changed';
       threadId: string;

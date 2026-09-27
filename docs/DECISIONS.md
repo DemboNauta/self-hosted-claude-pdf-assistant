@@ -242,6 +242,14 @@ change them if he disagrees.
   appears when the answer ends (so a forgotten reference only delays it), and
   `now: true` keeps the old immediate behaviour. A mark shows on its own once: if
   the student dismisses it, only the chip or "Volver a mostrar…" brings it back.
+- **Whiteboard details (2026-09-27, Claude).** The panel switches to the board by
+  itself when Claude draws (the answer stays readable in a strip below). Claude draws
+  with a small vocabulary turned into Excalidraw elements in the browser, on a
+  1000-unit-wide board; maths as Unicode (no LaTeX on the board). One board per chat
+  thread, the student can draw on it, and the scene is saved a moment after each
+  change. Mermaid on the board goes through `@excalidraw/mermaid-to-excalidraw`,
+  which brings its own Mermaid 11 (only in the lazy board chunk). Excalidraw's fonts
+  are served by the app (CJK font left out, 13 MB).
 - **Page layout (2026-09-27, Claude).** Built on demand from the stored text items
   plus the PDF operator list (image placements and path bounds), not at ingestion:
   vector clusters with a single stroke or under 3 % of the page in both directions

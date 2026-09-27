@@ -110,6 +110,12 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
   - `diagrams/`: Mermaid loaded on demand and rendered in the app's colours
     (`mermaid.ts`), `DiagramView` (inline in the chat, full-screen viewer),
     `PanZoom` (free zoom and pan canvas), reader panel and `/diagrams` page.
+  - `whiteboard/`: the "Pizarra" tab of the chat panel. `convert.ts` (pure) turns
+    Claude's board vocabulary into Excalidraw skeletons; `store.ts` loads the board
+    per thread, draws Claude's steps in order when the answer reaches them (via
+    `setBoardRevealer` in the chat store) and saves the scene (debounced PUT);
+    `BoardCanvas.tsx` is the lazy Excalidraw chunk (fonts served by the app, see the
+    `excalidraw-fonts` plugin in `vite.config.ts`).
   - `timer/`: study timer (`engine.ts` is pure and timestamp based, `store.ts`
     persists to localStorage and syncs tabs, floating widget, break screen).
   - `memory/`, `review/` (queue, rating, flashcard dialog, `MultipleChoice`

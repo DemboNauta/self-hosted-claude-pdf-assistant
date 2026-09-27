@@ -1,15 +1,19 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import {
   anchorSchema,
+  BOARD_WIDTH,
+  boardElementSchema,
   HIGHLIGHT_KEYS,
   MEMORY_CATEGORIES,
   POINTER_SHAPES,
   SEARCH_MARK_END,
   SEARCH_MARK_START,
   type Anchor,
+  type BoardStep,
   type OutlineEntry,
   type PointerGroup,
   type PointerShape,
+  type ResolvedBoardElement,
   type ServerChatEvent,
   type ThreadScope,
   type ToolEvent,
@@ -85,7 +89,15 @@ type ToolAnchor = z.infer<typeof toolAnchorSchema>;
 /** The services of the user whose turn this is: tools only see that user's data. */
 export type ToolDeps = Pick<
   UserServices,
-  'db' | 'library' | 'search' | 'annotations' | 'settings' | 'memory' | 'review' | 'diagrams'
+  | 'db'
+  | 'library'
+  | 'search'
+  | 'annotations'
+  | 'settings'
+  | 'memory'
+  | 'review'
+  | 'diagrams'
+  | 'whiteboards'
 >;
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -929,6 +941,134 @@ export function diagramTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/** Rough box of a board element in board units, to tell Claude where there is room. */
+function boardBox(e: ResolvedBoardElement): { x: number; y: number; w: number; h: number } | null {
+  switch (e.type) {
+    case 'text': {
+      const px = { s: 16, m: 20, l: 28, xl: 36 }[e.size ?? 'm'];
+      const lines = e.text.split('\n');
+      const longest = Math.max(...lines.map((l) => l.length));
+      return { x: e.x, y: e.y, w: longest * px * 0.55, h: lines.length * px * 1.25 };
+    }
+    case 'rect':
+    case 'ellipse':
+    case 'diamond':
+    case 'pdf':
+      return { x: e.x, y: e.y, w: e.w, h: e.h };
+    case 'freehand':
+    case 'arrow':
+    case 'line': {
+      const pts = e.points ?? [];
+      if (!pts.length) return null;
+      const xs = pts.map((p) => p[0]);
+      const ys = pts.map((p) => p[1]);
+      return {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        w: Math.max(...xs) - Math.min(...xs),
+        h: Math.max(...ys) - Math.min(...ys),
+      };
+    }
+  }
+}
+
+/** Whiteboard next to the chat (visual interaction, block 2). */
+export function whiteboardTools(deps: ToolDeps, ctx: ToolContext) {
+  let steps = 0;
+  return [
+    tool(
+      'whiteboard_draw',
+      [
+        `Draw on the hand-drawn whiteboard next to the chat, like a teacher at the blackboard: diagrams, worked steps, sketches of graphs, comparisons, a figure of the PDF annotated. Coordinates are board units: x from 0 to ${BOARD_WIDTH} (left to right), y from 0 downwards without limit.`,
+        'Elements: text {x,y,text,size s|m|l|xl}; rect / ellipse / diamond {id,x,y,w,h,label,fill}; arrow / line {from,to} connecting element ids (or {points:[[x,y],…]}), with label and dashed; freehand {points}; pdf {page,region,x,y,w} pastes a crop of a PDF page (region in page fractions, e.g. a figure box from get_page_layout) to annotate it with arrows and text.',
+        'Colours: black, blue, red, green, orange, purple, gray. Give ids to things you will connect or change later; drawing an id again replaces that element. There are no LaTeX formulas: write maths with Unicode (x², √, π, ∑, ∫, →, ≤).',
+        'Each call is one step of the explanation and returns a step id (w1, w2…): write [[mark:ID]] at the start of the sentence that explains it, and it is drawn at that moment (also when spoken). Build complex drawings in several steps. "mermaid" draws a flowchart or mind map below the rest; "clear": true wipes the board first (only for a new topic).',
+        'The student sees the board and may draw on it too.',
+      ].join(' '),
+      {
+        elements: z.array(boardElementSchema).max(80).default([]),
+        mermaid: z.string().max(MAX_DIAGRAM_SOURCE).optional(),
+        clear: z.boolean().optional(),
+      },
+      tracked(
+        ctx,
+        'whiteboard_draw',
+        () => '',
+        async ({ elements, mermaid, clear }) => {
+          if (!elements.length && !mermaid && !clear) return fail('Nothing to draw.');
+          if (mermaid) {
+            const problem = checkDiagramSource(mermaid);
+            if (problem) return fail(problem);
+          }
+          const files: Record<string, string> = {};
+          const resolved: ResolvedBoardElement[] = [];
+          for (const e of elements) {
+            if (e.type !== 'pdf') {
+              resolved.push(e);
+              continue;
+            }
+            const docId = e.docId ?? ctx.docId;
+            if (!docId) return fail('pdf elements need docId here (no document is open).');
+            let row;
+            try {
+              row = deps.library.getLive(docId);
+            } catch {
+              return fail(`Unknown document ${docId}.`);
+            }
+            const img = await renderPageImage(row.filePath, e.page, {
+              ...(e.region && {
+                region: {
+                  ...e.region,
+                  w: Math.min(e.region.w, 1 - e.region.x),
+                  h: Math.min(e.region.h, 1 - e.region.y),
+                },
+              }),
+              maxSide: 900,
+            });
+            const fileId = newId();
+            files[fileId] = `data:image/png;base64,${img.png.toString('base64')}`;
+            resolved.push({ ...e, docId, fileId, h: Math.round((e.w * img.height) / img.width) });
+          }
+
+          const step: BoardStep = {
+            id: `w${++steps}`,
+            messageId: ctx.messageId,
+            ...(clear && { clear: true }),
+            elements: resolved,
+            ...(mermaid && { mermaid }),
+            ...(Object.keys(files).length && { files }),
+            createdAt: new Date().toISOString(),
+          };
+          deps.whiteboards.addStep(ctx.threadId, step);
+          ctx.emit({ type: 'board_step', threadId: ctx.threadId, step });
+
+          // Where the board has room, from what Claude drew since the last clear.
+          const all = deps.whiteboards.get(ctx.threadId).steps;
+          const since = all.slice(Math.max(0, all.map((s) => !!s.clear).lastIndexOf(true)));
+          const boxes = since
+            .flatMap((s) => s.elements)
+            .map(boardBox)
+            .filter((b): b is NonNullable<typeof b> => b !== null);
+          const bottom = boxes.length ? Math.max(...boxes.map((b) => b.y + b.h)) : 0;
+          const ids = since
+            .flatMap((s) => s.elements)
+            .map((e) => ('id' in e ? e.id : undefined))
+            .filter(Boolean);
+          return text(
+            [
+              `Step ${step.id} ready. Write [[mark:${step.id}]] at the start of the sentence that explains it.`,
+              `Your drawings reach y ≈ ${Math.round(bottom)}${mermaid ? ' plus the Mermaid diagram below them' : ''}; put new things below unless they belong next to existing ones.`,
+              ids.length ? `Ids on the board: ${[...new Set(ids)].join(', ')}.` : '',
+            ]
+              .filter(Boolean)
+              .join(' '),
+          );
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
   const tools = [
@@ -938,6 +1078,7 @@ export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
     ...memoryTools(deps, ctx),
     ...reviewTools(deps, ctx),
     ...diagramTools(deps, ctx),
+    ...whiteboardTools(deps, ctx),
   ];
   return {
     server: createSdkMcpServer({ name: MCP_SERVER_NAME, version: '1.0.0', tools }),
