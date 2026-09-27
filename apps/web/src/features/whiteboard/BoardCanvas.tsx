@@ -1,7 +1,7 @@
 import './assets';
 import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { detachBoardApi, noteChange, noteUserInput, setBoardApi, useBoard } from './store';
 
 /** Current app theme (the `data-theme` attribute set by `useApplyTheme`). */
@@ -20,7 +20,8 @@ function useDark() {
 function Board({ threadId }: { threadId: string }) {
   const dark = useDark();
 
-  useEffect(() => () => detachBoardApi(), []);
+  // A layout effect: its cleanup runs before Excalidraw tears its scene down.
+  useLayoutEffect(() => () => detachBoardApi(), []);
   return (
     <div
       className="absolute inset-0"
@@ -32,7 +33,9 @@ function Board({ threadId }: { threadId: string }) {
       <Excalidraw
         excalidrawAPI={(api) => setBoardApi(api)}
         initialData={{ appState: { currentItemRoughness: 1 } }}
-        onChange={(elements) => noteChange(elements)}
+        onChange={(elements, _appState, files) =>
+          noteChange(elements, files as Record<string, unknown>)
+        }
         langCode="es-ES"
         theme={dark ? 'dark' : 'light'}
         UIOptions={{

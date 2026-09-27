@@ -53,6 +53,9 @@ DECISIONS "Visual interaction with the PDF"), not deployed yet:
 - Owner's first real board had overlapping text: `whiteboard_draw` now returns a
   preview image and the overlaps (`claude/board.ts`), boxes take a body `text`, and
   `amend` fixes a step in place. The deploy copies `apps/server/assets` (font).
+- Fixed (owner report): switching to "Conversación" and back wiped the whiteboard
+  (Excalidraw empties its scene while unmounting; the board now keeps the last scene it
+  reported). Regression e2e in `whiteboard.spec.ts`.
 - **Next:** try all four blocks with the real Claude and the owner's PDFs, then deploy
   (migrations `0015`–`0017`; the web build now carries Excalidraw's fonts).
 

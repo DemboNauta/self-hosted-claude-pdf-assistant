@@ -58,6 +58,18 @@ test('Claude draws on the whiteboard and the board is kept', async ({ page }, in
   await page.getByTestId('board-chip').first().click();
   await expect(page.getByRole('tab', { name: 'Pizarra' })).toHaveAttribute('aria-selected', 'true');
 
+  // Switching to the conversation and back keeps the drawing (it used to be wiped).
+  await page.getByRole('tab', { name: 'Conversación' }).click();
+  await page.getByRole('tab', { name: 'Pizarra' }).click();
+  await expect(page.getByTestId('whiteboard').locator('canvas').first()).toBeVisible();
+  await page.waitForTimeout(2500);
+  const kept = (await (
+    await page.request.get(`/api/threads/${thread.id}/whiteboard`)
+  ).json()) as Whiteboard;
+  expect((kept.scene?.elements ?? []).map((e) => (e as { id: string }).id)).toEqual(
+    expect.arrayContaining(['claude-luz', 'claude-azucar', 'claude-nota']),
+  );
+
   // After a reload the board comes back from the server.
   await page.reload();
   if (info.project.name !== 'desktop') {

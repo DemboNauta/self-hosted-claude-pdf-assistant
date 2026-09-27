@@ -120,14 +120,19 @@ async function attach(api: ExcalidrawImperativeAPI) {
 /** The board unmounts: keep its scene in the store and save it. */
 export function detachBoardApi() {
   if (!excalidrawApi) return;
-  const elements = currentElements();
-  const files = currentFiles();
+  // Excalidraw may already have emptied its scene while unmounting: keep the last scene
+  // it reported instead of asking it (only once it had taken over the board).
+  const last = live() ? lastLive : null;
   excalidrawApi = null;
   readyApi = null;
-  useBoard.setState({ scene: { elements, files } });
+  lastLive = null;
+  if (last) useBoard.setState({ scene: last });
   clearTimeout(saveTimer);
   void save();
 }
+
+/** The last scene the mounted board reported (onChange), once it holds the truth. */
+let lastLive: BoardScene | null = null;
 
 const live = () => (excalidrawApi && readyApi === excalidrawApi ? excalidrawApi : null);
 
@@ -245,7 +250,17 @@ export function noteUserInput() {
 }
 
 /** Excalidraw's onChange: saves real changes, remembering whether the student made them. */
-export function noteChange(elements: readonly { version: number }[]) {
+export function noteChange(
+  elements: readonly { version: number; isDeleted?: boolean }[],
+  files?: Record<string, unknown>,
+) {
+  // Before the board has taken over, its (still empty) scene is not the truth.
+  if (live()) {
+    lastLive = {
+      elements: elements.filter((e) => !e.isDeleted) as unknown[],
+      files: files ?? lastLive?.files ?? {},
+    };
+  }
   const sig = `${elements.reduce((n, e) => n + e.version, 0)}:${elements.length}`;
   if (sig === lastChangeSig) return;
   lastChangeSig = sig;
