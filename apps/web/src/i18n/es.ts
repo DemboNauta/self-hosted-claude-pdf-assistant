@@ -298,6 +298,16 @@ export const es = {
     save: 'Guardar',
     created: 'Tarjeta creada',
     remaining: (n: number) => `Quedan ${n}`,
+    choices: {
+      label: 'Opciones',
+      right: 'Respuesta correcta',
+      wrong: 'Tu respuesta, incorrecta',
+      correct: '¡Correcto!',
+      incorrect: 'No era esa: la correcta está marcada en verde.',
+      next: 'Siguiente',
+      preparing: 'Claude está preparando las opciones de esta tarjeta…',
+      shortcuts: 'Atajos: 1–4 elige una opción · Intro continúa tras un fallo',
+    },
     generate: {
       open: 'Crear tarjetas con Claude',
       title: 'Nuevas tarjetas con Claude',

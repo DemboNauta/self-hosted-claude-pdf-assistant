@@ -58,8 +58,18 @@ const fakeChat = ((args: {
         page: Number(m[2]),
         front: `¿Qué dice la página ${m[2]}?`,
         back: m[3]!.slice(0, 200),
+        wrong: ['Opción falsa A', 'Opción falsa B', 'Opción falsa C'],
       }));
       yield { type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(cards) };
+      return;
+    }
+    // Wrong options for multiple choice: the same three for every card asked about.
+    if (typeof args.prompt === 'string' && args.options.systemPrompt?.includes('wrong options')) {
+      const refs = [...args.prompt.matchAll(/--- (C\d+) ---/g)].map((m) => ({
+        ref: m[1],
+        wrong: ['Opción falsa A', 'Opción falsa B', 'Opción falsa C'],
+      }));
+      yield { type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(refs) };
       return;
     }
     let prompt = '';

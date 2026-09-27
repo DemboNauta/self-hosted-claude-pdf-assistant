@@ -38,14 +38,20 @@ test('create flashcards, review them and see today and the stats', async ({ page
   await page.getByRole('button', { name: 'Aceptar todas' }).click();
   await expect(page.getByTestId('proposal')).toHaveCount(0);
 
+  // Cards without wrong answers get them from Claude and are answered by choosing:
+  // a right answer moves on by itself, a wrong one shows the right one first.
   const card = page.getByTestId('flashcard');
   await expect(card).toContainText(`¿Qué produce la mitocondria? ${name}`);
-  await card.getByRole('button', { name: 'Mostrar respuesta' }).click();
-  await expect(card).toContainText('La mitocondria produce ATP');
-  await card.getByRole('button', { name: /^Bien/ }).click();
+  const options = card.getByRole('list', { name: 'Opciones' }).getByRole('button');
+  await expect(options).toHaveCount(4);
+  await options.filter({ hasText: 'La mitocondria produce ATP' }).click();
+  await expect(card).toContainText('¡Correcto!');
   await expect(card).toContainText('¿Qué dice este fragmento?');
-  await card.getByRole('button', { name: 'Mostrar respuesta' }).click();
-  await card.getByRole('button', { name: /^Fácil/ }).click();
+  await expect(options).toHaveCount(4);
+  await options.filter({ hasText: 'Opción falsa A' }).click();
+  await expect(card).toContainText('No era esa');
+  await card.getByRole('button', { name: 'Siguiente' }).click();
+  // Rated "again": the card comes back in a minute, nothing else is due now.
   await expect(page.getByText(/Nada pendiente/)).toBeVisible();
 
   await page.goto('/');

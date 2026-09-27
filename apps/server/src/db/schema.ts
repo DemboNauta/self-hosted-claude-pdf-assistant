@@ -332,6 +332,8 @@ export const flashcards = sqliteTable(
     conceptId: text('concept_id').references(() => concepts.id, { onDelete: 'set null' }),
     front: text('front').notNull(),
     back: text('back').notNull(),
+    /** Three wrong answers (JSON array) for multiple choice; null until Claude writes them. */
+    distractorsJson: text('distractors_json'),
     author: text('author', { enum: ['user', 'claude'] }).notNull(),
     status: text('status', { enum: ['active', 'proposed', 'rejected'] })
       .notNull()

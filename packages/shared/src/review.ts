@@ -10,6 +10,8 @@ export interface Flashcard {
   conceptId: string | null;
   front: string;
   back: string;
+  /** Three wrong answers for multiple choice (the back is the right one); null until written. */
+  distractors: string[] | null;
   author: 'user' | 'claude';
   status: 'active' | 'proposed' | 'rejected';
   dueAt: string;
@@ -47,6 +49,12 @@ export const reviewSchema = z.object({
   /** Reviewer's local day (YYYY-MM-DD) for streaks. */
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+/** Multiple choice: three plausible wrong answers per card. */
+export const DISTRACTORS = 3;
+export const distractorsSchema = z.array(z.string().trim().min(1).max(1000)).length(DISTRACTORS);
+/** Cards that still need wrong answers for multiple choice (Claude writes them). */
+export const fillDistractorsSchema = z.object({ ids: z.array(id).min(1).max(20) });
+
 export const reviewQuerySchema = z.object({
   subjectId: id.optional(),
   topicId: id.optional(),

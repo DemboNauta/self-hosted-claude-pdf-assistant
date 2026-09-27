@@ -1,5 +1,6 @@
 import {
   createFlashcardsSchema,
+  fillDistractorsSchema,
   generateFlashcardsSchema,
   reviewQuerySchema,
   reviewSchema,
@@ -29,6 +30,9 @@ export async function registerReviewRoutes(app: FastifyInstance, svc: RequestSer
     const { count, ...source } = parse(generateFlashcardsSchema, req.body);
     return reply.code(201).send(await svc(req).cardgen.generate(source, count));
   });
+  app.post('/api/flashcards/distractors', async (req) =>
+    svc(req).cardgen.fillDistractors(parse(fillDistractorsSchema, req.body).ids),
+  );
   app.patch('/api/flashcards/:id', async (req) =>
     svc(req).review.update(id(req.params), parse(updateFlashcardSchema, req.body)),
   );

@@ -1,7 +1,7 @@
 import type { Flashcard, LibraryTree } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
 import { BookOpen, Check, Pencil, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Page } from '../../components/Page';
 import { t } from '../../i18n';
@@ -9,7 +9,16 @@ import { Markdown } from '../chat/Markdown';
 import { canUseClaude, useCurrentUser } from '../auth/session';
 import { useLibrary } from '../library/api';
 import { GenerateCards } from './GenerateCards';
-import { deleteCard, invalidateReview, rate, updateCard, useQueue, type ReviewFilter } from './api';
+import { MultipleChoice } from './MultipleChoice';
+import {
+  deleteCard,
+  fillDistractors,
+  invalidateReview,
+  rate,
+  updateCard,
+  useQueue,
+  type ReviewFilter,
+} from './api';
 
 function FilterSelect({
   tree,
@@ -169,6 +178,33 @@ function Proposals({ cards }: { cards: Flashcard[] }) {
   );
 }
 
+/** Cards asked for per request: the next ones of the queue. */
+const PREPARE_AHEAD = 10;
+
+/**
+ * Asks Claude, in the background, for the wrong answers of the next due cards that have
+ * none (the student's own cards, older ones or edited ones). Each card is asked once
+ * per visit; until they arrive the card is answered the classic way.
+ */
+function usePrepareChoices(due: Flashcard[] | undefined, enabled: boolean) {
+  const asked = useRef(new Set<string>());
+  const [preparing, setPreparing] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!enabled || !due) return;
+    const ids = due
+      .slice(0, PREPARE_AHEAD)
+      .filter((c) => !c.distractors && !asked.current.has(c.id))
+      .map((c) => c.id);
+    if (!ids.length) return;
+    for (const id of ids) asked.current.add(id);
+    setPreparing((prev) => new Set([...prev, ...ids]));
+    void fillDistractors(ids)
+      .catch(() => undefined)
+      .finally(() => setPreparing((prev) => new Set([...prev].filter((id) => !ids.includes(id)))));
+  }, [due, enabled]);
+  return preparing;
+}
+
 /** Flashcard review with FSRS (F-REV-01/02/05). */
 export function ReviewPage() {
   const [params, setParams] = useSearchParams();
@@ -186,6 +222,8 @@ export function ReviewPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const claude = canUseClaude(useCurrentUser());
   const card = queue.data?.due[0];
+  const choices = Boolean(card?.distractors) && !editing;
+  const preparing = usePrepareChoices(queue.data?.due, claude);
 
   const answer = async (rating: 1 | 2 | 3 | 4) => {
     if (!card || busy) return;
@@ -210,6 +248,8 @@ export function ReviewPage() {
         el instanceof HTMLSelectElement
       )
         return;
+      // Multiple-choice cards handle their own keys.
+      if (choices) return;
       if (e.key === ' ' && !shown) {
         e.preventDefault();
         setShown(true);
@@ -304,7 +344,10 @@ export function ReviewPage() {
               <Trash2 size={16} aria-hidden />
             </button>
           </div>
-          {!editing &&
+          {choices && card ? (
+            <MultipleChoice key={card.id} card={card} busy={busy} onRate={(r) => void answer(r)} />
+          ) : (
+            !editing &&
             (shown ? (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([1, 2, 3, 4] as const).map((r) => (
@@ -333,9 +376,15 @@ export function ReviewPage() {
               >
                 {t.review.showAnswer}
               </button>
-            ))}
+            ))
+          )}
+          {!choices && !editing && card && preparing.has(card.id) && (
+            <p className="text-text-muted text-center text-xs" role="status">
+              {t.review.choices.preparing}
+            </p>
+          )}
           <p className="text-text-muted hidden text-center text-xs sm:block">
-            {t.review.shortcuts}
+            {choices ? t.review.choices.shortcuts : t.review.shortcuts}
           </p>
         </article>
       )}

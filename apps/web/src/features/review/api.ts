@@ -82,6 +82,16 @@ export async function generateCards(documentIds: string[], count: number) {
   return created;
 }
 
+/** Claude writes the wrong options of cards without them (multiple choice). */
+export async function fillDistractors(ids: string[]) {
+  const filled = await api<Flashcard[]>('/flashcards/distractors', {
+    method: 'POST',
+    json: { ids },
+  });
+  if (filled.length) void queryClient.invalidateQueries({ queryKey: ['review-queue'] });
+  return filled;
+}
+
 export async function updateCard(
   id: string,
   patch: { front?: string; back?: string; status?: 'active' | 'rejected' },

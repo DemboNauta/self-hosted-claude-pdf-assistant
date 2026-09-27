@@ -54,6 +54,7 @@ export class ReviewService {
       documentId?: string | null;
       page?: number | null;
       conceptId?: string | null;
+      distractors?: string[] | null;
     }[],
     author: 'user' | 'claude',
     status: 'active' | 'proposed' = 'active',
@@ -81,6 +82,7 @@ export class ReviewService {
           conceptId: c.conceptId ?? null,
           front: c.front,
           back: c.back,
+          distractorsJson: c.distractors?.length ? JSON.stringify(c.distractors) : null,
           author,
           status,
           fsrsJson: JSON.stringify(card),
@@ -100,13 +102,28 @@ export class ReviewService {
   }
 
   update(id: string, patch: { front?: string; back?: string; status?: 'active' | 'rejected' }) {
+    // A new answer makes the old wrong answers meaningless: Claude writes them again.
+    const reset = patch.front !== undefined || patch.back !== undefined;
     const res = this.db
       .update(flashcards)
-      .set({ ...patch, updatedAt: new Date().toISOString() })
+      .set({
+        ...patch,
+        ...(reset && { distractorsJson: null }),
+        updatedAt: new Date().toISOString(),
+      })
       .where(this.own(id))
       .run();
     if (res.changes === 0) throw notFound();
     return this.get(id);
+  }
+
+  /** Stores the wrong answers Claude wrote for multiple choice. */
+  setDistractors(id: string, distractors: string[]) {
+    this.db
+      .update(flashcards)
+      .set({ distractorsJson: JSON.stringify(distractors) })
+      .where(this.own(id))
+      .run();
   }
 
   delete(id: string) {
@@ -185,7 +202,7 @@ export class ReviewService {
     );
   }
 
-  private byIds(ids: string[]): Flashcard[] {
+  byIds(ids: string[]): Flashcard[] {
     if (!ids.length) return [];
     const rows = this.db
       .select({ f: flashcards, title: documents.title })
@@ -231,6 +248,7 @@ export class ReviewService {
       conceptId: f.conceptId,
       front: f.front,
       back: f.back,
+      distractors: f.distractorsJson ? (JSON.parse(f.distractorsJson) as string[]) : null,
       author: f.author,
       status: f.status,
       dueAt: f.dueAt,

@@ -7,6 +7,7 @@ import { baseAgentOptions } from '../claude/options.js';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { documents, flashcards, pages, topics } from '../db/schema.js';
+import { DISTRACTORS } from '@pdfclaudeassistant/shared';
 import { HttpError } from './errors.js';
 import type { ReviewService } from './review.js';
 import type { SettingsService } from './settings.js';
@@ -19,6 +20,8 @@ const MAX_PAGE_CHARS = 4_000;
 /** Existing cards shown to Claude so it does not repeat them. */
 const MAX_EXISTING = 80;
 
+const WRONG_RULES = `The wrong answers must be plausible to someone who studied carelessly (common confusions, related but different concepts, typical mistakes), clearly wrong to someone who knows, in the same language, style and length as the right answer, so the right one does not stand out. Never "all of the above" or "none of the above".`;
+
 const CARDS_PROMPT = `You write flashcards for spaced repetition in a study app, from pages the student has already read.
 Rules:
 - One idea per card. The front is a precise question (or a term to define); the back is a short, self-contained answer (one to three sentences, or a formula).
@@ -26,7 +29,12 @@ Rules:
 - Use only what the pages say. Write in the language of the pages. Mathematics in KaTeX ($...$).
 - Do not repeat or rephrase the cards the student already has.
 - Spread the cards over the pages given, favouring the ones marked as not yet covered.
-Answer ONLY with a JSON array, no prose: [{"ref": "D1", "page": 12, "front": "...", "back": "..."}], where "ref" and "page" say which page each card comes from.`;
+- The cards are answered as multiple choice: add three wrong answers ("wrong"). ${WRONG_RULES}
+Answer ONLY with a JSON array, no prose: [{"ref": "D1", "page": 12, "front": "...", "back": "...", "wrong": ["...", "...", "..."]}], where "ref" and "page" say which page each card comes from.`;
+
+const DISTRACTORS_PROMPT = `You write the wrong options of multiple-choice flashcards in a study app. For each card you get its question and its right answer.
+${WRONG_RULES}
+Answer ONLY with a JSON array, no prose: [{"ref": "C1", "wrong": ["...", "...", "..."]}], one entry per card.`;
 
 const cardsSchema = z
   .array(
@@ -35,9 +43,23 @@ const cardsSchema = z
       page: z.number().int().min(1),
       front: z.string().min(3).max(1000),
       back: z.string().min(1).max(2000),
+      wrong: z.array(z.string().min(1).max(1000)).optional(),
     }),
   )
   .max(60);
+
+const wrongSchema = z
+  .array(z.object({ ref: z.string().max(10), wrong: z.array(z.string().min(1).max(1000)) }))
+  .max(60);
+
+/** Three distinct wrong answers that differ from the right one, or null. */
+function cleanWrong(wrong: string[] | undefined, back: string): string[] | null {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const out = [...new Set((wrong ?? []).map((w) => w.trim()).filter(Boolean))].filter(
+    (w) => norm(w) !== norm(back),
+  );
+  return out.length >= DISTRACTORS ? out.slice(0, DISTRACTORS) : null;
+}
 
 export interface CardSource {
   subjectIds?: string[];
@@ -46,17 +68,19 @@ export interface CardSource {
 }
 
 /** First JSON array in Claude's answer (it may wrap it in a code fence). */
-export function parseCards(text: string) {
+function parseArray<T>(text: string, schema: z.ZodType<T[]>): T[] {
   const start = text.indexOf('[');
   const end = text.lastIndexOf(']');
   if (start < 0 || end <= start) return [];
   try {
-    const parsed = cardsSchema.safeParse(JSON.parse(text.slice(start, end + 1)));
+    const parsed = schema.safeParse(JSON.parse(text.slice(start, end + 1)));
     return parsed.success ? parsed.data : [];
   } catch {
     return [];
   }
 }
+
+export const parseCards = (text: string) => parseArray(text, cardsSchema);
 
 /**
  * Flashcards written by Claude from what the student has read (pages viewed in the
@@ -112,9 +136,54 @@ export class CardGenService {
     return (row?.n ?? 0) > 0;
   }
 
-  async generate(source: CardSource, count: number): Promise<Flashcard[]> {
+  /** One single-turn request to Claude with the user's own subscription. */
+  private async ask(systemPrompt: string, prompt: string): Promise<string> {
     const auth = this.credentials.forUser(this.userId);
     if (!auth) throw new HttpError(409, 'claude_not_configured');
+    let text = '';
+    const q = this.runQuery({
+      prompt,
+      options: {
+        ...baseAgentOptions(this.config, auth),
+        ...(this.settings.claudeModel() ? { model: this.settings.claudeModel()! } : {}),
+        systemPrompt,
+        maxTurns: 1,
+        persistSession: false,
+      },
+    });
+    for await (const msg of q as AsyncIterable<SDKMessage>) {
+      if (msg.type === 'result') {
+        if (msg.subtype !== 'success' || msg.is_error) throw new HttpError(502, 'claude_failed');
+        text = msg.result;
+      }
+    }
+    return text;
+  }
+
+  /**
+   * Writes the wrong options of cards that have none yet (the student's own cards and
+   * those from before multiple choice), in one request, and returns the updated cards.
+   */
+  async fillDistractors(ids: string[]): Promise<Flashcard[]> {
+    const cards = this.review.byIds(ids).filter((c) => !c.distractors);
+    if (!cards.length) return [];
+    const prompt = cards
+      .map((c, i) => `--- C${i + 1} ---\nQuestion: ${c.front}\nRight answer: ${c.back}`)
+      .join('\n\n');
+    const answer = parseArray(await this.ask(DISTRACTORS_PROMPT, prompt), wrongSchema);
+    const done: string[] = [];
+    for (const a of answer) {
+      const card = cards[Number(a.ref.replace(/^C/, '')) - 1];
+      const wrong = card && cleanWrong(a.wrong, card.back);
+      if (!card || !wrong) continue;
+      this.review.setDistractors(card.id, wrong);
+      done.push(card.id);
+    }
+    return this.review.byIds(done);
+  }
+
+  async generate(source: CardSource, count: number): Promise<Flashcard[]> {
+    if (!this.credentials.forUser(this.userId)) throw new HttpError(409, 'claude_not_configured');
     const docs = this.documents(source);
     if (!docs.length) throw new HttpError(409, 'nothing_read');
     const docIds = docs.map((d) => d.id);
@@ -190,24 +259,7 @@ export class CardGenService {
       .filter(Boolean)
       .join('\n');
 
-    let text = '';
-    const q = this.runQuery({
-      prompt,
-      options: {
-        ...baseAgentOptions(this.config, auth),
-        ...(this.settings.claudeModel() ? { model: this.settings.claudeModel()! } : {}),
-        systemPrompt: CARDS_PROMPT,
-        maxTurns: 1,
-        persistSession: false,
-      },
-    });
-    for await (const msg of q as AsyncIterable<SDKMessage>) {
-      if (msg.type === 'result') {
-        if (msg.subtype !== 'success' || msg.is_error) throw new HttpError(502, 'claude_failed');
-        text = msg.result;
-      }
-    }
-
+    const text = await this.ask(CARDS_PROMPT, prompt);
     const docOf = new Map([...refOf].map(([id, ref]) => [ref, id]));
     const sent = new Set(chosen.map((p) => `${p.doc}:${p.page}`));
     const cards = parseCards(text)
@@ -217,7 +269,13 @@ export class CardGenService {
         const documentId = docOf.get(c.ref)!;
         // A page Claude was not shown is a slip: keep the card, drop the page.
         const page = sent.has(`${documentId}:${c.page}`) ? c.page : null;
-        return { front: c.front, back: c.back, documentId, page };
+        return {
+          front: c.front,
+          back: c.back,
+          documentId,
+          page,
+          distractors: cleanWrong(c.wrong, c.back),
+        };
       });
     if (!cards.length) throw new HttpError(502, 'claude_failed');
     return this.review.create(cards, 'claude', 'active');

@@ -1,0 +1,1 @@
+ALTER TABLE `flashcards` ADD `distractors_json` text;

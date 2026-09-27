@@ -50,6 +50,11 @@ Session of 2026-09-27 (owner's requests, deployed after each commit):
   and 5 a day with the Home brief on the first visit (`services/cardgen.ts`).
   Home also shows mini stats (streak, cards, retention, weak concepts, 30-day
   chart). Not yet tried with the real Claude.
+- Multiple-choice cards (owner: all cards, 4 options, auto-rated): wrong
+  answers stored in `flashcards.distractors_json`; Claude writes them with new
+  cards, and the review screen asks for missing ones in the background (next 10
+  due; classic "Mostrar respuesta" until they arrive). Wrong = Otra vez, right =
+  Bien, or Fácil if faster than `fastLimitMs`. Editing a card clears them.
 - Pending, asked by the owner: improve how Claude talks in voice mode (owner not
   convinced by it). Two flaky/failing e2e tests were flagged as separate tasks
   (review.spec desktop Home brief; reader.spec mobile selection menu).

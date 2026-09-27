@@ -12,6 +12,8 @@ let briefCalls: number;
 let cardCalls: number;
 /** What the fake Claude answers when asked for flashcards. */
 let cardsAnswer: string;
+let distractorsAnswer: string;
+let distractorPrompts: string[];
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -19,8 +21,12 @@ beforeEach(async () => {
   briefCalls = 0;
   cardCalls = 0;
   cardsAnswer = '[]';
+  distractorsAnswer = '[]';
+  distractorPrompts = [];
   const fakeQuery = ((args: { prompt: string; options: { systemPrompt?: string } }) => {
-    const cards = args.options.systemPrompt?.includes('flashcards') ?? false;
+    const wrong = args.options.systemPrompt?.includes('wrong options') ?? false;
+    if (wrong) distractorPrompts.push(args.prompt);
+    const cards = !wrong && (args.options.systemPrompt?.includes('flashcards') ?? false);
     if (cards) cardCalls++;
     else briefCalls++;
     return (async function* () {
@@ -35,7 +41,11 @@ beforeEach(async () => {
         type: 'result',
         subtype: 'success',
         is_error: false,
-        result: cards ? cardsAnswer : '**Derivada:** repasa la regla de la cadena.',
+        result: wrong
+          ? distractorsAnswer
+          : cards
+            ? cardsAnswer
+            : '**Derivada:** repasa la regla de la cadena.',
       };
     })();
   }) as never;
@@ -160,5 +170,61 @@ describe('flashcards written by Claude', () => {
     expect(cardCalls).toBe(1);
     expect(briefCalls).toBe(2);
     expect((await req<ReviewQueue>('GET', '/api/review/queue')).due).toHaveLength(1);
+  });
+});
+
+describe('multiple choice', () => {
+  it('keeps the wrong answers Claude writes with new cards', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: `/api/documents/${docId}/position`,
+      headers,
+      payload: { page: 1, scroll: 0 },
+    });
+    cardsAnswer = JSON.stringify([
+      {
+        ref: 'D1',
+        page: 1,
+        front: '¿Derivada?',
+        back: 'Tasa de cambio.',
+        wrong: ['Área', 'Límite', 'Suma'],
+      },
+      // Too few distinct wrong answers (one repeats the right one): no multiple choice yet.
+      { ref: 'D1', page: 1, front: '¿Integral?', back: 'Área.', wrong: ['área.', 'x', 'x'] },
+    ]);
+    const cards = await req<Flashcard[]>('POST', '/api/flashcards/generate', {
+      documentIds: [docId],
+      count: 5,
+    });
+    expect(cards.map((c) => c.distractors)).toEqual([['Área', 'Límite', 'Suma'], null]);
+  });
+
+  it('writes missing wrong answers in one request and drops them when the card changes', async () => {
+    const [a, b] = await req<Flashcard[]>('POST', '/api/flashcards', {
+      cards: [
+        { front: '¿Qué es una derivada?', back: 'Una tasa de cambio.' },
+        { front: '¿Qué es una integral?', back: 'Un área acumulada.' },
+      ],
+    });
+    expect(a!.distractors).toBeNull();
+    distractorsAnswer =
+      '```json\n[{"ref":"C2","wrong":["Una derivada","Un límite","Una serie"]},{"ref":"C1","wrong":["Un área"]}]\n```';
+    const filled = await req<Flashcard[]>('POST', '/api/flashcards/distractors', {
+      ids: [a!.id, b!.id],
+    });
+    expect(distractorPrompts).toHaveLength(1);
+    expect(distractorPrompts[0]).toContain('C2 ---\nQuestion: ¿Qué es una integral?');
+    // C1 got too few: it stays without options until a later request.
+    expect(filled.map((c) => [c.id, c.distractors])).toEqual([
+      [b!.id, ['Una derivada', 'Un límite', 'Una serie']],
+    ]);
+    // Cards that already have them are not sent again.
+    await req('POST', '/api/flashcards/distractors', { ids: [b!.id] });
+    expect(distractorPrompts).toHaveLength(1);
+
+    const edited = await req<Flashcard>('PATCH', `/api/flashcards/${b!.id}`, {
+      back: 'El área bajo la curva.',
+    });
+    expect(edited.distractors).toBeNull();
   });
 });

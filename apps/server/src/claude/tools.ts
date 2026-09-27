@@ -687,13 +687,14 @@ export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
   return [
     tool(
       'create_flashcards',
-      'Propose flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are shown as proposals the student accepts in the review screen.',
+      'Propose flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are shown as proposals the student accepts in the review screen. They are answered as multiple choice: give three plausible wrong answers ("wrong") in the same style and length as the right one.',
       {
         cards: z
           .array(
             z.object({
               front: z.string().min(3).max(1000),
               back: z.string().min(1).max(2000),
+              wrong: z.array(z.string().min(1).max(1000)).length(3).optional(),
               page: z.number().int().min(1).optional(),
               docId: z.string().optional(),
             }),
@@ -710,6 +711,7 @@ export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
             cards.map((c) => ({
               front: c.front,
               back: c.back,
+              distractors: c.wrong ?? null,
               page: c.page ?? null,
               documentId: c.docId ?? ctx.docId ?? null,
             })),

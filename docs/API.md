@@ -180,6 +180,7 @@ carry `voice: { voice, rate }`.
 | GET    | `/api/memory`                                    | `MemoryOverview` (read-only).                                                                                |
 | GET    | `/api/flashcards?subjectId&topicId&documentId`   | Active and proposed cards.                                                                                   |
 | POST   | `/api/flashcards`                                | `{ cards: [{front, back, documentId?, page?}] }` (user cards).                                               |
+| POST   | `/api/flashcards/distractors`                    | `{ ids }` (≤ 20): Claude writes the 3 wrong options of cards without them → updated cards.                   |
 | POST   | `/api/flashcards/generate`                       | `{ subjectIds?, topicIds?, documentIds?, count }`: Claude writes cards from read pages (409 `nothing_read`). |
 | PATCH  | `/api/flashcards/:id`                            | `{ front?, back?, status?: active\|rejected }`                                                               |
 | DELETE | `/api/flashcards/:id`                            |                                                                                                              |
