@@ -417,5 +417,11 @@ export const whiteboards = sqliteTable('whiteboards', {
   sceneJson: text('scene_json'),
   stepsJson: text('steps_json').notNull().default('[]'),
   appliedJson: text('applied_json').notNull().default('[]'),
+  /** PNG data URL of the drawing and the board area it shows (JSON), for Claude to look at. */
+  snapshotPng: text('snapshot_png'),
+  snapshotBoundsJson: text('snapshot_bounds_json'),
+  /** When the student last drew on it, and when Claude last looked (`whiteboard_view`). */
+  studentEditedAt: text('student_edited_at'),
+  seenAt: text('seen_at'),
   updatedAt: text('updated_at').notNull(),
 });

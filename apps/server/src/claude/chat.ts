@@ -147,6 +147,7 @@ export class ChatService {
           context: input.context,
           scope: scopeLines,
           memory: svc.memory.contextFor(docId),
+          board: svc.whiteboards.status(thread.id),
           recoveredTranscript,
           markImage: markImage !== null,
         });

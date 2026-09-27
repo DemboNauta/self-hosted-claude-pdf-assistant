@@ -60,3 +60,40 @@ test('Claude draws on the whiteboard and the board is kept', async ({ page }, in
   await page.getByRole('tab', { name: 'Pizarra' }).click();
   await expect(page.getByTestId('whiteboard').locator('canvas').first()).toBeVisible();
 });
+
+// Block 3: the student draws on the board and Claude looks at it and corrects it there.
+test('the student draws and Claude reviews the board', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'drawing with the mouse');
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Pizarra alumno ${info.project.name}`,
+    tinyPdf([['La fotosintesis ocurre en los cloroplastos.']]),
+  );
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('cloroplastos');
+  await page.getByRole('tab', { name: 'Pizarra' }).click();
+  const canvas = page.getByTestId('whiteboard').locator('canvas.interactive');
+  await expect(canvas).toBeVisible();
+
+  // A rectangle drawn by hand (the "r" tool, then a drag).
+  await canvas.click({ position: { x: 20, y: 200 } });
+  await page.keyboard.press('r');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + 80, box.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 220, box.y + 200, { steps: 8 });
+  await page.mouse.up();
+
+  const thread = (await (
+    await page.request.get(`/api/documents/${docId}/threads/active`)
+  ).json()) as ThreadSummary;
+  const board = async () =>
+    (await (await page.request.get(`/api/threads/${thread.id}/whiteboard`)).json()) as Whiteboard;
+  await expect.poll(async () => (await board()).scene?.elements.length ?? 0).toBeGreaterThan(0);
+
+  await page.getByRole('button', { name: 'Revisar mi pizarra' }).click();
+  await expect(page.getByTestId('board-answer')).toContainText('He mirado tu pizarra');
+  await expect(page.getByRole('button', { name: 'Detener' })).toBeHidden();
+  await expect.poll(async () => (await board()).applied.length).toBe(1);
+});

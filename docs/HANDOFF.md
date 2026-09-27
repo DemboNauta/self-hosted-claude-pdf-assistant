@@ -44,7 +44,10 @@ DECISIONS "Visual interaction with the PDF"), not deployed yet:
 - **Block 2 done (same day):** the whiteboard ("Pizarra" tab, `features/whiteboard`,
   `whiteboard_draw`, migration `0016`). Not tried with real Claude: check that it
   draws readable layouts and uses `[[mark:wN]]`.
-- **Next (owner's order):** block 3, the student draws and Claude corrects from an image; block 4, follow mode
+- **Block 3 done (same day):** the student draws and Claude looks (`whiteboard_view`,
+  snapshot saved by the browser, migration `0017`) and corrects on the board;
+  "Revisar mi pizarra". Not tried with real Claude.
+- **Next (owner's order):** block 4, follow mode
   (toggle), split view, richer shapes (numbered steps, callouts), click a mark to
   ask about it.
 

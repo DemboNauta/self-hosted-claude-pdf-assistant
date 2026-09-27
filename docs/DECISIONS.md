@@ -250,6 +250,11 @@ change them if he disagrees.
   change. Mermaid on the board goes through `@excalidraw/mermaid-to-excalidraw`,
   which brings its own Mermaid 11 (only in the lazy board chunk). Excalidraw's fonts
   are served by the app (CJK font left out, 13 MB).
+- **Student drawings (2026-09-27, Claude).** Claude does not get the board with every
+  question (quota): it is told in the turn context when the student changed the board
+  since it last looked, and looks with `whiteboard_view`. A save counts as the
+  student's when it follows their pointer or key input on the board by less than 3 s.
+  "Revisar mi pizarra" (under the board) asks Claude to check the work.
 - **Page layout (2026-09-27, Claude).** Built on demand from the stored text items
   plus the PDF operator list (image placements and path bounds), not at ingestion:
   vector clusters with a single stroke or under 3 % of the page in both directions

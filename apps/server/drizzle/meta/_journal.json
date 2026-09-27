@@ -120,6 +120,13 @@
       "when": 1790532919926,
       "tag": "0016_whiteboards",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1790538383741,
+      "tag": "0017_whiteboard_snapshot",
+      "breakpoints": true
     }
   ]
 }

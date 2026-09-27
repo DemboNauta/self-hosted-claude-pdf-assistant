@@ -165,6 +165,7 @@ and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 | `create_flashcards`      | cards[{front, back, wrong?[3], page?, docId?}]           | **Proposed** flashcards, with their multiple-choice wrong answers when given.                                                                                                                                                                                                   |
 | `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                                                                                                                                                                                                                     |
 | `whiteboard_draw`        | elements[] (≤80), mermaid?, clear?                       | Draws one step on the thread's whiteboard (`BoardElement`: text, rect/ellipse/diamond, arrow/line `from`/`to` ids or points, freehand, `pdf` crop rendered here as PNG). Returns `wN` and where the board has room. Ids are reusable: drawing one again replaces it.            |
+| `whiteboard_view`        | —                                                        | The board's latest snapshot as an image, plus the board area it shows (to place corrections). Marks the board as seen.                                                                                                                                                          |
 | `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                                                                                                                                                                                                                     |
 
 ## Marks in the answer (`[[mark:ID]]`)
@@ -202,8 +203,14 @@ The system prompt has a "Whiteboard" section (when drawing helps, several steps,
 each with its `[[mark:wN]]`). Steps are stored in `whiteboards.steps_json` and sent
 as `board_step`; `MARK_RE` accepts `w` ids, and `revealMarks` in the chat store
 hands them to the board (written answers: when the text reaches them; voice: when
-the sentence is spoken; unreferenced ones at the end). Claude does not see the
-student's drawings yet (block 3: the board sent as an image).
+the sentence is spoken; unreferenced ones at the end).
+
+The student's drawings: the browser saves a PNG snapshot with the scene and flags
+saves that follow the student's own pointer or key input (`studentEdited`). The turn
+context (`buildTurnPrompt` `board`) then says the student drew since Claude last
+looked (or just that the board has content), and Claude calls `whiteboard_view`;
+the prompt asks it to say what is right and mark mistakes in red next to them.
+"Revisar mi pizarra" saves the board and sends a fixed request.
 
 ## Daily brief (`services/brief.ts`)
 
@@ -257,6 +264,8 @@ the user's own token:
     - "larga" → 40 more paragraphs streamed (chat scrolling tests);
     - "recuerda …" → `remember` + `mark_concept_difficult`;
     - "pizarra" → two `whiteboard_draw` steps (boxes, then an arrow and a formula);
+    - "revisa" → `whiteboard_view`, then a red correction below the drawing ("He mirado
+      tu pizarra");
     - diagram mode → `create_diagram` with a small mind map, answered with
       `[[diagram:ID]]`.
   - Its `result` is the full text, used by the daily brief.

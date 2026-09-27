@@ -32,6 +32,7 @@ To change the schema:
 | `0014_flashcard_distractors` | `flashcards.distractors_json` (wrong options for multiple choice)                                |
 | `0015_message_pointers`      | `messages.pointers_json` (Claude's marks on the PDF, shown again from the chat)                  |
 | `0016_whiteboards`           | `whiteboards` (one per thread)                                                                   |
+| `0017_whiteboard_snapshot`   | `whiteboards.snapshot_png`, `snapshot_bounds_json`, `student_edited_at`, `seen_at`               |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
@@ -107,7 +108,10 @@ to_page?, updated_at`.
 - **whiteboards** `thread_id (PK, cascade), user_id, scene_json (Excalidraw
 elements + files, saved by the browser), steps_json (BoardStep[] Claude drew, last
 300), applied_json (step keys `messageId:wN` already merged into the scene),
-updated_at`. PDF crops travel as PNG data URLs inside the steps and the scene.
+updated_at`, plus `snapshot_png` (data URL of the whole drawing on white, ≤1400 px,
+  made by the browser on each save) with `snapshot_bounds_json` (board area it shows),
+  `student_edited_at` (the student changed it) and `seen_at` (Claude last called
+  `whiteboard_view`). PDF crops travel as PNG data URLs inside the steps and the scene.
 - **memory_items** `scope (global|document), document_id?, category, content`.
 - **concepts** `name, key (canonical name for merging), document_id?, page?,
 mastery 0–1, times_failed, last_evidence, last_seen_at`.

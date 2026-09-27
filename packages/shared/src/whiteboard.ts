@@ -121,12 +121,37 @@ export interface Whiteboard {
   updatedAt: string;
 }
 
+/** Part of the board a snapshot shows, in board units. */
+export const boardBoundsSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  w: z.number().min(0),
+  h: z.number().min(0),
+});
+export type BoardBounds = z.infer<typeof boardBoundsSchema>;
+
 export const saveBoardSchema = z.object({
   scene: z.object({
     elements: z.array(z.unknown()).max(5000),
     files: z.record(z.string(), z.unknown()),
   }),
   applied: z.array(z.string().max(80)).max(2000),
+  /**
+   * PNG of the whole drawing (data URL) and the area it shows, so Claude can look at
+   * the board (`whiteboard_view`); null when the board is empty.
+   */
+  snapshot: z
+    .object({
+      png: z
+        .string()
+        .max(8_000_000)
+        .regex(/^data:image\/png;base64,/),
+      bounds: boardBoundsSchema,
+    })
+    .nullable()
+    .optional(),
+  /** The student drew or wrote on the board since the last save. */
+  studentEdited: z.boolean().optional(),
 });
 export type SaveBoard = z.infer<typeof saveBoardSchema>;
 

@@ -170,10 +170,10 @@ The chat context also accepts `pageRange: { from, to }` (the scope of a diagram)
 
 One board per chat thread (`Whiteboard` in `packages/shared/src/whiteboard.ts`).
 
-| Method | Path                          | Notes                                                                                  |
-| ------ | ----------------------------- | -------------------------------------------------------------------------------------- |
-| GET    | `/api/threads/:id/whiteboard` | `{ threadId, scene, steps, applied, updatedAt }` (`scene` null until first drawn).     |
-| PUT    | `/api/threads/:id/whiteboard` | `{ scene: { elements, files }, applied }` from the browser; body limit 25 MB (images). |
+| Method | Path                          | Notes                                                                                                                                      |
+| ------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/threads/:id/whiteboard` | `{ threadId, scene, steps, applied, updatedAt }` (`scene` null until first drawn).                                                         |
+| PUT    | `/api/threads/:id/whiteboard` | `{ scene: { elements, files }, applied, snapshot?: { png, bounds } \| null, studentEdited? }` from the browser; body limit 25 MB (images). |
 
 WebSocket: `board_step` (`BoardStep`: `id` `w1`…, `messageId`, `elements`, `mermaid?`,
 `files?`, `clear?`) when Claude draws; the browser draws it when the answer reaches

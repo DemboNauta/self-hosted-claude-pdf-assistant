@@ -139,8 +139,33 @@ const fakeChat = ((args: {
       const id = /\[\[mark:([mw]\d+)\]\]/.exec(JSON.stringify(result))?.[1];
       if (id) markIds.push(id);
     };
+    // "Revisa … pizarra" makes the fake look at the board and write a correction in red.
+    let boardSeen = '';
+    if (/revisa/i.test(question) && tools?.whiteboard_view && tools.whiteboard_draw) {
+      const view = JSON.stringify(await tools.whiteboard_view.handler({}, {}));
+      const at = /x (-?\d+) to (-?\d+) and y (-?\d+) to (-?\d+)/.exec(view);
+      if (at) {
+        boardSeen = 'He mirado tu pizarra. ';
+        noteMark(
+          await tools.whiteboard_draw.handler(
+            {
+              elements: [
+                {
+                  type: 'text',
+                  x: Number(at[1]),
+                  y: Number(at[4]) + 20,
+                  text: 'Revisa este paso',
+                  color: 'red',
+                },
+              ],
+            },
+            {},
+          ),
+        );
+      } else boardSeen = 'Tu pizarra está vacía. ';
+    }
     // "Pizarra" makes the fake draw on the whiteboard: two boxes, then an arrow between them.
-    if (/pizarra/i.test(question) && tools?.whiteboard_draw) {
+    else if (/pizarra/i.test(question) && tools?.whiteboard_draw) {
       noteMark(
         await tools.whiteboard_draw.handler(
           {
@@ -252,6 +277,7 @@ const fakeChat = ((args: {
       ...(marked
         ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]
         : []),
+      ...(boardSeen ? [boardSeen] : []),
       ...markIds.map((id) => `[[mark:${id}]] Mira lo que te señalo. `),
       'Respuesta de prueba: ',
       'la idea principal está en la página ',

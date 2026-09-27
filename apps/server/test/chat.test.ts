@@ -225,6 +225,26 @@ describe('chat', () => {
     ]);
   });
 
+  it('tells Claude when the student drew on the whiteboard', async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    await app.inject({
+      method: 'PUT',
+      url: `/api/threads/${thread.id}/whiteboard`,
+      headers,
+      payload: {
+        scene: { elements: [], files: {} },
+        applied: [],
+        snapshot: { png: 'data:image/png;base64,AAAA', bounds: { x: 0, y: 0, w: 10, h: 10 } },
+        studentEdited: true,
+      },
+    });
+    await ask(thread.id, '¿Está bien mi ejercicio?');
+    expect(calls[0]!.prompt).toContain('drawn or written on the whiteboard');
+    expect(calls[0]!.options.allowedTools).toContain('mcp__pca__whiteboard_view');
+  });
+
   it('lists the questions asked about passages, with their answers', async () => {
     const thread = (
       await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })

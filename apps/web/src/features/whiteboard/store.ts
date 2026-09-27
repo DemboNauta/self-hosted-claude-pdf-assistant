@@ -2,6 +2,7 @@ import {
   boardStepKey,
   type BoardScene,
   type BoardStep,
+  type SaveBoard,
   type Whiteboard,
 } from '@pdfclaudeassistant/shared';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
@@ -142,8 +143,90 @@ async function save() {
   const signature = `${elements.reduce((n, e) => n + e.version, 0)}:${elements.length}:${applied.length}`;
   if (signature === lastSaved) return;
   useBoard.setState({ scene });
-  await http(`/threads/${threadId}/whiteboard`, { method: 'PUT', json: { scene, applied } });
+  const studentEdited = studentDirty;
+  studentDirty = false;
+  let snapshot: SaveBoard['snapshot'];
+  try {
+    snapshot = await takeSnapshot(scene);
+  } catch (err) {
+    console.warn('[whiteboard] snapshot failed', err);
+    snapshot = undefined;
+  }
+  try {
+    await http(`/threads/${threadId}/whiteboard`, {
+      method: 'PUT',
+      json: { scene, applied, snapshot, ...(studentEdited && { studentEdited }) },
+    });
+  } catch (err) {
+    studentDirty ||= studentEdited;
+    throw err;
+  }
   if (useBoard.getState().threadId === threadId) lastSaved = signature;
+}
+
+/** Saves now (before asking Claude about the board, so it sees the latest drawing). */
+export async function flushBoard() {
+  clearTimeout(saveTimer);
+  await save();
+}
+
+/** Longest side of the picture Claude gets of the board. */
+const SNAPSHOT_MAX = 1400;
+const SNAPSHOT_PADDING = 16;
+
+/**
+ * PNG of the whole drawing on white (whatever the app theme) and the board area it
+ * shows, so Claude can look at the student's work (`whiteboard_view`).
+ */
+async function takeSnapshot(scene: BoardScene): Promise<SaveBoard['snapshot']> {
+  if (!scene.elements.length) return null;
+  const ex = await excalidraw();
+  const elements = scene.elements as never;
+  const [minX, minY, maxX, maxY] = ex.getCommonBounds(elements);
+  const blob = await ex.exportToBlob({
+    elements,
+    files: scene.files as never,
+    mimeType: 'image/png',
+    maxWidthOrHeight: SNAPSHOT_MAX,
+    exportPadding: SNAPSHOT_PADDING,
+    appState: { exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
+  });
+  const png = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+  return {
+    png,
+    bounds: {
+      x: minX - SNAPSHOT_PADDING,
+      y: minY - SNAPSHOT_PADDING,
+      w: maxX - minX + SNAPSHOT_PADDING * 2,
+      h: maxY - minY + SNAPSHOT_PADDING * 2,
+    },
+  };
+}
+
+// ---- the student's own drawing ----
+
+/** The student drew or wrote on the board since the last save. */
+let studentDirty = false;
+let lastUserInput = 0;
+let lastChangeSig = '';
+
+/** A pointer or key press on the board: changes right after it are the student's. */
+export function noteUserInput() {
+  lastUserInput = performance.now();
+}
+
+/** Excalidraw's onChange: saves real changes, remembering whether the student made them. */
+export function noteChange(elements: readonly { version: number }[]) {
+  const sig = `${elements.reduce((n, e) => n + e.version, 0)}:${elements.length}`;
+  if (sig === lastChangeSig) return;
+  lastChangeSig = sig;
+  if (performance.now() - lastUserInput < 3000) studentDirty = true;
+  scheduleSave();
 }
 
 // ---- applying Claude's steps ----

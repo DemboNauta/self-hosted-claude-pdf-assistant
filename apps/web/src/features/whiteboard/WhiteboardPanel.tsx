@@ -1,10 +1,10 @@
 import clsx from 'clsx';
-import { ChevronDown, ChevronUp, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronUp, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { t } from '../../i18n';
 import { Markdown } from '../chat/Markdown';
 import { useChat } from '../chat/store';
-import { useBoard } from './store';
+import { flushBoard, useBoard } from './store';
 
 const BoardCanvas = lazy(() => import('./BoardCanvas'));
 
@@ -34,6 +34,27 @@ function LatestAnswer() {
         </div>
       )}
     </div>
+  );
+}
+
+/** "Revisar mi pizarra": asks Claude to look at what the student drew and correct it. */
+function CheckButton() {
+  const running = useChat((s) => s.running);
+  const hasDrawing = useBoard((s) => (s.scene?.elements.length ?? 0) > 0);
+  if (!hasDrawing) return null;
+  return (
+    <button
+      type="button"
+      disabled={running}
+      onClick={() => {
+        useBoard.getState().setExpanded(false);
+        void flushBoard().then(() => useChat.getState().send(t.board.checkPrompt));
+      }}
+      className="hover:bg-surface-muted flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium disabled:opacity-50"
+    >
+      <CheckCheck size={14} aria-hidden />
+      {t.board.check}
+    </button>
   );
 }
 
@@ -76,12 +97,16 @@ export function WhiteboardPanel() {
         >
           <BoardCanvas />
         </Suspense>
+      </div>
+      <div className="border-border flex items-center gap-2 border-t px-2 py-1">
+        <CheckButton />
+        <span className="flex-1" />
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
           aria-label={expanded ? t.board.shrink : t.board.expand}
           title={expanded ? t.board.shrink : t.board.expand}
-          className="bg-surface border-border hover:bg-surface-muted absolute right-2 bottom-2 z-10 rounded-md border p-1.5 shadow-sm"
+          className="text-text-muted hover:text-text hover:bg-surface-muted rounded-md p-1.5"
         >
           {expanded ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}
         </button>

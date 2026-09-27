@@ -535,6 +535,8 @@ export const es = {
     shrink: 'Volver al panel',
     showStep: 'Ver en la pizarra lo que Claude dibuja',
     chip: 'Pizarra',
+    check: 'Revisar mi pizarra',
+    checkPrompt: 'Revisa lo que he hecho en la pizarra y corrígeme.',
   },
   chat: {
     title: 'Claude',

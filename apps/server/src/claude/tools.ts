@@ -972,10 +972,35 @@ function boardBox(e: ResolvedBoardElement): { x: number; y: number; w: number; h
   }
 }
 
-/** Whiteboard next to the chat (visual interaction, block 2). */
+/** Whiteboard next to the chat (visual interaction, blocks 2 and 3). */
 export function whiteboardTools(deps: ToolDeps, ctx: ToolContext) {
   let steps = 0;
   return [
+    tool(
+      'whiteboard_view',
+      'Look at the whiteboard as it is now, with what the student drew or wrote on it (a solved exercise, a sketch, a question) and what you drew. Returns an image and the board area it shows, in board units, so you can place corrections with whiteboard_draw right next to their work.',
+      {},
+      tracked(
+        ctx,
+        'whiteboard_view',
+        () => '',
+        async () => {
+          const view = deps.whiteboards.look(ctx.threadId);
+          if (!view) return text('The whiteboard is empty.');
+          const { x, y, w, h } = view.bounds;
+          const r = Math.round;
+          return {
+            content: [
+              { type: 'image', data: view.png.toString('base64'), mimeType: 'image/png' },
+              {
+                type: 'text',
+                text: `The image shows the board from x ${r(x)} to ${r(x + w)} and y ${r(y)} to ${r(y + h)} (board units; the image is scaled). To correct the student's work, draw next to it with whiteboard_draw (e.g. red marks or text), and explain the mistakes with [[mark:ID]].`,
+              },
+            ],
+          };
+        },
+      ),
+    ),
     tool(
       'whiteboard_draw',
       [

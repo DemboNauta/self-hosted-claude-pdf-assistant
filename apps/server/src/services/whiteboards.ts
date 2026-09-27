@@ -1,10 +1,28 @@
-import type { BoardScene, BoardStep, SaveBoard, Whiteboard } from '@pdfclaudeassistant/shared';
+import type {
+  BoardBounds,
+  BoardScene,
+  BoardStep,
+  SaveBoard,
+  Whiteboard,
+} from '@pdfclaudeassistant/shared';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { whiteboards } from '../db/schema.js';
 import type { ThreadService } from './threads.js';
 
 type Row = typeof whiteboards.$inferSelect;
+type Patch = Partial<
+  Pick<
+    Row,
+    | 'sceneJson'
+    | 'stepsJson'
+    | 'appliedJson'
+    | 'snapshotPng'
+    | 'snapshotBoundsJson'
+    | 'studentEditedAt'
+    | 'seenAt'
+  >
+>;
 
 const now = () => new Date().toISOString();
 
@@ -43,20 +61,42 @@ export class WhiteboardService {
     this.upsert(threadId, { stepsJson: JSON.stringify(steps) });
   }
 
-  /** The scene as the browser has it now, with the steps it has merged. */
+  /** The scene as the browser has it now, with the steps it has merged and a snapshot. */
   save(threadId: string, input: SaveBoard): Whiteboard {
     this.row(threadId);
     this.upsert(threadId, {
       sceneJson: JSON.stringify(input.scene),
       appliedJson: JSON.stringify(input.applied),
+      ...(input.snapshot !== undefined && {
+        snapshotPng: input.snapshot?.png ?? null,
+        snapshotBoundsJson: input.snapshot ? JSON.stringify(input.snapshot.bounds) : null,
+      }),
+      ...(input.studentEdited && { studentEditedAt: now() }),
     });
     return this.get(threadId);
   }
 
-  private upsert(
-    threadId: string,
-    set: Partial<Pick<Row, 'sceneJson' | 'stepsJson' | 'appliedJson'>>,
-  ) {
+  /** What Claude should know about the board this turn (goes in the turn context). */
+  status(threadId: string): { hasContent: boolean; studentChanged: boolean } {
+    const row = this.row(threadId);
+    return {
+      hasContent: !!row?.snapshotPng,
+      studentChanged: !!row?.studentEditedAt && (!row.seenAt || row.studentEditedAt > row.seenAt),
+    };
+  }
+
+  /** The latest picture of the board for Claude; marks the board as seen. */
+  look(threadId: string): { png: Buffer; bounds: BoardBounds } | null {
+    const row = this.row(threadId);
+    if (!row?.snapshotPng) return null;
+    this.upsert(threadId, { seenAt: now() });
+    return {
+      png: Buffer.from(row.snapshotPng.replace(/^data:image\/png;base64,/, ''), 'base64'),
+      bounds: JSON.parse(row.snapshotBoundsJson ?? '{"x":0,"y":0,"w":0,"h":0}') as BoardBounds,
+    };
+  }
+
+  private upsert(threadId: string, set: Patch) {
     const updatedAt = now();
     this.db
       .insert(whiteboards)

@@ -2,7 +2,7 @@ import './assets';
 import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { useEffect, useState } from 'react';
-import { detachBoardApi, scheduleSave, setBoardApi, useBoard } from './store';
+import { detachBoardApi, noteChange, noteUserInput, setBoardApi, useBoard } from './store';
 
 /** Current app theme (the `data-theme` attribute set by `useApplyTheme`). */
 function useDark() {
@@ -22,11 +22,17 @@ function Board({ threadId }: { threadId: string }) {
 
   useEffect(() => () => detachBoardApi(), []);
   return (
-    <div className="absolute inset-0" data-testid="whiteboard" data-thread={threadId}>
+    <div
+      className="absolute inset-0"
+      data-testid="whiteboard"
+      data-thread={threadId}
+      onPointerDownCapture={noteUserInput}
+      onKeyDownCapture={noteUserInput}
+    >
       <Excalidraw
         excalidrawAPI={(api) => setBoardApi(api)}
         initialData={{ appState: { currentItemRoughness: 1 } }}
-        onChange={() => scheduleSave()}
+        onChange={(elements) => noteChange(elements)}
         langCode="es-ES"
         theme={dark ? 'dark' : 'light'}
         UIOptions={{

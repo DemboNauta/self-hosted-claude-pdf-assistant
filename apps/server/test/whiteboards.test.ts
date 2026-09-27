@@ -34,7 +34,7 @@ describe('whiteboard', () => {
       emit: (e) => events.push(e),
       record: () => {},
     };
-    const [draw] = whiteboardTools(servicesOf(app), ctx);
+    const draw = whiteboardTools(servicesOf(app), ctx).find((t) => t.name === 'whiteboard_draw');
     const first = JSON.stringify(
       await draw!.handler(
         {
@@ -98,5 +98,48 @@ describe('whiteboard', () => {
     });
     const missing = await app.inject({ url: '/api/threads/nope/whiteboard', headers });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it("shows Claude the student's drawing and tells it when the board changed", async () => {
+    const png = 'data:image/png;base64,' + Buffer.from('fake png').toString('base64');
+    const save = (studentEdited: boolean) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/threads/${threadId}/whiteboard`,
+        headers,
+        payload: {
+          scene: { elements: [{ id: 'a' }], files: {} },
+          applied: [],
+          snapshot: { png, bounds: { x: 10, y: 20, w: 300, h: 200 } },
+          studentEdited,
+        },
+      });
+    const svc = servicesOf(app);
+    expect(svc.whiteboards.status(threadId)).toEqual({ hasContent: false, studentChanged: false });
+    expect((await save(true)).statusCode).toBe(200);
+    expect(svc.whiteboards.status(threadId)).toEqual({ hasContent: true, studentChanged: true });
+
+    const ctx: ToolContext = {
+      threadId,
+      messageId: 'm',
+      docId,
+      scope: { kind: 'document', id: docId },
+      emit: () => {},
+      record: () => {},
+    };
+    const view = whiteboardTools(svc, ctx).find((t) => t.name === 'whiteboard_view')!;
+    const res = await view.handler({} as never, {});
+    expect(res.content[0]).toMatchObject({
+      type: 'image',
+      data: Buffer.from('fake png').toString('base64'),
+    });
+    expect(JSON.stringify(res)).toContain('x 10 to 310 and y 20 to 220');
+    // Once seen, the board only counts as changed after the student draws again.
+    await new Promise((r) => setTimeout(r, 5));
+    expect(svc.whiteboards.status(threadId).studentChanged).toBe(false);
+    await save(false);
+    expect(svc.whiteboards.status(threadId).studentChanged).toBe(false);
+    await save(true);
+    expect(svc.whiteboards.status(threadId).studentChanged).toBe(true);
   });
 });
