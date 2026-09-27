@@ -1,3 +1,9 @@
+/** A duration in minutes, or hours and minutes: "25 min", "1 h 5 min". */
+function duration(seconds: number) {
+  const m = Math.round(seconds / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
 /** All UI strings (Spanish). Keys are English; keep this the only place with UI text. */
 export const es = {
   appName: 'PdfClaudeAssistant',
@@ -322,6 +328,18 @@ export const es = {
     cardsDetail: (total: number, due: number, mature: number) =>
       `${total} en total · ${due} pendientes · ${mature} consolidadas`,
     last30: 'Últimos 30 días',
+    today: 'Hoy',
+    summary30: (total: string, days: number) =>
+      `${total} en total · ${days === 1 ? '1 día' : `${days} días`} con estudio`,
+    max: (d: string) => `máx. ${d}`,
+    studied: (seconds: number) =>
+      seconds === 0
+        ? 'Sin estudio'
+        : seconds < 60
+          ? 'Menos de 1 min'
+          : `${duration(seconds)} de estudio`,
+    reviewedCards: (n: number) => (n === 1 ? '1 tarjeta repasada' : `${n} tarjetas repasadas`),
+    pomodoroCount: (n: number) => (n === 1 ? '1 pomodoro' : `${n} pomodoros`),
     minutes: 'minutos',
     progress: 'Progreso',
     concepts: 'Conceptos difíciles',
@@ -334,10 +352,7 @@ export const es = {
     pomodoros: 'Pomodoros',
     pomodorosDetail: (today: number, seconds: number, fmt: (s: number) => string) =>
       `${today} hoy · ${fmt(seconds)} de foco en total`,
-    duration: (seconds: number) => {
-      const m = Math.round(seconds / 60);
-      return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
-    },
+    duration,
   },
   timer: {
     title: 'Temporizador de estudio',

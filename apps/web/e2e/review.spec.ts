@@ -53,4 +53,13 @@ test('create flashcards, review them and see today and the stats', async ({ page
   await expect(page.getByText('Respuesta de prueba').first()).toBeVisible();
   await page.goto('/stats');
   await expect(page.getByText('1 día', { exact: true })).toBeVisible();
+  // The chart tells what each day was: today by default, any other day on hover or tap.
+  const detail = page.getByTestId('chart-detail');
+  await expect(detail).toContainText('Hoy');
+  await expect(detail).toContainText('tarjeta');
+  const bars = page.getByRole('group', { name: 'Últimos 30 días' }).getByRole('button');
+  await expect(bars).toHaveCount(30);
+  await bars.first().click();
+  await expect(detail).toContainText('Sin estudio');
+  await expect(detail).not.toContainText('Hoy');
 });
