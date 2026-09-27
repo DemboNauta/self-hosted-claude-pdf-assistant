@@ -606,8 +606,13 @@ export const es = {
       update_concept_mastery: 'Actualizando tu dominio de un concepto',
       update_progress: 'Registrando tu progreso',
       record_exam_result: 'Registrando el resultado',
+      get_annotations: 'Revisando tus anotaciones',
       highlight_key_ideas: 'Proponiendo subrayados',
       add_note: 'Añadiendo una nota',
+      add_margin_notes: 'Escribiendo notas al margen',
+      create_flashcards: 'Proponiendo tarjetas',
+      create_diagram: 'Dibujando un esquema',
+      update_diagram: 'Actualizando el esquema',
     } as Record<string, string>,
     errors: {
       rate_limited:

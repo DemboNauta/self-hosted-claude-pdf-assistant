@@ -32,6 +32,9 @@ has owner preferences and next steps) and update `docs/HANDOFF.md` at the end.
   `ANTHROPIC_AUTH_TOKEN`, `@anthropic-ai/sdk` or calls to the Anthropic API
   host. Claude is reached only through `@anthropic-ai/claude-agent-sdk` with
   the subscription session. `apps/server/test/no-api-key.test.ts` enforces it.
+- **Docs in the same commit (owner):** every change updates the docs it touches
+  (`FEATURES.md`, `API.md`, `DATA_MODEL.md`, `CLAUDE_INTEGRATION.md`,
+  `ARCHITECTURE.md`, `DECISIONS.md` for owner choices, `HANDOFF.md`), not later.
 - Ask before implementing anything marked **[DECISIÓN ABIERTA]** (SPEC §14).
 - **Owner preference:** whenever something is unclear or the owner's opinion
   could matter (product behaviour, UX, data handling), ask before assuming.
@@ -59,6 +62,9 @@ Other owner decisions:
   (30 days); restoring asks for a destination topic. A minimal trash view ships
   in Phase 1 for this reason (full F-LIB-05 in Phase 3).
 - Phase 1 started before the owner validated Phase 0 on the VPS (owner's call).
+- Flashcards are answered as multiple choice (4 options, auto-rated) and Claude
+  writes cards from what was read (daily on Home, on demand in Repaso): see
+  `docs/DECISIONS.md` (2026-09-27).
 
 Still open: 4 (semantic search), 5 (voice backend), 7 (usage counter).
 

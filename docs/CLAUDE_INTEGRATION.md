@@ -141,26 +141,27 @@ and `record`. `allowedTools` is `mcp__pca__<name>`. Every handler is wrapped in
 `tracked()`, which emits `tool_event` running/done/error (shown in the chat as
 "Leyendo p. 3–5") and stores it with the message.
 
-| Tool                     | Input                                                    | Effect                                                                                   |
-| ------------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `get_document_info`      | docId                                                    | Title, pages, subject/topic, outline.                                                    |
-| `get_pages`              | docId, fromPage, toPage                                  | Page text, max 10 pages, with a truncation note.                                         |
-| `get_page_image`         | docId, page                                              | PNG (long side 1400 px) rendered with PDF.js + napi canvas.                              |
-| `search_library`         | query, scope doc/topic/subject/all, docId?               | FTS5 hits with «snippets». Defaults to the open doc or the thread's scope.               |
-| `list_library`           | —                                                        | Library tree with ids.                                                                   |
-| `point_at`               | docId?, page, shapes[] (≤12)                             | Emits `pointer` (ephemeral marks). Anchors: text quote (+occurrence) or normalised rect. |
-| `clear_pointers`         | —                                                        | Emits `clear_pointers`.                                                                  |
-| `get_annotations`        | docId?, fromPage?, toPage?                               | The student's highlights (with colour meanings) and notes.                               |
-| `highlight_key_ideas`    | docId?, highlights[{page, quote, reason}]                | Creates **proposed** Claude highlights; warns about quotes not found.                    |
-| `add_note`               | docId?, page, text, quote? or x/y                        | Creates a Claude note.                                                                   |
-| `remember`               | scope, docId?, category, content, replaceId?             | De-duplicated memory item.                                                               |
-| `mark_concept_difficult` | concept, docId?, page?, evidence                         | Upserts a concept by normalised name, lowers mastery.                                    |
-| `update_concept_mastery` | conceptId, delta, evidence                               | Adjusts mastery 0–1.                                                                     |
-| `update_progress`        | docId?, note                                             | Document memory, category `progress`.                                                    |
-| `record_exam_result`     | docId?, question, userAnswer, correct, concepts[], page? | Stores the result, updates concepts.                                                     |
-| `create_flashcards`      | cards[{front, back, page?, docId?}]                      | **Proposed** flashcards.                                                                 |
-| `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                              |
-| `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                              |
+| Tool                     | Input                                                    | Effect                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_document_info`      | docId                                                    | Title, pages, subject/topic, outline.                                                                                                                               |
+| `get_pages`              | docId, fromPage, toPage                                  | Page text, max 10 pages, with a truncation note.                                                                                                                    |
+| `get_page_image`         | docId, page, region?, grid?                              | PNG (long side 1400 px) rendered with PDF.js + napi canvas. `region` zooms in (up to 4×); `grid` overlays labelled page-fraction coordinates to place rect anchors. |
+| `search_library`         | query, scope doc/topic/subject/all, docId?               | FTS5 hits with «snippets». Defaults to the open doc or the thread's scope.                                                                                          |
+| `list_library`           | —                                                        | Library tree with ids.                                                                                                                                              |
+| `point_at`               | docId?, page, shapes[] (≤12)                             | Emits `pointer` (ephemeral marks). Anchors: text quote (+occurrence) or normalised rect; arrows with `to` connect two anchors.                                      |
+| `clear_pointers`         | —                                                        | Emits `clear_pointers`.                                                                                                                                             |
+| `get_annotations`        | docId?, fromPage?, toPage?                               | The student's highlights (with colour meanings) and notes.                                                                                                          |
+| `highlight_key_ideas`    | docId?, highlights[{page, quote, reason}]                | Creates **proposed** Claude highlights; warns about quotes not found.                                                                                               |
+| `add_note`               | docId?, page, text, quote? or x/y                        | Creates a Claude note.                                                                                                                                              |
+| `add_margin_notes`       | docId?, notes[{page, quote, text}] (≤20)                 | Creates **proposed** Claude text notes shown in the margin (`MarginNotes.tsx`); notes whose quote is not found are dropped and reported.                            |
+| `remember`               | scope, docId?, category, content, replaceId?             | De-duplicated memory item.                                                                                                                                          |
+| `mark_concept_difficult` | concept, docId?, page?, evidence                         | Upserts a concept by normalised name, lowers mastery.                                                                                                               |
+| `update_concept_mastery` | conceptId, delta, evidence                               | Adjusts mastery 0–1.                                                                                                                                                |
+| `update_progress`        | docId?, note                                             | Document memory, category `progress`.                                                                                                                               |
+| `record_exam_result`     | docId?, question, userAnswer, correct, concepts[], page? | Stores the result, updates concepts.                                                                                                                                |
+| `create_flashcards`      | cards[{front, back, wrong?[3], page?, docId?}]           | **Proposed** flashcards, with their multiple-choice wrong answers when given.                                                                                       |
+| `create_diagram`         | title, mermaid, fromPage?, toPage?, docId?               | Saves a diagram; the answer shows it with `[[diagram:ID]]`.                                                                                                         |
+| `update_diagram`         | id, mermaid, title?                                      | Replaces a diagram in place (changes the student asks for).                                                                                                         |
 
 Tools that change data emit `data_changed` (`annotations` | `memory` |
 `flashcards` | `diagrams`) so the web invalidates its queries. Tools that need a document
@@ -183,6 +184,25 @@ concepts plus a "Hoy te propongo:" line. The brief is cached in
 `settings.daily_brief` per local day. `POST /api/review/today?day=` generates it,
 and Home calls it automatically once a day.
 
+## Flashcards written by Claude (`services/cardgen.ts`)
+
+One-shot queries like the brief (no tools, `maxTurns: 1`, own system prompt), with
+the user's own token:
+
+- `generate(source, count)` (`POST /api/flashcards/generate`, and 5 cards a day from
+  `brief.generate` on the first Home visit, once per day): sends the text of pages
+  the student has **read** (`pages.viewed_at`) of the chosen subjects/topics/documents
+  (default: the 5 opened last), up to ~32k characters, pages without cards first,
+  plus the existing card fronts so Claude does not repeat them. Claude answers a JSON
+  array `[{ref, page, front, back, wrong[3]}]`; cards are created **active** (ready
+  to review). Unknown refs are dropped; a page Claude was not shown becomes null.
+- `fillDistractors(ids)` (`POST /api/flashcards/distractors`, ≤20): writes the three
+  wrong answers of cards that have none (the student's own, older or edited cards),
+  one request for all. The review screen calls it in the background for the next 10
+  due cards; cards keep "Mostrar respuesta" until theirs arrive. Wrong answers equal
+  to the right one or repeated are discarded (fewer than three → the card stays
+  without options).
+
 ## Testing without the subscription
 
 - Unit tests pass `claudeQuery` (and a fake status query) through `authedApp(...,
@@ -197,10 +217,15 @@ and Home calls it automatically once a day.
     - "señala" → `point_at`;
     - "ideas clave" → `highlight_key_ideas`;
     - "tarjetas" → `create_flashcards`;
+    - "nota al margen" → `add_margin_notes` on the selection;
+    - "conecta" → `point_at` with an arrow from the selection to a rect (`to`);
     - "recuerda …" → `remember` + `mark_concept_difficult`;
     - diagram mode → `create_diagram` with a small mind map, answered with
       `[[diagram:ID]]`.
   - Its `result` is the full text, used by the daily brief.
+  - One-shot requests are told apart by their system prompt: "write flashcards"
+    answers one card per page shown (with fixed wrong answers) and "wrong options"
+    answers the same three wrong answers for every card.
 - For a real check without touching the owner's data, run a scratch script
   (not committed):
   - It should call `buildApp(loadConfig({...process.env, DATA_DIR: <temp>}))`.

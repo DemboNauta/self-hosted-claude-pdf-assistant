@@ -13,22 +13,24 @@ To change the schema:
    `ON DELETE cascade`, add it by hand (done in `0008`).
 4. Commit the SQL and the `meta/` snapshot.
 
-| Migration                 | Adds                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------ |
-| `0000_init`               | `settings`, `auth_sessions`                                                                      |
-| `0001_library`            | `subjects`, `topics`, `documents`, `pages`                                                       |
-| `0002_pages_fts`          | FTS5 `pages_fts` (external content, `unicode61 remove_diacritics 2`) + triggers                  |
-| `0003_chat`               | `threads`, `messages`                                                                            |
-| `0004_annotations`        | `annotations`                                                                                    |
-| `0005_memory`             | `memory_items`, `concepts`, `exam_results`                                                       |
-| `0006_study_sessions`     | `study_sessions`                                                                                 |
-| `0007_flashcards`         | `flashcards`, `reviews`                                                                          |
-| `0008_thread_scopes`      | `threads.topic_id`, `threads.subject_id` (cascade)                                               |
-| `0009_annotation_display` | `annotations.display_json` (note window: pinned, position, size)                                 |
-| `0010_diagrams`           | `diagrams`                                                                                       |
-| `0011_focus_sessions`     | `focus_sessions`                                                                                 |
-| `0012_users`              | `users`, `invitations`, `user_settings`; `user_id` on every owned table (hand-edited, see below) |
-| `0013_drop_display_name`  | drops `users.display_name`: the username is the only name                                        |
+| Migration                    | Adds                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `0000_init`                  | `settings`, `auth_sessions`                                                                      |
+| `0001_library`               | `subjects`, `topics`, `documents`, `pages`                                                       |
+| `0002_pages_fts`             | FTS5 `pages_fts` (external content, `unicode61 remove_diacritics 2`) + triggers                  |
+| `0003_chat`                  | `threads`, `messages`                                                                            |
+| `0004_annotations`           | `annotations`                                                                                    |
+| `0005_memory`                | `memory_items`, `concepts`, `exam_results`                                                       |
+| `0006_study_sessions`        | `study_sessions`                                                                                 |
+| `0007_flashcards`            | `flashcards`, `reviews`                                                                          |
+| `0008_thread_scopes`         | `threads.topic_id`, `threads.subject_id` (cascade)                                               |
+| `0009_annotation_display`    | `annotations.display_json` (note window: pinned, position, size)                                 |
+| `0010_diagrams`              | `diagrams`                                                                                       |
+| `0011_focus_sessions`        | `focus_sessions`                                                                                 |
+| `0012_users`                 | `users`, `invitations`, `user_settings`; `user_id` on every owned table (hand-edited, see below) |
+| `0013_drop_display_name`     | drops `users.display_name`                                                                       |
+| `0014_flashcard_distractors` | `flashcards.distractors_json` (wrong options for multiple choice)                                |
+| `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
 
@@ -106,6 +108,8 @@ concepts_json`.
   User settings key `study_timer` holds the timer options.
 - **flashcards**:
   - content and links: `document_id?, page?, concept_id?, front, back`;
+  - `distractors_json?`: three wrong answers (JSON array) for multiple choice, written
+    by Claude; null until then, and reset when the front or back is edited;
   - `author, status (active|proposed|rejected)`;
   - scheduling: `fsrs_json` (ts-fsrs Card) and `due_at`.
 - **reviews** `flashcard_id (cascade), rating 1–4, reviewed_at, day (local)`.

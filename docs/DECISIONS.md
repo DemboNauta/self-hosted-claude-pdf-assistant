@@ -56,6 +56,26 @@ change them if he disagrees.
     student cuts in with the "Preguntar" button (also shown on desktop); no second
     microphone is opened there.
 
+- **Claude on the page (2026-09-27).** Claude's pointer marks must not get in the
+  way once it has finished: they fade after the answer (and its speech) and have a
+  × to remove them. The owner chose "point inside figures" and "margin notes" from
+  a list of ideas (not the guided voice tour or word-by-word highlighting). Margin
+  notes are proposals the student keeps or discards; with no free margin they fold
+  into a tab so they never cover the text (Claude's call, after seeing them on a
+  phone).
+- **Highlights on dark PDF pages (2026-09-27):** they must stand out (they were
+  barely visible); done with the screen blend mode.
+- **Flashcards by Claude (2026-09-27).** Home shows a minimum of stats (the owner
+  picked: 30-day chart, cards of the day, weak concepts). Claude writes **new
+  cards, ready to review** (not proposals, and not a quiz session): a few every
+  day on the first visit to Home, and on demand in "Repaso" choosing subjects,
+  topics or PDFs, always from what was already read.
+- **Multiple choice (2026-09-27).** Every card is answered by choosing among **4
+  options** (faster than "Mostrar respuesta"), rated **automatically**: wrong =
+  "Otra vez", right = "Bien", or "Fácil" when fast. Claude writes the wrong
+  answers, also for the student's own cards.
+- **Stats chart:** hovering or tapping a day shows its time in hours/minutes.
+
 - Deleting a subject or topic that still has PDFs moves those PDFs to the trash
   for 30 days. Restoring asks for a destination topic.
 - Phase 1 started before Phase 0 was validated on the VPS.
