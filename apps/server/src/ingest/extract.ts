@@ -112,21 +112,91 @@ async function renderCover(pdf: PDFDocumentProxy, coverPath: string) {
   await fs.promises.writeFile(coverPath, await canvas.encode('webp', 80));
 }
 
+type Region = { x: number; y: number; w: number; h: number };
+type Canvas2D = ReturnType<ReturnType<typeof createCanvas>['getContext']>;
+
+/** Grid spacing (page fraction) that gives roughly 5–10 lines across `span`. */
+export function gridStep(span: number): number {
+  for (const step of [0.01, 0.02, 0.05, 0.1]) if (span / step <= 10) return step;
+  return 0.1;
+}
+
+/**
+ * Draws labelled grid lines in page fractions over a render of `region` (`pw`×`ph` are
+ * the pixel size of the whole page at this scale), so Claude can read coordinates for
+ * `point_at` rect anchors off the image.
+ */
+function drawGrid(ctx: Canvas2D, region: Region, pw: number, ph: number) {
+  const font = Math.max(14, Math.round(Math.max(pw * region.w, ph * region.h) / 80));
+  ctx.font = `${font}px sans-serif`;
+  ctx.lineWidth = 1;
+  const label = (text: string, x: number, y: number) => {
+    const m = ctx.measureText(text);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillRect(x - 1, y - 1, m.width + 4, font + 4);
+    ctx.fillStyle = '#c2185b';
+    ctx.fillText(text, x + 1, y + font);
+  };
+  // Each axis gets its own spacing, so a wide, short region still has several rows.
+  const lines = (from: number, span: number, draw: (v: number, text: string) => void) => {
+    const step = gridStep(span);
+    const digits = step < 0.1 ? 2 : 1;
+    for (let i = Math.ceil(from / step - 1e-9); i * step <= from + span + 1e-9; i++) {
+      draw(i * step, (i * step).toFixed(digits));
+    }
+  };
+  ctx.strokeStyle = 'rgba(194,24,91,0.35)';
+  lines(region.x, region.w, (v, text) => {
+    const px = Math.round((v - region.x) * pw) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, region.h * ph);
+    ctx.stroke();
+    label(`x${text}`, px + 2, 2);
+  });
+  lines(region.y, region.h, (v, text) => {
+    const py = Math.round((v - region.y) * ph) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, py);
+    ctx.lineTo(region.w * pw, py);
+    ctx.stroke();
+    label(`y${text}`, 2, py + 2);
+  });
+}
+
 /**
  * Renders one page as PNG for Claude (`get_page_image`: figures, formulas, diagrams).
- * The long side is capped so the image stays within what the model reads well.
+ * `region` (normalised page space) zooms into part of the page (up to 4×); `grid`
+ * overlays coordinates in page fractions. The long side is capped so the image stays
+ * within what the model reads well.
  */
-export async function renderPageImage(filePath: string, pageNumber: number, maxSide = 1400) {
+export async function renderPageImage(
+  filePath: string,
+  pageNumber: number,
+  opts: { region?: Region; grid?: boolean; maxSide?: number } = {},
+) {
+  const region = opts.region ?? { x: 0, y: 0, w: 1, h: 1 };
+  const maxSide = opts.maxSide ?? 1400;
   const pdf = await openPdf(filePath);
   try {
     const page = await pdf.getPage(pageNumber);
     const base = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: maxSide / Math.max(base.width, base.height) });
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const rw = Math.max(1, region.w * base.width);
+    const rh = Math.max(1, region.h * base.height);
+    const scale = Math.min(4, maxSide / Math.max(rw, rh));
+    const pw = base.width * scale;
+    const ph = base.height * scale;
+    const viewport = page.getViewport({
+      scale,
+      offsetX: -region.x * pw,
+      offsetY: -region.y * ph,
+    });
+    const canvas = createCanvas(Math.ceil(rw * scale), Math.ceil(rh * scale));
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvas: canvas as never, canvasContext: ctx as never, viewport }).promise;
+    if (opts.grid) drawGrid(ctx, region, pw, ph);
     return { png: await canvas.encode('png'), width: canvas.width, height: canvas.height };
   } finally {
     await pdf.loadingTask.destroy();

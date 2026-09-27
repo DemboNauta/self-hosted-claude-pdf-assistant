@@ -192,6 +192,65 @@ describe('annotations', () => {
     expect(JSON.stringify(await read.handler({} as never, {}))).toContain('Idea central');
   });
 
+  it('lets Claude propose margin notes, dropping those whose passage is not on the page', async () => {
+    const ctx: ToolContext = {
+      threadId: 't',
+      messageId: 'm',
+      docId,
+      scope: { kind: 'document', id: docId },
+      emit: () => {},
+      record: () => {},
+    };
+    const tool = annotationTools(servicesOf(app), ctx).find((t) => t.name === 'add_margin_notes')!;
+    const result = await tool.handler(
+      {
+        notes: [
+          { page: 1, quote: 'El ciclo de Calvin', text: 'Ocurre en el estroma.' },
+          { page: 1, quote: 'texto que no existe', text: 'Perdida' },
+        ],
+      } as never,
+      {},
+    );
+    expect(JSON.stringify(result)).toContain('Proposed 1 margin note');
+    const notes = await list();
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({
+      type: 'note',
+      author: 'claude',
+      status: 'proposed',
+      content: 'Ocurre en el estroma.',
+      anchor: { kind: 'text', quote: 'El ciclo de Calvin' },
+    });
+    expect((notes[0]!.anchor as HighlightAnchor).rects).toHaveLength(1);
+  });
+
+  it('saves a connecting arrow aimed at a quote with the box of that text', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/documents/${docId}/annotations`,
+      headers,
+      payload: {
+        items: [
+          {
+            type: 'shape',
+            page: 1,
+            color: 'claude',
+            author: 'claude',
+            anchor: { shape: 'arrow', quote: 'fotosíntesis', toQuote: 'ciclo de Calvin' },
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const anchor = res.json<Annotation[]>()[0]!.anchor as {
+      rects: { y: number }[];
+      to: { y: number; w: number };
+    };
+    expect(anchor.rects).toHaveLength(1);
+    expect(anchor.to.y).toBeGreaterThan(anchor.rects[0]!.y);
+    expect(anchor.to.w).toBeGreaterThan(0);
+  });
+
   it('exports a copy of the PDF with standard annotations', async () => {
     await app.inject({
       method: 'POST',

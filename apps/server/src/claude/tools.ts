@@ -162,25 +162,55 @@ export function readingTools(deps: ToolDeps, ctx: ToolContext) {
 
     tool(
       'get_page_image',
-      'Rendered image of one page, for figures, diagrams, tables and formulas.',
-      { docId: z.string(), page: z.number().int().min(1) },
+      [
+        'Rendered image of one page, for figures, diagrams, tables and formulas.',
+        'Pass "region" (page fractions, origin top-left) to zoom into part of the page, and "grid": true to overlay labelled coordinates in page fractions:',
+        'use them to place point_at rect anchors precisely on parts of a figure (zoom into the figure with the grid first, then read the coordinates off the image).',
+      ].join(' '),
+      {
+        docId: z.string(),
+        page: z.number().int().min(1),
+        region: z
+          .object({
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            w: z.number().min(0.02).max(1),
+            h: z.number().min(0.02).max(1),
+          })
+          .optional(),
+        grid: z.boolean().optional(),
+      },
       tracked(
         ctx,
         'get_page_image',
         ({ page }) => `p. ${page}`,
-        async ({ docId, page }) => {
+        async ({ docId, page, region, grid }) => {
           const doc = docOrError(docId);
           if (!doc) return fail(`Unknown document ${docId}.`);
           if (doc.pageCount && page > doc.pageCount)
             return fail(`The document has ${doc.pageCount} pages.`);
           const row = library.getLive(docId);
-          const img = await renderPageImage(row.filePath, page);
+          // Keep the region inside the page.
+          const r = region && {
+            x: region.x,
+            y: region.y,
+            w: Math.min(region.w, 1 - region.x),
+            h: Math.min(region.h, 1 - region.y),
+          };
+          const img = await renderPageImage(row.filePath, page, { region: r, grid });
+          const f = (n: number) => n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+          const where = r
+            ? ` Region x ${f(r.x)}–${f(r.x + r.w)}, y ${f(r.y)}–${f(r.y + r.h)} of the page.`
+            : '';
+          const coords = grid
+            ? ' Grid labels are page fractions (x from the left, y from the top).'
+            : '';
           return {
             content: [
               { type: 'image', data: img.png.toString('base64'), mimeType: 'image/png' },
               {
                 type: 'text',
-                text: `Page ${page} of "${doc.title}" (${img.width}×${img.height}px).`,
+                text: `Page ${page} of "${doc.title}" (${img.width}×${img.height}px).${where}${coords}`,
               },
             ],
           };
@@ -267,6 +297,8 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
       [
         'Draw temporary marks on a page of the PDF while you explain: arrow, circle, rect (box), highlight or label.',
         'Each shape has an anchor: {"kind":"text","quote":"exact words from the page"} (preferred; 2 to 12 consecutive words copied verbatim, add "occurrence" when the words repeat on the page) or {"kind":"rect","x":0.1,"y":0.2,"w":0.3,"h":0.1} in page fractions (origin top-left) for figures.',
+        'Labels and text inside figures are often in the text layer too, so try a text anchor first; otherwise read rect coordinates from get_page_image with "grid" (and "region" to zoom in).',
+        'An arrow with "to" (another anchor) connects two parts, e.g. one state of a diagram to the next; use several to walk through a figure step by step.',
         'Use "label" for a short note shown next to the mark. The viewer jumps to the page. Marks disappear when the student sends the next message.',
       ].join(' '),
       {
@@ -450,6 +482,61 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
           );
           changed();
           return text('Note added.');
+        },
+      ),
+    ),
+    tool(
+      'add_margin_notes',
+      [
+        'Propose short comments written in the margin next to passages of the PDF, like a teacher annotating a book: a clarification, a link to another idea, a warning about a common mistake, a mini example.',
+        'They appear as proposals in your colour that the student accepts (they become notes) or discards.',
+        'Quote each passage verbatim (3 to 40 consecutive words from the page); keep each comment brief (one or two sentences) and in the language of the student.',
+      ].join(' '),
+      {
+        docId: z.string().optional(),
+        notes: z
+          .array(
+            z.object({
+              page: z.number().int().min(1),
+              quote: z.string().min(3).max(1000),
+              text: z.string().min(1).max(400),
+            }),
+          )
+          .min(1)
+          .max(20),
+      },
+      tracked(
+        ctx,
+        'add_margin_notes',
+        ({ notes }) => `(${notes.length})`,
+        async ({ docId, notes }) => {
+          const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
+          deps.library.getLive(id);
+          const created = deps.annotations.create(
+            id,
+            notes.map((n) => ({
+              type: 'note' as const,
+              page: n.page,
+              color: 'claude',
+              content: n.text,
+              anchor: { kind: 'text' as const, quote: n.quote },
+            })),
+            { author: 'claude', status: 'proposed' },
+          );
+          // A note whose passage was not found has nowhere to sit in the margin: drop it.
+          const missing = created.filter((a) => !(a.anchor as { rects?: unknown[] }).rects?.length);
+          if (missing.length) deps.annotations.delete(missing.map((m) => m.id));
+          changed();
+          const shown = created.length - missing.length;
+          const warn = missing.length
+            ? ` ${missing.length} quote(s) were not found verbatim on their page (pages ${missing
+                .map((m) => m.page)
+                .join(', ')}) and were not added: check the exact wording and propose them again.`
+            : '';
+          return text(
+            `Proposed ${shown} margin note(s); the student can accept or discard them.${warn}`,
+          );
         },
       ),
     ),

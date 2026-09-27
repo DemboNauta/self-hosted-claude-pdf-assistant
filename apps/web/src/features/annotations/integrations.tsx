@@ -64,15 +64,20 @@ function SavePointersButton({ messageId }: { messageId: string }) {
     const byDoc = new Map<string, CreateAnnotation[]>();
     for (const g of groups) {
       for (const shape of g.shapes) {
-        const anchor =
+        const from =
           shape.anchor.kind === 'rect'
             ? {
-                shape: shape.type,
                 rects: [
                   { x: shape.anchor.x, y: shape.anchor.y, w: shape.anchor.w, h: shape.anchor.h },
                 ],
               }
-            : { shape: shape.type, quote: shape.anchor.quote };
+            : { quote: shape.anchor.quote };
+        const to = !shape.to
+          ? {}
+          : shape.to.kind === 'rect'
+            ? { to: { x: shape.to.x, y: shape.to.y, w: shape.to.w, h: shape.to.h } }
+            : { toQuote: shape.to.quote };
+        const anchor = { shape: shape.type, ...from, ...to };
         const list = byDoc.get(g.docId) ?? [];
         list.push({
           type: 'shape',

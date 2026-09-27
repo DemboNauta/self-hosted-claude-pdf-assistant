@@ -11,6 +11,7 @@ import { MessageSquare, StickyNote } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
+import { connectorPath } from '../reader/PointerLayer';
 import { useReader, type AnnotationFilter } from '../reader/store';
 import type { NormRect } from '../reader/textMatch';
 import {
@@ -21,6 +22,7 @@ import {
   usePalette,
 } from './api';
 import { AnnotationPopover } from './AnnotationPopover';
+import { isMarginNote, MarginNotes } from './MarginNotes';
 import { askAboutMark } from './mark';
 
 export function isVisible(a: Annotation, f: AnnotationFilter) {
@@ -182,7 +184,8 @@ export function AnnotationOverlay({
 
   const drawings = visible.filter((a) => a.type === 'drawing');
   const shapes = visible.filter((a) => a.type === 'shape');
-  const notes = visible.filter((a) => a.type === 'note');
+  const margin = visible.filter(isMarginNote);
+  const notes = visible.filter((a) => a.type === 'note' && !isMarginNote(a));
   // Open note windows: the pinned ones plus the one the user just opened.
   const windows = visible.filter((a) => a.display?.pinned);
   const selected = all.find((a) => a.id === active);
@@ -315,6 +318,23 @@ export function AnnotationOverlay({
               />
             );
           }
+          if (s.shape === 'arrow' && s.to) {
+            const link = connectorPath(
+              { x, y, w, h },
+              {
+                x: s.to.x * width - pad,
+                y: s.to.y * height - pad,
+                w: s.to.w * width + 2 * pad,
+                h: s.to.h * height + 2 * pad,
+              },
+            );
+            return (
+              <g key={a.id} stroke={c} strokeWidth={2}>
+                <path d={link.d} />
+                <polygon points={link.head} fill={c} />
+              </g>
+            );
+          }
           if (s.shape === 'arrow') {
             return (
               <g key={a.id} stroke={c} strokeWidth={2}>
@@ -393,6 +413,15 @@ export function AnnotationOverlay({
           </button>
         );
       })}
+
+      <MarginNotes
+        docId={docId}
+        notes={margin}
+        layers={layers}
+        width={width}
+        height={height}
+        boxOf={boxOf}
+      />
 
       {tool !== 'select' && (
         <InputSurface docId={docId} page={page} items={visible} width={width} height={height} />

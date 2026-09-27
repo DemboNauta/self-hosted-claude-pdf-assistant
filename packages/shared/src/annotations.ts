@@ -62,6 +62,10 @@ export const shapeAnchorSchema = z
     rects: z.array(normRectSchema).max(200).optional(),
     /** Text anchor of a saved Claude mark; resolved to rects by the server. */
     quote: z.string().max(1000).optional(),
+    /** Target of a connecting arrow (drawn from `rects` to `to`). */
+    to: normRectSchema.optional(),
+    /** Text target of a saved connecting arrow; resolved to `to` by the server. */
+    toQuote: z.string().max(1000).optional(),
   })
   .refine((a) => (a.rects?.length ?? 0) > 0 || Boolean(a.quote), 'rects or quote required');
 

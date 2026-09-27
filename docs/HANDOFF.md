@@ -31,6 +31,22 @@ Last updated: 2026-09-26 (multi-user and voice mode committed, **not deployed ye
 Phases 1, 2 and 3 of SPEC §13 are implemented, with unit and e2e tests (see
 `FEATURES.md`).
 
+Session of 2026-09-27 (owner's requests, deployed after each commit):
+
+- Highlights on dark PDF pages use `screen` blending (they were barely visible).
+- Claude's pointer marks fade once the answer (and its speech) ends, with a × to
+  dismiss them on the page.
+- Claude points inside figures: `get_page_image` takes `region` (zoom) and
+  `grid` (labelled page-fraction coordinates); `point_at` arrows take `to` to
+  connect two parts. Saved connectors keep their target (`to` / `toQuote`).
+- Claude margin notes: `add_margin_notes` proposes comments next to passages
+  (`MarginNotes.tsx`), outside the page when there is room, folded into a tab
+  otherwise; accepting turns one into a regular note. Not yet tried with the
+  real Claude.
+- Pending, asked by the owner: stats chart tooltips (hours/minutes on hover), a
+  minimum of stats on "Inicio", Claude-prepared review sessions shown there,
+  and improving how Claude talks in voice mode (owner not convinced by it).
+
 Session of 2026-09-26: the owner tried the app locally (fresh clone, see
 `DEVELOPMENT.md` "Fresh clone") and asked, **before the deployment**, for:
 

@@ -169,6 +169,8 @@ export const POINTER_SHAPES = ['arrow', 'circle', 'rect', 'highlight', 'label'] 
 export const pointerShapeSchema = z.object({
   type: z.enum(POINTER_SHAPES),
   anchor: anchorSchema,
+  /** Arrows only: draw the arrow from `anchor` to this target (connecting two parts). */
+  to: anchorSchema.optional(),
   label: z.string().max(200).optional(),
 });
 export type PointerShape = z.infer<typeof pointerShapeSchema>;

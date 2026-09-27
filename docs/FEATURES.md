@@ -53,15 +53,15 @@ server, not against real Claude yet.
 
 | ID         | Status  | Where / notes                                                                                                     |
 | ---------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| F-POINT-01 | ✅      | `point_at` tool → `PointerLayer.tsx` (arrow, circle, rect, highlight, label). Tried with real Claude.             |
+| F-POINT-01 | ✅      | `point_at` tool → `PointerLayer.tsx` (arrow, circle, rect, highlight, label; arrows with `to` connect two parts). |
 | F-POINT-02 | ✅      | Animated in, grouped per answer.                                                                                  |
-| F-POINT-03 | ✅      | Cleared with the next question or "Limpiar".                                                                      |
+| F-POINT-03 | ✅      | Fade after the answer; cleared with the next question, "Limpiar" or the × on the page.                            |
 | F-POINT-04 | ✅      | "Guardar" in the chat → `shape` annotations.                                                                      |
 | F-POINT-05 | ✅      | The viewer jumps to the page (provisional choice).                                                                |
 | F-ANN-01   | ✅      | 5 colours with editable meanings.                                                                                 |
 | F-ANN-02   | ✅      | Point notes (movable) and text-anchored notes. Note window: resizable, movable, pinnable, bottom sheet on phones. |
 | F-ANN-03   | ✅      | Freehand pen (pressure), eraser, movable drawings; "Preguntar" sends the marked area (text + image) to Claude.    |
-| F-ANN-04   | ✅ fake | `highlight_key_ideas` proposals, accept or discard one by one or in bulk.                                         |
+| F-ANN-04   | ✅ fake | `highlight_key_ideas` and `add_margin_notes` proposals, accept or discard one by one or in bulk.                  |
 | F-ANN-05   | ✅      | Layer toggle, filters by author and colour.                                                                       |
 | F-ANN-06   | ✅      | `GET /documents/:id/export-annotated` (pdf-lib, standard annotations).                                            |
 | F-ANN-07   | ✅      | `AnnotationsPanel.tsx`.                                                                                           |

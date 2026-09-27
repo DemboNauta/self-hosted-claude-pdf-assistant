@@ -89,6 +89,33 @@ const fakeChat = ((args: {
         {},
       );
     }
+    // "Nota al margen" makes the fake propose a margin note on the selection.
+    if (/nota al margen/i.test(question) && tools?.add_margin_notes && selected?.[2]) {
+      await tools.add_margin_notes.handler(
+        {
+          notes: [
+            { page: Number(page), quote: selected[2], text: 'Ojo: esto ocurre en el estroma.' },
+          ],
+        },
+        {},
+      );
+    }
+    // "Conecta" makes the fake draw an arrow from the selection to the top of the page.
+    if (/conecta/i.test(question) && tools?.point_at && quote) {
+      await tools.point_at.handler(
+        {
+          page: Number(page),
+          shapes: [
+            {
+              type: 'arrow',
+              anchor: { kind: 'text', quote },
+              to: { kind: 'rect', x: 0.6, y: 0.05, w: 0.2, h: 0.05 },
+            },
+          ],
+        },
+        {},
+      );
+    }
     if (/señala/i.test(question) && tools?.point_at && quote) {
       await tools.point_at.handler(
         {

@@ -58,6 +58,61 @@ test('highlight, comment, undo, accept Claude proposals and export', async ({ pa
   await expect(panel).toContainText('De Claude');
 });
 
+// Claude writes in the margin (proposals) and connects parts of the page with arrows.
+test('Claude margin notes are accepted or discarded, and arrows connect two parts', async ({
+  page,
+}, info) => {
+  await login(page);
+  const docId = await seedDocument(
+    page,
+    `Margen ${info.project.name}`,
+    tinyPdf([['La fotosintesis ocurre en los cloroplastos.', 'El ciclo de Calvin fija el CO2.']]),
+  );
+  await page.goto(`/read/${docId}`);
+  await expect(page.locator('[data-page="1"] .textLayer')).toContainText('Calvin');
+  const menu = page.getByRole('toolbar', { name: 'Acciones sobre la selección' });
+  const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
+  const ask = async (text: string, question: string) => {
+    await selectInPdf(page, text);
+    await menu.getByRole('button', { name: 'Preguntar' }).click();
+    await composer.fill(question);
+    await composer.press('Enter');
+    await expect(page.getByRole('button', { name: 'Detener' })).toBeHidden();
+  };
+
+  await ask('El ciclo de Calvin fija', 'Ponme una nota al margen');
+  const note = page.locator('[data-page="1"]').getByRole('note', {
+    name: 'Nota de Claude al margen',
+  });
+  // Without free margin next to the page the note is folded into a small tab.
+  const tab = page.locator('[data-page="1"]').getByRole('button', { name: 'Abrir nota de Claude' });
+  await tab.click();
+  await expect(note).toContainText('Ojo: esto ocurre en el estroma.');
+  await note.getByRole('button', { name: 'Plegar la nota' }).click();
+  await expect(note).toHaveCount(0);
+  await tab.click();
+  await note.getByRole('button', { name: 'Guardar la nota' }).click();
+  await expect(note).toHaveCount(0);
+  // Accepted, it is a regular note of the page.
+  await expect(
+    page.locator('[data-page="1"]').getByRole('button', { name: 'Abrir nota' }),
+  ).toHaveCount(1);
+
+  await ask('La fotosintesis ocurre', 'Otra nota al margen');
+  await tab.click();
+  await expect(note).toHaveCount(1);
+  await note.getByRole('button', { name: 'Descartar la nota' }).click();
+  await expect(note).toHaveCount(0);
+  await expect(
+    page.locator('[data-page="1"]').getByRole('button', { name: 'Abrir nota' }),
+  ).toHaveCount(1);
+
+  await ask('La fotosintesis ocurre', 'Conecta esto con el título');
+  const pointers = page.locator('[data-page="1"] [data-testid="claude-pointers"]');
+  await expect(pointers.locator('path.pointer-draw')).toHaveCount(1);
+  await expect(pointers.locator('polygon')).toHaveCount(1);
+});
+
 test('draw by hand and erase', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'mouse drawing');
   await login(page);

@@ -145,12 +145,23 @@ export class AnnotationService {
 
   /** Quote-only anchors get rectangles from the stored text layer (for export and Claude). */
   private withRects(docId: string, page: number, type: string, anchor: unknown) {
-    const a = anchor as { quote?: string; rects?: unknown[]; kind?: string };
+    let a = anchor as { quote?: string; rects?: unknown[]; kind?: string; toQuote?: string };
     const quoted =
       type === 'highlight' || type === 'shape' || (type === 'note' && a.kind === 'text');
     if (quoted && a.quote && !a.rects?.length) {
-      return { ...a, rects: quoteRects(pageItems(this.db, docId, page), a.quote) };
+      a = { ...a, rects: quoteRects(pageItems(this.db, docId, page), a.quote) };
     }
-    return anchor;
+    // A saved connecting arrow aimed at a quote: the box around that text.
+    if (type === 'shape' && a.toQuote && !('to' in a)) {
+      const rects = quoteRects(pageItems(this.db, docId, page), a.toQuote);
+      if (rects.length) {
+        const x = Math.min(...rects.map((r) => r.x));
+        const y = Math.min(...rects.map((r) => r.y));
+        const w = Math.max(...rects.map((r) => r.x + r.w)) - x;
+        const h = Math.max(...rects.map((r) => r.y + r.h)) - y;
+        a = { ...a, to: { x, y, w, h } } as typeof a;
+      }
+    }
+    return a;
   }
 }

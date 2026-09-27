@@ -5,6 +5,7 @@ import type { DocumentDetail, DocumentSummary, UploadSession } from '@pdfclaudea
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
+import { gridStep, renderPageImage } from '../src/ingest/extract.js';
 import type { IngestService } from '../src/ingest/service.js';
 import { titleFromFilename } from '../src/services/uploads.js';
 import { makePdf } from './fixtures/pdf.js';
@@ -215,6 +216,32 @@ describe('upload and ingestion', () => {
   it('derives titles from file names', () => {
     expect(titleFromFilename('Tema_3 Derivadas.PDF')).toBe('Tema 3 Derivadas');
     expect(titleFromFilename('.pdf')).toBe('Documento sin título');
+  });
+});
+
+describe('page images for Claude', () => {
+  it('zooms into a region and overlays a coordinate grid', async () => {
+    const file = path.join(dataDir, 'figure.pdf');
+    fs.writeFileSync(file, await makePdf([['Figura 1']]));
+    const whole = await renderPageImage(file, 1);
+    expect(Math.max(whole.width, whole.height)).toBe(1400);
+    const plain = await renderPageImage(file, 1, { region: { x: 0, y: 0, w: 0.5, h: 0.25 } });
+    // Half the page width, zoomed in: at most 4× and never beyond the size cap.
+    expect(plain.width).toBe(Math.ceil(595 * 0.5 * 4));
+    expect(plain.height).toBe(Math.ceil(842 * 0.25 * 4));
+    const grid = await renderPageImage(file, 1, {
+      region: { x: 0, y: 0, w: 0.5, h: 0.25 },
+      grid: true,
+    });
+    expect(grid.width).toBe(plain.width);
+    expect(grid.png.equals(plain.png)).toBe(false);
+  });
+
+  it('picks a grid spacing of about 5–10 lines', () => {
+    expect(gridStep(1)).toBe(0.1);
+    expect(gridStep(0.4)).toBe(0.05);
+    expect(gridStep(0.15)).toBe(0.02);
+    expect(gridStep(0.05)).toBe(0.01);
   });
 });
 

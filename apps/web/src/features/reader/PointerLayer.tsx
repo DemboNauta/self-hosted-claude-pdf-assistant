@@ -32,6 +32,48 @@ interface Resolved {
   shape: PointerShape;
   rects: NormRect[];
   box: NormRect;
+  /** Target of a connecting arrow. */
+  to?: NormRect;
+}
+
+type Pt = { x: number; y: number };
+type Box = { x: number; y: number; w: number; h: number };
+
+/** Where the segment from the centre of `b` towards `p` leaves the box. */
+function exitPoint(b: Box, p: Pt): Pt {
+  const c = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const dx = p.x - c.x;
+  const dy = p.y - c.y;
+  if (!dx && !dy) return c;
+  const t = Math.min(
+    dx ? b.w / 2 / Math.abs(dx) : Infinity,
+    dy ? b.h / 2 / Math.abs(dy) : Infinity,
+  );
+  return { x: c.x + dx * Math.min(t, 1), y: c.y + dy * Math.min(t, 1) };
+}
+
+/**
+ * A gently curved arrow from the edge of box `a` to the edge of box `b` (pixels), with
+ * its head at `b`. Shared by live pointers and saved marks.
+ */
+export function connectorPath(a: Box, b: Box, gap = 4) {
+  const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+  const cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const s0 = exitPoint(a, cb);
+  const e0 = exitPoint(b, ca);
+  const len = Math.hypot(e0.x - s0.x, e0.y - s0.y) || 1;
+  const ux = (e0.x - s0.x) / len;
+  const uy = (e0.y - s0.y) / len;
+  const s = { x: s0.x + ux * gap, y: s0.y + uy * gap };
+  const e = { x: e0.x - ux * gap, y: e0.y - uy * gap };
+  // Bend sideways a little so parallel connectors stay apart and read as hand drawn.
+  const bend = Math.min(40, len * 0.15);
+  const q = { x: (s.x + e.x) / 2 - uy * bend, y: (s.y + e.y) / 2 + ux * bend };
+  const angle = Math.atan2(e.y - q.y, e.x - q.x);
+  const head = 10;
+  const p1 = `${e.x - head * Math.cos(angle - 0.45)},${e.y - head * Math.sin(angle - 0.45)}`;
+  const p2 = `${e.x - head * Math.cos(angle + 0.45)},${e.y - head * Math.sin(angle + 0.45)}`;
+  return { d: `M${s.x},${s.y} Q${q.x},${q.y} ${e.x},${e.y}`, head: `${e.x},${e.y} ${p1} ${p2}` };
 }
 
 /** One mark, in CSS pixels of the page (`w`×`h`). */
@@ -90,6 +132,24 @@ function Mark({ r, w, h, delay }: { r: Resolved; w: number; h: number; delay: nu
       );
       break;
     case 'arrow': {
+      if (r.to) {
+        const c = connectorPath(
+          { x: bx, y: by, w: bw, h: bh },
+          {
+            x: r.to.x * w - pad,
+            y: r.to.y * h - pad,
+            w: r.to.w * w + pad * 2,
+            h: r.to.h * h + pad * 2,
+          },
+        );
+        shape = (
+          <g>
+            <path d={c.d} pathLength={1} className="pointer-draw" style={style} />
+            <polygon points={c.head} fill={CLAUDE} className="pointer-fade" style={style} />
+          </g>
+        );
+        break;
+      }
       // Comes in from the left margin, or from above when the target is near the edge.
       const tx = bx - 2;
       const ty = by + bh / 2;
@@ -172,7 +232,9 @@ export function PointerLayer({
       for (const shape of group.shapes) {
         const rects = resolveAnchor(shape.anchor, layers);
         const box = unionRect(rects);
-        if (box) marks.push({ shape, rects, box });
+        const to =
+          shape.type === 'arrow' && shape.to ? unionRect(resolveAnchor(shape.to, layers)) : null;
+        if (box) marks.push({ shape, rects, box, ...(to && { to }) });
       }
       out.push({ group, marks });
     }
