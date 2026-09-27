@@ -209,10 +209,21 @@ body {
   }
 }
 
+/* Highlights multiply over white paper: text keeps its ink, the paper takes the colour. */
+.annotation-underlay {
+  --hl-boost: 1;
+  mix-blend-mode: multiply;
+}
+
 /* Dark PDF pages (F-VIS-04): invert and soften the canvas, keep hues. */
 [data-theme='dark'][data-dark-pdf='on'] [data-page] {
   background: #1c1c1b;
   & canvas {
     filter: invert(0.88) hue-rotate(180deg) contrast(0.95);
+  }
+  /* Multiply would only tint the light text; screen lights the dark paper instead. */
+  & .annotation-underlay {
+    --hl-boost: 1.2;
+    mix-blend-mode: screen;
   }
 }

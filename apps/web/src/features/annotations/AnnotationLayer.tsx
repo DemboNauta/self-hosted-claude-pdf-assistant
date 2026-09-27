@@ -101,7 +101,8 @@ export function AnnotationUnderlay({ docId, page }: { docId: string; page: numbe
       isVisible(a, filter),
   );
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 mix-blend-multiply">
+    // Blend mode and --hl-boost switch for dark PDF pages in styles.css.
+    <div aria-hidden className="annotation-underlay pointer-events-none absolute inset-0">
       {items.flatMap((a) =>
         rectsOf(a).map((r, i) => (
           <div
@@ -113,14 +114,15 @@ export function AnnotationUnderlay({ docId, page }: { docId: string; page: numbe
             style={{
               ...pct(r),
               background: colorOf(a.color),
-              opacity:
+              opacity: `calc(var(--hl-boost) * ${
                 a.type === 'note'
                   ? 0.25
                   : a.status === 'proposed'
                     ? 0.3
                     : a.id === active
                       ? 0.6
-                      : 0.42,
+                      : 0.42
+              })`,
               outlineColor: colorOf(a.color),
             }}
             data-annotation={a.id}
