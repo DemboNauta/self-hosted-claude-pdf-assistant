@@ -1,10 +1,15 @@
 # PdfClaudeAssistant
 
 Self-hosted study assistant: a PDF reader with Claude as a tutor. Claude reads your
-PDFs, answers with page citations, points at things on the page, highlights, builds
-summaries and quizzes, remembers what you struggle with and schedules reviews.
+PDFs, answers with page citations, points at things on the page, highlights, explains
+on a hand-drawn whiteboard (and corrects what you draw on it), builds summaries and
+quizzes, writes multiple-choice flashcards with spaced repetition, and remembers what
+you struggle with. It can also talk: a voice mode explains out loud and lets you
+interrupt.
 
-Single user, runs on your own VPS. See [`SPEC.md`](SPEC.md) for the full product spec.
+Multi-user, runs on your own VPS: the admin creates accounts or sends single-use
+invitation links, every user's data is isolated, and each user connects their own
+Claude subscription. See [`SPEC.md`](SPEC.md) for the full product spec.
 
 > **Claude runs through your Claude subscription (Pro/Max), never an API key.**
 > The backend uses the Claude Agent SDK, which drives Claude Code with your
@@ -55,13 +60,14 @@ anyway). Database migrations run automatically when the server starts.
    `/opt/pdfclaudeassistant/.env` (with a random `SESSION_SECRET`) and `data/`,
    and publishes the Caddy block. It stops before starting the app because
    there is no login password yet.
-2. `.\scripts\deploy.ps1 -SetPassword`: asks for the password on your PC and
+2. `.\scripts\deploy.ps1 -SetPassword`: asks for the admin password on your PC and
    stores its argon2 hash in `.env` (the password travels over SSH stdin and is
    never written to disk). This starts the app.
 3. Connect Claude (next section): run `claude setup-token` on your PC, then
    `.\scripts\deploy.ps1 -SetClaudeToken` and paste the token.
-4. Open `https://<APP_DOMAIN>`, log in and check **Ajustes → Conexión con
+4. Open `https://<APP_DOMAIN>`, log in as `admin` and check **Ajustes → Conexión con
    Claude**: it should say _Conectado con tu suscripción_.
+5. Invite other users from **Usuarios** (accounts or single-use invitation links).
 
 Other settings (`CLAUDE_MODEL`, `MAX_UPLOAD_MB`, `OCR_LANGS`) are edited in
 `/opt/pdfclaudeassistant/.env`, followed by `systemctl restart pdfclaudeassistant`.
@@ -98,8 +104,15 @@ proxy (`DOMAIN` in `.env`). Create `.env` from `.env.example`; the hash comes fr
 
 ## Connecting Claude to your subscription
 
-The server uses a long-lived subscription token. It stays on the server (in
-`.env`) and never reaches the browser.
+Each user brings their own subscription; nobody's turns use someone else's.
+
+- **The admin** uses the server's token (in `.env`, set as below) or a personal one
+  saved in Settings.
+- **Every other user** runs `claude setup-token` and pastes the token in
+  **Ajustes → Tu token de Claude**. It is stored encrypted and never reaches the
+  browser again.
+
+Setting the server's token:
 
 1. On any machine with Claude Code installed, run `claude setup-token` and sign
    in with your Claude account in the browser window it opens.
