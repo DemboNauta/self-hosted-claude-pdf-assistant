@@ -47,6 +47,8 @@ follows the same pattern:
     (first `.env` only), `PCA_DEPLOY_DIR`, `PCA_SSH_KEY`;
   - deploy: refuses uncommitted tracked changes unless `-AllowDirty`;
     `git archive HEAD` → `scp` with `scripts/deploy-remote.sh` (as LF) → `ssh`;
+  - every step line shows the local date and time, and the last one how long the
+    deploy took;
   - `-SetPassword` / `-SetClaudeToken`: read the secret with
     `Read-Host -AsSecureString` and send it over SSH **stdin**.
 - `scripts/deploy-remote.sh <command> <dir> …` (as root on the VPS):

@@ -48,7 +48,12 @@ if (-not $Dir) { $Dir = '/opt/pdfclaudeassistant' }
 if (-not $Key) { $Key = Join-Path $env:USERPROFILE '.ssh\id_ed25519' }
 if (-not $Port) { $Port = '8004' }
 
-function Write-Step([string]$Message) { Write-Host "[PdfClaudeAssistant] $Message" -ForegroundColor Cyan }
+# Every step shows the local time, so the log says when the deploy ran.
+$started = Get-Date
+function Write-Step([string]$Message) {
+  Write-Host "[PdfClaudeAssistant $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message" -ForegroundColor Cyan
+}
+function Get-Elapsed { '{0:mm\:ss}' -f ((Get-Date) - $started) }
 
 if (-not $DeployHost) { throw 'Set PCA_DEPLOY_HOST (e.g. root@<VPS_HOST>) or pass -DeployHost.' }
 if (-not (Test-Path $Key)) { throw "SSH key not found: $Key" }
@@ -137,7 +142,7 @@ try {
     exit 3
   }
   if ($code -ne 0) { throw "Remote deploy failed (exit code $code)." }
-  Write-Step "Done: revision $rev is live."
+  Write-Step "Done: revision $rev is live (took $(Get-Elapsed))."
 }
 finally {
   Pop-Location
