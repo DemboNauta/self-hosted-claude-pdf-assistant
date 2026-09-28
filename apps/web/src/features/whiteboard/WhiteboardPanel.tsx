@@ -1,5 +1,14 @@
 import clsx from 'clsx';
-import { CheckCheck, ChevronDown, ChevronUp, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
+  Columns2,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  PanelRightClose,
+} from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { t } from '../../i18n';
 import { Markdown } from '../chat/Markdown';
@@ -58,14 +67,38 @@ function CheckButton() {
   );
 }
 
+/** In the chat's board tab while the board is open next to the PDF. */
+export function DockedNotice() {
+  return (
+    <div className="text-text-muted flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm">
+      <p>{t.board.docked}</p>
+      <button
+        type="button"
+        onClick={() => {
+          useBoard.getState().setDocked(false);
+          useBoard.getState().setView('board');
+        }}
+        className="border-border hover:bg-surface-muted text-text flex items-center gap-1.5 rounded-md border px-3 py-1.5"
+      >
+        <PanelRightClose size={16} aria-hidden />
+        {t.board.undock}
+      </button>
+    </div>
+  );
+}
+
+const iconButton = 'text-text-muted hover:text-text hover:bg-surface-muted rounded-md p-1.5';
+
 /**
- * The whiteboard tab of the chat panel (visual interaction, block 2): the hand-drawn
- * board Claude explains on and the student can draw on, with the current answer below.
- * "Ampliar" shows it over the whole screen.
+ * The whiteboard (visual interaction, block 2): the hand-drawn board Claude explains on
+ * and the student can draw on, with the current answer below. It lives in the chat's
+ * board tab or, `docked`, next to the PDF ("Abrir junto al PDF"); "Ampliar" shows it over
+ * the whole screen.
  */
-export function WhiteboardPanel() {
+export function WhiteboardPanel({ docked = false }: { docked?: boolean }) {
   const expanded = useBoard((s) => s.expanded);
   const setExpanded = useBoard((s) => s.setExpanded);
+  const dockable = useBoard((s) => s.dockable);
 
   useEffect(() => {
     if (!expanded) return;
@@ -101,6 +134,33 @@ export function WhiteboardPanel() {
       <div className="border-border flex items-center gap-2 border-t px-2 py-1">
         <CheckButton />
         <span className="flex-1" />
+        {docked ? (
+          <button
+            type="button"
+            onClick={() => {
+              useBoard.getState().setDocked(false);
+              useBoard.getState().setView('board');
+            }}
+            aria-label={t.board.undock}
+            title={t.board.undock}
+            className={iconButton}
+          >
+            <PanelRightClose size={16} aria-hidden />
+          </button>
+        ) : (
+          dockable &&
+          !expanded && (
+            <button
+              type="button"
+              onClick={() => useBoard.getState().setDocked(true)}
+              aria-label={t.board.dock}
+              title={t.board.dock}
+              className={iconButton}
+            >
+              <Columns2 size={16} aria-hidden />
+            </button>
+          )
+        )}
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}

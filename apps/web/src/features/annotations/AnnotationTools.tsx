@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import {
   Eraser,
+  Highlighter,
   MessageSquare,
   MousePointer2,
   PenLine,
@@ -12,11 +13,12 @@ import {
 import { useEffect } from 'react';
 import { t } from '../../i18n';
 import { useReader, type AnnotationTool } from '../reader/store';
-import { redo, undo, useAnnotationHistory } from './api';
+import { redo, undo, useAnnotationHistory, usePalette } from './api';
 import { askAboutMark } from './mark';
 
 const TOOLS: { id: AnnotationTool; icon: LucideIcon; label: string }[] = [
   { id: 'select', icon: MousePointer2, label: t.annotations.tools.select },
+  { id: 'highlight', icon: Highlighter, label: t.annotations.tools.highlight },
   { id: 'draw', icon: PenLine, label: t.annotations.tools.draw },
   { id: 'erase', icon: Eraser, label: t.annotations.tools.erase },
   { id: 'note', icon: StickyNote, label: t.annotations.tools.note },
@@ -54,6 +56,9 @@ export function AnnotationTools() {
   const setTool = useReader((s) => s.setTool);
   const pen = useReader((s) => s.pen);
   const setPen = useReader((s) => s.setPen);
+  const highlightColor = useReader((s) => s.highlightColor);
+  const setHighlightColor = useReader((s) => s.setHighlightColor);
+  const { palette } = usePalette();
   const docId = useReader((s) => s.docId);
   const drawn = useReader((s) => s.drawn);
   const clearDrawn = useReader((s) => s.clearDrawn);
@@ -85,6 +90,33 @@ export function AnnotationTools() {
           <x.icon size={18} aria-hidden />
         </button>
       ))}
+      {tool === 'highlight' && (
+        <>
+          <span className="bg-border mx-1 h-6 w-px" aria-hidden />
+          <div
+            role="radiogroup"
+            aria-label={t.annotations.tools.highlightColor}
+            className="flex gap-1"
+          >
+            {palette.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                role="radio"
+                aria-checked={highlightColor === p.key}
+                aria-label={p.meaning}
+                title={p.meaning}
+                onClick={() => setHighlightColor(p.key)}
+                className={clsx(
+                  'size-6 rounded-full ring-offset-1',
+                  highlightColor === p.key && 'ring-text ring-2',
+                )}
+                style={{ background: p.color }}
+              />
+            ))}
+          </div>
+        </>
+      )}
       {tool === 'draw' && (
         <>
           <span className="bg-border mx-1 h-6 w-px" aria-hidden />

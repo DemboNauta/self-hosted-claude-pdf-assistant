@@ -11,6 +11,7 @@ import { MessageSquare, StickyNote } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
+import { rangeRects } from '../reader/SelectionMenu';
 import { connectorPath } from '../reader/PointerLayer';
 import { useReader, type AnnotationFilter } from '../reader/store';
 import type { NormRect } from '../reader/textMatch';
@@ -22,6 +23,7 @@ import {
   usePalette,
 } from './api';
 import { AnnotationPopover } from './AnnotationPopover';
+import { caretInLayer, rangeText, wordRange, type Caret } from './highlighter';
 import { isMarginNote, MarginNotes } from './MarginNotes';
 import { askAboutMark } from './mark';
 
@@ -507,7 +509,10 @@ function translateAnchor(a: Annotation, dx: number, dy: number): Annotation['anc
   };
 }
 
-/** Pen, eraser and note-pin input (F-ANN-02, F-ANN-03), with pen pressure when available. */
+/**
+ * Highlighter, pen, eraser and note-pin input (F-ANN-01/02/03), with pen pressure when
+ * available.
+ */
 function InputSurface({
   docId,
   page,
@@ -528,6 +533,49 @@ function InputSurface({
   const [live, setLive] = useState<Stroke | null>(null);
   const drawing = useRef<Stroke | null>(null);
   const surface = useRef<HTMLDivElement>(null);
+  const highlightColor = useReader((s) => s.highlightColor);
+  const { colorOf } = usePalette();
+  const marking = useRef<{ start: Caret; range: Range | null } | null>(null);
+  const [marked, setMarked] = useState<NormRect[]>([]);
+
+  /** The caret under the pointer in this page's text layer (looking through the surface). */
+  const caretAt = (e: RPointerEvent): Caret | null => {
+    const el = surface.current!;
+    const layer = el.closest('[data-page]')?.querySelector<HTMLElement>('.textLayer');
+    if (!layer) return null;
+    el.style.pointerEvents = 'none';
+    try {
+      return caretInLayer(layer, e.clientX, e.clientY);
+    } finally {
+      el.style.pointerEvents = '';
+    }
+  };
+
+  const markTo = (e: RPointerEvent) => {
+    const m = marking.current;
+    const end = m && caretAt(e);
+    const pageEl = surface.current!.closest<HTMLElement>('[data-page]');
+    if (!m || !end || !pageEl) return;
+    m.range = wordRange(m.start, end);
+    setMarked(rangeRects(m.range, pageEl));
+  };
+
+  const finishMark = () => {
+    const m = marking.current;
+    marking.current = null;
+    const rects = marked;
+    setMarked([]);
+    const quote = m?.range ? rangeText(m.range) : '';
+    if (quote.length < 2 || !rects.length) return;
+    void createAnnotations(docId, [
+      {
+        type: 'highlight',
+        page,
+        color: highlightColor,
+        anchor: { quote: quote.slice(0, 8000), rects: rects.slice(0, 200) },
+      },
+    ]);
+  };
 
   const at = (e: RPointerEvent): [number, number, number] => {
     const box = surface.current!.getBoundingClientRect();
@@ -553,7 +601,13 @@ function InputSurface({
       data-annotation-ui
       className={clsx(
         'absolute inset-0 z-20',
-        tool === 'erase' ? 'cursor-cell' : tool === 'note' ? 'cursor-copy' : 'cursor-crosshair',
+        tool === 'erase'
+          ? 'cursor-cell'
+          : tool === 'note'
+            ? 'cursor-copy'
+            : tool === 'highlight'
+              ? 'cursor-text'
+              : 'cursor-crosshair',
       )}
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
@@ -569,6 +623,12 @@ function InputSurface({
           return;
         }
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        if (tool === 'highlight') {
+          const start = caretAt(e);
+          marking.current = start ? { start, range: null } : null;
+          if (start) markTo(e);
+          return;
+        }
         if (tool === 'erase') {
           eraseAt(x, y);
           drawing.current = { points: [[x, y, p]], width: pen.width, color: pen.color };
@@ -578,6 +638,7 @@ function InputSurface({
         setLive(drawing.current);
       }}
       onPointerMove={(e) => {
+        if (tool === 'highlight') return markTo(e);
         const d = drawing.current;
         if (!d) return;
         const [x, y, p] = at(e);
@@ -588,6 +649,7 @@ function InputSurface({
         setLive({ ...d, points: [...d.points] });
       }}
       onPointerUp={() => {
+        if (tool === 'highlight') return finishMark();
         const d = drawing.current;
         drawing.current = null;
         setLive(null);
@@ -598,7 +660,28 @@ function InputSurface({
           if (created) useReader.getState().addDrawn(page, created.id);
         });
       }}
+      onPointerCancel={() => {
+        marking.current = null;
+        setMarked([]);
+        drawing.current = null;
+        setLive(null);
+      }}
     >
+      {marked.map((r, i) => (
+        <div
+          key={i}
+          aria-hidden
+          data-testid="highlighter-preview"
+          className="pointer-events-none absolute rounded-[2px] opacity-40 mix-blend-multiply"
+          style={{
+            left: r.x * width,
+            top: r.y * height,
+            width: r.w * width,
+            height: r.h * height,
+            background: colorOf(highlightColor),
+          }}
+        />
+      ))}
       {live && (
         <svg
           className="pointer-events-none absolute inset-0"

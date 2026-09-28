@@ -39,8 +39,8 @@ import { t } from '../../i18n';
 import { useReader } from '../reader/store';
 import { useVoice } from '../voice/store';
 import { VoiceBar, VoiceToggle, voiceSupported } from '../voice/VoiceBar';
-import { useBoard } from '../whiteboard/store';
-import { WhiteboardPanel } from '../whiteboard/WhiteboardPanel';
+import { isDocked, useBoard } from '../whiteboard/store';
+import { DockedNotice, WhiteboardPanel } from '../whiteboard/WhiteboardPanel';
 import { CITATION_EVENT } from './CitationChip';
 import { dictationSupported, useDictation } from './dictation';
 import { Markdown } from './Markdown';
@@ -755,6 +755,7 @@ function ViewTabs() {
 export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
   const connected = useChat((s) => s.connected);
   const view = useBoard((s) => s.view);
+  const docked = useBoard(isDocked);
   const title = useChat((s) => s.threads.find((th) => th.id === s.threadId)?.title);
 
   useEffect(() => {
@@ -777,7 +778,7 @@ export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
         {headerActions}
       </header>
       <ErrorBanner />
-      {view === 'board' ? <WhiteboardPanel /> : <MessageList />}
+      {view !== 'board' ? <MessageList /> : docked ? <DockedNotice /> : <WhiteboardPanel />}
       <Composer />
     </section>
   );

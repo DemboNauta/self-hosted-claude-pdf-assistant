@@ -19,6 +19,7 @@ import { DiagramsPanel } from '../diagrams/DiagramsPanel';
 import { MemoryPanel } from '../memory/MemoryPanel';
 import { FlashcardDialog, flashcardAction } from '../review/FlashcardDialog';
 import { useChat } from '../chat/store';
+import { ReaderWithBoard } from '../whiteboard/DockedBoard';
 import { libraryKey } from '../library/api';
 import { PdfViewer, type ReadingPositionUpdate } from './PdfViewer';
 import { NavOfferBar } from './NavOfferBar';
@@ -167,34 +168,36 @@ export function ReaderPage() {
         {panel === 'annotations' && <AnnotationsPanel docId={doc.id} />}
         {panel === 'memory' && <MemoryPanel docId={doc.id} />}
         {panel === 'diagrams' && <DiagramsPanel docId={doc.id} />}
-        <div className="relative min-w-0 flex-1">
-          {!ready ? (
-            <p className="text-text-muted p-6">{t.reader.notReady}</p>
-          ) : error ? (
-            <p className="text-danger p-6">{t.reader.loadError}</p>
-          ) : !pdf ? (
-            <p className="text-text-muted p-6">{t.common.loading}</p>
-          ) : (
-            <PdfViewer
-              pdf={pdf}
-              pageSizes={doc.pageSizes}
-              initialPage={citedPage ?? doc.lastPage}
-              initialScroll={citedPage ? 0 : doc.lastScroll}
-              onPosition={savePosition}
-              onScroller={setScroller}
-              underlay={(page) => <AnnotationUnderlay docId={doc.id} page={page} />}
-              overlay={(page, layers, size) => (
-                <>
-                  <AnnotationOverlay docId={doc.id} page={page} layers={layers} {...size} />
-                  <QuestionMarks docId={doc.id} page={page} layers={layers} {...size} />
-                  <PointerLayer pageNumber={page} docId={doc.id} layers={layers} {...size} />
-                </>
-              )}
-            />
-          )}
-          {showTools && pdf && <AnnotationTools />}
-          <NavOfferBar />
-        </div>
+        <ReaderWithBoard>
+          <div className="relative min-h-0 min-w-0 flex-1">
+            {!ready ? (
+              <p className="text-text-muted p-6">{t.reader.notReady}</p>
+            ) : error ? (
+              <p className="text-danger p-6">{t.reader.loadError}</p>
+            ) : !pdf ? (
+              <p className="text-text-muted p-6">{t.common.loading}</p>
+            ) : (
+              <PdfViewer
+                pdf={pdf}
+                pageSizes={doc.pageSizes}
+                initialPage={citedPage ?? doc.lastPage}
+                initialScroll={citedPage ? 0 : doc.lastScroll}
+                onPosition={savePosition}
+                onScroller={setScroller}
+                underlay={(page) => <AnnotationUnderlay docId={doc.id} page={page} />}
+                overlay={(page, layers, size) => (
+                  <>
+                    <AnnotationOverlay docId={doc.id} page={page} layers={layers} {...size} />
+                    <QuestionMarks docId={doc.id} page={page} layers={layers} {...size} />
+                    <PointerLayer pageNumber={page} docId={doc.id} layers={layers} {...size} />
+                  </>
+                )}
+              />
+            )}
+            {showTools && pdf && <AnnotationTools />}
+            <NavOfferBar />
+          </div>
+        </ReaderWithBoard>
         <SidePane />
         <ChatDock />
       </div>

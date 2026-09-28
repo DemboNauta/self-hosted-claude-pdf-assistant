@@ -83,7 +83,8 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
     - `store.ts`: the single `/ws/chat` socket with reconnect, and the chat
       state for one scope (document, topic or subject).
     - `ChatPanel` (mode bar with the diagram scope, composer with the attached
-      selection or drawing mark), `ChatDock` (desktop panel or mobile sheet),
+      selection or drawing mark), `ChatDock` (side panel on desktops and landscape tablets, bottom sheet with a
+      height grip on phones and portrait tablets),
       `Markdown` (citations become `cite:` links, then `CitationChip`;
       `[[diagram:ID]]` becomes a `DiagramEmbed`), `dictation.ts` (voice),
       `ScopeChatPage` (topic/subject chat).
@@ -98,12 +99,14 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
     pause, exit; floats over the reader when the chat is closed).
   - `annotations/`:
     - `api.ts`: queries and undoable mutations.
-    - `AnnotationLayer` (underlay, overlay, pen/eraser/note input, dragging
+    - `AnnotationLayer` (underlay, overlay, highlighter/pen/eraser/note input, dragging
       sticky notes and drawings), `AnnotationPopover` (the note window:
       floating or phone sheet, resizable, movable, pinnable; `display` is saved
       on the server; `popoverSize.ts` remembers the default size per layout),
       `AnnotationsPanel`, `AnnotationTools` (floating toolbar with "Preguntar"
       for new drawings, undo shortcuts).
+    - `highlighter.ts`: the highlighter tool's caret lookup under the pointer
+      (snapped to the nearest text span), whole-word range and quoted text.
     - `mark.ts`: builds the drawing mark (area + text inside) sent to the chat.
     - `MarginNotes.tsx`: Claude's proposed margin notes (beside the page, or
       folded into a tab when there is no room).
@@ -112,7 +115,9 @@ Other entry points (bundled by `build.mjs`): `dist/main.js`,
   - `diagrams/`: Mermaid loaded on demand and rendered in the app's colours
     (`mermaid.ts`), `DiagramView` (inline in the chat, full-screen viewer),
     `PanZoom` (free zoom and pan canvas), reader panel and `/diagrams` page.
-  - `whiteboard/`: the "Pizarra" tab of the chat panel. `convert.ts` (pure) turns
+  - `whiteboard/`: the "Pizarra" tab of the chat panel, or docked next to the PDF
+    (`DockedBoard.tsx` `ReaderWithBoard`, store `docked`/`dockable`/`dockSize`;
+    only one Excalidraw is mounted at a time). `convert.ts` (pure) turns
     Claude's board vocabulary into Excalidraw skeletons; `store.ts` loads the board
     per thread, draws Claude's steps in order when the answer reaches them (via
     `setBoardRevealer` in the chat store) and saves the scene (debounced PUT);

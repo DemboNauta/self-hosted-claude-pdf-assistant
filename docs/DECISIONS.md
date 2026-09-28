@@ -168,6 +168,17 @@ change them if he disagrees.
     personal use; it is not meant for other people. Per account, off by default,
     confirmed with a warning that usage counts against the admin's limits. A personal
     token saved by the account always wins. Migration `0018`.
+- **Tablet use (owner, 2026-09-28):**
+  - the whiteboard can open **next to the PDF** ("Abrir junto al PDF"): side by side
+    in landscape, on top of the PDF in portrait, with a draggable divider; the chat
+    goes back to the conversation meanwhile;
+  - **highlighting by painting**: a highlighter tool that turns a stroke over the
+    text into a normal highlight (snapped to whole words, colour picked in the
+    toolbar). The pen (S Pen) highlights **only with that tool chosen**; otherwise
+    it behaves like a finger;
+  - the chat is a **side panel in landscape tablets** (width dragged with a touch
+    grip) and a **bottom sheet with a free height** (dragged from its grip) in
+    portrait.
 
 ## Provisional product choices (Claude, "don't ask until deploy")
 

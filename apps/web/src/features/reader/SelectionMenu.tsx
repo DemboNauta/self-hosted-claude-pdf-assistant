@@ -35,6 +35,15 @@ export function readSelection(root: HTMLElement): Current | null {
   if (!pageEl || text.length < 2) return null;
   const rect = range.getBoundingClientRect();
   if (!rect.width && !rect.height) return null;
+  return {
+    selection: { page: Number(pageEl.dataset.page), text: text.slice(0, 8000) },
+    rect,
+    rects: rangeRects(range, pageEl),
+  };
+}
+
+/** The text boxes of a range on one page, one per line, in normalised page space. */
+export function rangeRects(range: Range, pageEl: HTMLElement): NormRect[] {
   const box = pageEl.getBoundingClientRect();
   const rects = [...range.getClientRects()]
     .filter(
@@ -46,11 +55,7 @@ export function readSelection(root: HTMLElement): Current | null {
       w: r.width / box.width,
       h: r.height / box.height,
     }));
-  return {
-    selection: { page: Number(pageEl.dataset.page), text: text.slice(0, 8000) },
-    rect,
-    rects: mergeRects(rects),
-  };
+  return mergeRects(rects);
 }
 
 export interface SelectionAction {

@@ -10,8 +10,18 @@ import { CITATION_EVENT } from './CitationChip';
 
 const WIDTH_KEY = 'pca.chat.width';
 const OPEN_KEY = 'pca.chat.open';
+const SHEET_KEY = 'pca.chat.sheet';
 const MIN_WIDTH = 300;
 const MAX_WIDTH = 720;
+/** Bottom sheet height as a fraction of the reader (dragged by its handle). */
+const MIN_SHEET = 0.2;
+const MAX_SHEET = 0.9;
+
+/**
+ * Side panel on desktops and on tablets held horizontally; bottom sheet on phones and
+ * tablets held vertically.
+ */
+const SIDE_QUERY = '(min-width: 1024px), (min-width: 768px) and (orientation: landscape)';
 
 /** Mobile bottom sheet heights (SPEC §4: half / full). */
 export type SheetState = 'closed' | 'half' | 'full';
@@ -37,25 +47,36 @@ interface DockState {
   /** Mobile: bottom sheet height. */
   sheet: SheetState;
   width: number;
+  /** Height of the half-open bottom sheet (fraction of the reader). */
+  sheetHeight: number;
   setOpen: (open: boolean) => void;
   setSheet: (sheet: SheetState) => void;
   setWidth: (width: number) => void;
+  setSheetHeight: (fraction: number) => void;
   /** Shows the chat whatever the screen size (selection menu, toolbar button). */
   show: () => void;
   toggle: () => void;
 }
 
-export const isDesktop = () => window.matchMedia('(min-width: 1024px)').matches;
+export const isDesktop = () => window.matchMedia(SIDE_QUERY).matches;
+
+const clampSheet = (f: number) => Math.min(MAX_SHEET, Math.max(MIN_SHEET, f));
 
 export const useChatDock = create<DockState>((set, get) => ({
   open: read(OPEN_KEY) !== '0',
   sheet: 'closed',
   width: Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Number(read(WIDTH_KEY)) || 400)),
+  sheetHeight: clampSheet(Number(read(SHEET_KEY)) || 0.55),
   setOpen: (open) => {
     write(OPEN_KEY, open ? '1' : '0');
     set({ open });
   },
   setSheet: (sheet) => set({ sheet }),
+  setSheetHeight: (fraction) => {
+    const f = clampSheet(fraction);
+    write(SHEET_KEY, f.toFixed(3));
+    set({ sheetHeight: f });
+  },
   setWidth: (width) => {
     const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
     write(WIDTH_KEY, String(Math.round(w)));
@@ -74,7 +95,7 @@ export const useChatDock = create<DockState>((set, get) => ({
 function useIsDesktop() {
   const [desktop, setDesktop] = useState(isDesktop);
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)');
+    const mq = window.matchMedia(SIDE_QUERY);
     const on = () => setDesktop(mq.matches);
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
@@ -110,15 +131,76 @@ function ResizeHandle() {
         if (e.key === 'ArrowLeft') setWidth(width + 24);
         if (e.key === 'ArrowRight') setWidth(width - 24);
       }}
-      className="hover:bg-border focus-visible:bg-border absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize"
-    />
+      className="group hover:bg-border focus-visible:bg-border absolute inset-y-0 -left-1.5 z-10 flex w-3 cursor-col-resize touch-none items-center justify-center"
+    >
+      {/* A visible grip for fingers and pens (there is no hover on touch screens). */}
+      <span className="bg-border group-hover:bg-text-muted h-10 w-1 rounded-full pointer-fine:hidden" />
+    </div>
   );
 }
 
-/** Where the chat lives: right panel on desktop, bottom sheet on phones and tablets. */
+/**
+ * Grip at the top of the bottom sheet: drag it to any height; dragging near the top opens
+ * it full, near the bottom closes it.
+ */
+function SheetHandle() {
+  const { sheet, sheetHeight, setSheet, setSheetHeight } = useChatDock();
+  const drag = useRef<{ box: DOMRect; fraction: number } | null>(null);
+  const fractionAt = (y: number, box: DOMRect) => (box.bottom - y) / box.height;
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const parent = e.currentTarget.closest('[data-testid="chat-sheet"]')?.parentElement;
+    if (!parent) return;
+    const box = parent.getBoundingClientRect();
+    drag.current = { box, fraction: fractionAt(e.clientY, box) };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: ReactPointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    d.fraction = fractionAt(e.clientY, d.box);
+    if (sheet === 'full') setSheet('half');
+    setSheetHeight(d.fraction);
+  };
+  const onUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    if (d.fraction > 0.95) setSheet('full');
+    else if (d.fraction < 0.12) setSheet('closed');
+  };
+  const current = sheet === 'full' ? 1 : sheetHeight;
+  return (
+    <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label={t.chat.resizeSheet}
+      aria-valuenow={Math.round(current * 100)}
+      aria-valuemin={Math.round(MIN_SHEET * 100)}
+      aria-valuemax={100}
+      tabIndex={0}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowUp') setSheetHeight(current + 0.05);
+        if (e.key === 'ArrowDown') setSheetHeight(current - 0.05);
+      }}
+      data-testid="chat-sheet-handle"
+      className="bg-surface flex h-5 shrink-0 cursor-row-resize touch-none items-center justify-center"
+    >
+      <span className="bg-border h-1 w-10 rounded-full" />
+    </div>
+  );
+}
+
+/**
+ * Where the chat lives: resizable right panel on desktop and landscape tablets, bottom
+ * sheet (height dragged by its grip) on phones and portrait tablets.
+ */
 export function ChatDock() {
   const desktop = useIsDesktop();
-  const { open, sheet, width, setOpen, setSheet } = useChatDock();
+  const { open, sheet, width, sheetHeight, setOpen, setSheet } = useChatDock();
 
   useEndVoiceOnLeave();
   const voiceActive = useVoice((s) => s.active);
@@ -159,10 +241,12 @@ export function ChatDock() {
     <div
       className={clsx(
         'border-border absolute inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-2xl border-t shadow-[0_-8px_24px_rgba(0,0,0,0.12)]',
-        sheet === 'full' ? 'top-0' : 'h-[55%]',
+        sheet === 'full' && 'top-0',
       )}
+      style={sheet === 'full' ? undefined : { height: `${sheetHeight * 100}%` }}
       data-testid="chat-sheet"
     >
+      <SheetHandle />
       <ChatPanel
         headerActions={
           <>

@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-28 (the admin can share the server's Claude with an account, for his own demo accounts: migration `0018`, **not deployed yet**; before that: visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-28 (tablet: whiteboard next to the PDF, highlighter tool, resizable chat, **not deployed yet**; before that: the admin can share the server's Claude with an account, for his own demo accounts: migration `0018`, **not deployed yet**; before that: visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -20,13 +20,21 @@ Last updated: 2026-09-28 (the admin can share the server's Claude with an accoun
 - **Never put the domain, the VPS IP or any VPS detail in the repo** (files,
   commits, docs). They live only in the VPS `.env`, the VPS Caddyfile and
   environment variables on the owner's PC. Ask him for them when needed.
-- Commits have **not been pushed** to GitHub. Ask before pushing.
+- The repo is on GitHub (`origin`, pushed on the owner's request on 2026-09-28).
+  Ask before pushing.
 - **Don't touch the owner's local data** (`data/` at the repo root). He uses the
   app with his own PDFs, and copying or reading them is off-limits (it was
   denied once). For manual tests, use the sandbox e2e server or a temp
   `DATA_DIR` with generated PDFs (see `DEVELOPMENT.md`).
 
 ## Where the work stopped
+
+Session of 2026-09-28 (later), tablet use, owner's requests and choices (DECISIONS
+"Tablet use"): the whiteboard opens next to the PDF, a highlighter tool highlights by
+painting over the text (S Pen only with the tool chosen), and the chat is a side panel
+on landscape tablets and a sheet with a free height in portrait. e2e `tablet.spec.ts`
+(desktop project, simulated sizes). **Not tried on the owner's real tablet yet**: check
+the S Pen with the highlighter and the grips there.
 
 Session of 2026-09-28: the owner asked for an admin option to let an account use
 his Claude subscription, for demo accounts that he uses himself (see DECISIONS).

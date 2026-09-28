@@ -54,6 +54,12 @@ interface BoardState {
   view: 'chat' | 'board';
   /** Board shown full screen. */
   expanded: boolean;
+  /** Board opened next to the PDF, outside the chat ("Abrir junto al PDF"). */
+  docked: boolean;
+  /** A reader is open, so the board can be docked next to its PDF. */
+  dockable: boolean;
+  /** Share of the reader the docked board takes (the rest is the PDF). */
+  dockSize: number;
   threadId: string | null;
   steps: BoardStep[];
   applied: string[];
@@ -63,11 +69,36 @@ interface BoardState {
   stepElements: Record<string, string[]>;
   setView: (view: 'chat' | 'board') => void;
   setExpanded: (expanded: boolean) => void;
+  setDocked: (docked: boolean) => void;
+  setDockable: (dockable: boolean) => void;
+  setDockSize: (size: number) => void;
+}
+
+const DOCK_SIZE_KEY = 'pca.board.dock';
+const clampDock = (v: number) => Math.min(0.75, Math.max(0.25, v));
+function readDockSize() {
+  try {
+    return clampDock(Number(localStorage.getItem(DOCK_SIZE_KEY)) || 0.5);
+  } catch {
+    return 0.5;
+  }
+}
+
+/** The board is showing next to the PDF (not inside the chat). */
+export const isDocked = (s: { docked: boolean; dockable: boolean } = useBoard.getState()) =>
+  s.docked && s.dockable;
+
+/** Brings the board into view: its chat tab, unless it is already open next to the PDF. */
+function showBoard() {
+  if (!isDocked()) useBoard.setState({ view: 'board' });
 }
 
 export const useBoard = create<BoardState>((set) => ({
   view: 'chat',
   expanded: false,
+  docked: false,
+  dockable: false,
+  dockSize: readDockSize(),
   threadId: null,
   steps: [],
   applied: [],
@@ -76,6 +107,18 @@ export const useBoard = create<BoardState>((set) => ({
   stepElements: {},
   setView: (view) => set({ view }),
   setExpanded: (expanded) => set({ expanded }),
+  // Docking shows the conversation in the chat again: the board is beside the PDF.
+  setDocked: (docked) => set(docked ? { docked, view: 'chat', expanded: false } : { docked }),
+  setDockable: (dockable) => set({ dockable }),
+  setDockSize: (size) => {
+    const dockSize = clampDock(size);
+    try {
+      localStorage.setItem(DOCK_SIZE_KEY, dockSize.toFixed(3));
+    } catch {
+      /* storage unavailable */
+    }
+    set({ dockSize });
+  },
 }));
 
 let excalidrawApi: ExcalidrawImperativeAPI | null = null;
@@ -384,14 +427,14 @@ function reveal(messageId: string, ids: string[] | null, exclude?: Set<string>) 
     return !applied.includes(key) && !queued.has(key);
   });
   if (!fresh.length) return;
-  useBoard.setState({ view: 'board' });
+  showBoard();
   void enqueue(fresh, { focus: true });
 }
 setBoardRevealer(reveal);
 
 /** Shows the board and what a step drew ("[[mark:w1]]" chip). */
 export function showStep(messageId: string, stepId: string) {
-  useBoard.setState({ view: 'board' });
+  showBoard();
   const ids = useBoard.getState().stepElements[`${messageId}:${stepId}`];
   if (!ids?.length) return;
   if (live()) focusElements(ids);

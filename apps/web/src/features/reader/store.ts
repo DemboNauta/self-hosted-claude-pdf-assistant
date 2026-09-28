@@ -4,8 +4,11 @@ export type ZoomMode = 'fit-width' | 'fit-page' | 'custom';
 export type SidePanel =
   'thumbnails' | 'outline' | 'search' | 'annotations' | 'memory' | 'diagrams' | null;
 
-/** Pointer tool on the page: normal reading/selection, freehand pen, eraser or note pin. */
-export type AnnotationTool = 'select' | 'draw' | 'erase' | 'note';
+/**
+ * Pointer tool on the page: normal reading/selection, highlighter (paint over text to
+ * highlight it), freehand pen, eraser or note pin.
+ */
+export type AnnotationTool = 'select' | 'highlight' | 'draw' | 'erase' | 'note';
 
 export interface AnnotationFilter {
   visible: boolean;
@@ -60,6 +63,8 @@ interface ReaderState {
   searchTerms: string | null;
   tool: AnnotationTool;
   pen: { color: string; width: number };
+  /** Palette key the highlighter paints with. */
+  highlightColor: string;
   filter: AnnotationFilter;
   /** Annotation whose popover is open. */
   activeAnnotation: string | null;
@@ -81,6 +86,7 @@ interface ReaderState {
   setSearchTerms: (terms: string | null) => void;
   setTool: (tool: AnnotationTool) => void;
   setPen: (pen: Partial<{ color: string; width: number }>) => void;
+  setHighlightColor: (key: string) => void;
   setFilter: (filter: Partial<AnnotationFilter>) => void;
   setActiveAnnotation: (id: string | null) => void;
   /** Records a new drawing; one on another page starts a new mark. */
@@ -107,6 +113,7 @@ export const useReader = create<ReaderState>((set, get) => ({
   searchTerms: null,
   tool: 'select',
   pen: { color: '#1f6feb', width: 0.003 },
+  highlightColor: 'yellow',
   filter: { visible: true, mine: true, claude: true, hiddenColors: [] },
   activeAnnotation: null,
   drawn: null,
@@ -147,6 +154,7 @@ export const useReader = create<ReaderState>((set, get) => ({
   setSearchTerms: (searchTerms) => set({ searchTerms }),
   setTool: (tool) => set({ tool, activeAnnotation: null }),
   setPen: (pen) => set({ pen: { ...get().pen, ...pen } }),
+  setHighlightColor: (highlightColor) => set({ highlightColor }),
   setFilter: (filter) => set({ filter: { ...get().filter, ...filter } }),
   setActiveAnnotation: (activeAnnotation) => set({ activeAnnotation }),
   addDrawn: (page, id) => {
