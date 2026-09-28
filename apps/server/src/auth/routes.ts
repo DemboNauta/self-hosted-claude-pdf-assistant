@@ -162,9 +162,13 @@ export async function registerAuth(
   app.post('/api/admin/users', async (req, reply) =>
     reply.code(201).send(await users.create(parse(createUserSchema, req.body))),
   );
-  app.patch('/api/admin/users/:id', async (req) =>
-    users.adminUpdate(id(req.params), parse(adminUpdateUserSchema, req.body)),
-  );
+  app.patch('/api/admin/users/:id', async (req) => {
+    const userId = id(req.params);
+    const patch = parse(adminUpdateUserSchema, req.body);
+    const updated = await users.adminUpdate(userId, patch);
+    if (patch.serverClaude !== undefined) onClaudeTokenChange(userId);
+    return updated;
+  });
   app.delete('/api/admin/users/:id', async (req, reply) => {
     users.delete(id(req.params));
     return reply.code(204).send();

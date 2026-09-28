@@ -23,7 +23,10 @@ export interface CurrentUser {
   role: UserRole;
   /** A personal Claude token is saved (its value is never sent back). */
   hasClaudeToken: boolean;
-  /** Claude is usable without a personal token (the admin uses the server's credentials). */
+  /**
+   * Claude is usable without a personal token: the account runs on the server's
+   * credentials (the admin, or a user the admin gave access to them).
+   */
   serverClaude: boolean;
 }
 
@@ -60,6 +63,8 @@ export interface AdminUser {
   username: string;
   role: UserRole;
   hasClaudeToken: boolean;
+  /** May use the server's (admin's) Claude credentials; always true for the admin. */
+  serverClaude: boolean;
   disabled: boolean;
   createdAt: string;
   lastLoginAt: string | null;
@@ -75,6 +80,8 @@ export type CreateUser = z.infer<typeof createUserSchema>;
 export const adminUpdateUserSchema = z.object({
   disabled: z.boolean().optional(),
   password: passwordSchema.optional(),
+  /** Let the user run on the admin's Claude subscription (used when they have no token). */
+  serverClaude: z.boolean().optional(),
 });
 export type AdminUpdateUser = z.infer<typeof adminUpdateUserSchema>;
 

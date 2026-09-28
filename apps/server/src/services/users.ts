@@ -98,7 +98,7 @@ export class UserService {
       username: row.username,
       role: row.role,
       hasClaudeToken: row.claudeTokenEnc !== null,
-      serverClaude: row.id === OWNER_ID,
+      serverClaude: row.id === OWNER_ID || row.serverClaude,
     };
   }
 
@@ -145,6 +145,11 @@ export class UserService {
     return enc ? this.box.open(enc) : null;
   }
 
+  /** Whether the admin lets this account use the server's Claude credentials. */
+  usesServerClaude(id: string): boolean {
+    return id === OWNER_ID || (this.row(id)?.serverClaude ?? false);
+  }
+
   // ---- admin --------------------------------------------------------------
 
   list(): AdminUser[] {
@@ -167,6 +172,7 @@ export class UserService {
         username: u.username,
         role: u.role,
         hasClaudeToken: u.claudeTokenEnc !== null,
+        serverClaude: u.id === OWNER_ID || u.serverClaude,
         disabled: u.disabledAt !== null,
         createdAt: u.createdAt,
         lastLoginAt: u.lastLoginAt,
@@ -202,6 +208,7 @@ export class UserService {
       set.disabledAt = patch.disabled ? (row.disabledAt ?? new Date().toISOString()) : null;
     }
     if (patch.password !== undefined) set.passwordHash = await hash(patch.password);
+    if (patch.serverClaude !== undefined && id !== OWNER_ID) set.serverClaude = patch.serverClaude;
     if (Object.keys(set).length) this.db.update(users).set(set).where(eq(users.id, id)).run();
     if (patch.disabled || patch.password !== undefined) this.sessions.revokeAllFor(id);
     return this.list().find((u) => u.id === id)!;

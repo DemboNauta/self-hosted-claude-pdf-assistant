@@ -20,7 +20,16 @@
     (stored encrypted, `users.claude_token_enc`). Their turns get it as
     `CLAUDE_CODE_OAUTH_TOKEN` and their own `CLAUDE_CONFIG_DIR`
     (`DATA_DIR/claude-users/<id>`), so they never reach the admin's login or
-    sessions. Without a token, chat turns fail with `not_configured` before any
+    sessions;
+  - unless the admin lets that user use the server's credentials
+    (`users.server_claude`, "Dejar usar mi Claude" in `/admin`, 2026-09-28, for the
+    owner's own demo accounts). Then, while the user has no personal token (a token
+    always wins), turns run as `{ kind: 'server' }`: no token of theirs in the env,
+    and their own `CLAUDE_CONFIG_DIR` when the server uses `CLAUDE_CODE_OAUTH_TOKEN`
+    (with an interactive login the default config dir is kept, because the login
+    lives there; sessions are still only resumed by the ids stored in their own
+    threads). Usage counts against the admin's limits.
+  - Without a token (or that access), chat turns fail with `not_configured` before any
     query, the brief returns `409 claude_not_configured` and the status says
     `not_configured`.
 - Verify SDK details against the installed package types
@@ -240,7 +249,7 @@ and Home calls it automatically once a day.
 ## Flashcards written by Claude (`services/cardgen.ts`)
 
 One-shot queries like the brief (no tools, `maxTurns: 1`, own system prompt), with
-the user's own token:
+the user's own Claude credentials (`credentials.forUser`):
 
 - `generate(source, count)` (`POST /api/flashcards/generate`, and 5 cards a day from
   `brief.generate` on the first Home visit, once per day): sends the text of pages

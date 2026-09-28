@@ -23,8 +23,8 @@ export const settings = sqliteTable('settings', {
 /**
  * Accounts (multi-user). The admin is the server owner: the account the migration
  * created for the pre-existing data, whose password comes from APP_PASSWORD_HASH and
- * who alone may use the server's own Claude credentials. Everyone else brings their
- * own Claude token, stored encrypted.
+ * who may use the server's own Claude credentials. Everyone else brings their own
+ * Claude token, stored encrypted, unless the admin lets them use the server's.
  */
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -36,6 +36,8 @@ export const users = sqliteTable('users', {
     .default('user'),
   /** AES-256-GCM encrypted CLAUDE_CODE_OAUTH_TOKEN (see services/secrets.ts). */
   claudeTokenEnc: text('claude_token_enc'),
+  /** The admin lets this account use the server's Claude credentials (the admin's). */
+  serverClaude: integer('server_claude', { mode: 'boolean' }).notNull().default(false),
   disabledAt: text('disabled_at'),
   lastLoginAt: text('last_login_at'),
   createdAt: createdAt(),

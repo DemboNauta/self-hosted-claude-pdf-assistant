@@ -76,12 +76,28 @@ function Users({ myId }: { myId?: string }) {
               </p>
               <p className="text-text-muted text-xs">
                 {t.admin.documents(u.documentCount)} ·{' '}
-                {u.hasClaudeToken || u.role === 'admin' ? t.admin.claudeYes : t.admin.claudeNo} ·{' '}
-                {u.lastLoginAt ? t.admin.lastLogin(date(u.lastLoginAt)) : t.admin.neverLoggedIn}
+                {u.hasClaudeToken
+                  ? t.admin.claudeYes
+                  : u.serverClaude
+                    ? t.admin.claudeShared
+                    : t.admin.claudeNo}{' '}
+                · {u.lastLoginAt ? t.admin.lastLogin(date(u.lastLoginAt)) : t.admin.neverLoggedIn}
               </p>
             </div>
             {u.role !== 'admin' && (
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={buttonClass}
+                  aria-pressed={u.serverClaude}
+                  onClick={() => {
+                    if (u.serverClaude || window.confirm(t.admin.shareClaudeConfirm(u.username))) {
+                      void patch(u, { serverClaude: !u.serverClaude });
+                    }
+                  }}
+                >
+                  {u.serverClaude ? t.admin.unshareClaude : t.admin.shareClaude}
+                </button>
                 <button
                   type="button"
                   className={buttonClass}

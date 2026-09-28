@@ -4,7 +4,7 @@ import { FORBIDDEN_CLAUDE_ENV_VARS } from '../src/auth-guard.js';
 import { ClaudeStatusService } from '../src/claude/status.js';
 import { testConfig } from './helpers.js';
 
-const SERVER = { kind: 'server' } as const;
+const SERVER = { kind: 'server', configDir: null } as const;
 
 function fakeQuery(messages: Partial<SDKMessage>[]) {
   const calls: unknown[] = [];

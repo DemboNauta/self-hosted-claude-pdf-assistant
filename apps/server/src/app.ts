@@ -61,7 +61,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   const sessions = new SessionStore(db);
   const users = new UserService(db, config, sessions);
   users.syncAdminPassword();
-  const credentials = new ClaudeCredentials(users);
+  const credentials = new ClaudeCredentials(users, config);
   const servicesFor = servicesFactory(db, config, credentials, runQuery);
   const svc: RequestServices = (req) => servicesFor(userOf(req).id);
 

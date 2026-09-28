@@ -53,8 +53,10 @@ has owner preferences and next steps) and update `docs/HANDOFF.md` at the end.
 
 Other owner decisions:
 
-- Multi-user: every user has their own Claude token (never the owner's
-  subscription for others), accounts come from the admin or single-use
+- Multi-user: every user has their own Claude token, unless the admin lets
+  that account use the admin's subscription (per user, from `/admin`, meant for
+  the owner's own demo accounts; own token wins; 2026-09-28), accounts come
+  from the admin or single-use
   invitation links, data is fully isolated per user (every service is scoped by
   `user_id`), and the pre-existing data belongs to the admin.
 

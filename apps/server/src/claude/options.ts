@@ -27,8 +27,7 @@ export function baseAgentOptions(config: AppConfig, auth: ClaudeAuth): Options {
 
 function agentEnv(auth: ClaudeAuth): Record<string, string> {
   const env = buildAgentEnv();
-  if (auth.kind === 'server') return env;
-  env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
+  if (auth.kind === 'token') env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
   if (auth.configDir) env.CLAUDE_CONFIG_DIR = auth.configDir;
   return env;
 }

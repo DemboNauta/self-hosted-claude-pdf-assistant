@@ -43,7 +43,11 @@ export function ClaudeToken({ onChange }: { onChange: () => void }) {
     <div className="space-y-3">
       <h3 className="font-medium">{t.settings.claude.token.title}</h3>
       <p className="text-text-muted text-sm">
-        {user.serverClaude ? t.settings.claude.token.adminHelp : t.settings.claude.token.help}
+        {user.role === 'admin'
+          ? t.settings.claude.token.adminHelp
+          : user.serverClaude
+            ? t.settings.claude.token.sharedHelp
+            : t.settings.claude.token.help}
       </p>
       {user.hasClaudeToken && !editing ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">

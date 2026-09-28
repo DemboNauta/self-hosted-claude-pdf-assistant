@@ -33,13 +33,15 @@ To change the schema:
 | `0015_message_pointers`      | `messages.pointers_json` (Claude's marks on the PDF, shown again from the chat)                  |
 | `0016_whiteboards`           | `whiteboards` (one per thread)                                                                   |
 | `0017_whiteboard_snapshot`   | `whiteboards.snapshot_png`, `snapshot_bounds_json`, `student_edited_at`, `seen_at`               |
+| `0018_server_claude`         | `users.server_claude`: the admin lets the account use the server's Claude credentials            |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
 
 - **users** `id, username (unique, lower case; also the name shown), password_hash
 (argon2), role (admin|user), claude_token_enc (AES-256-GCM, key derived from
-SESSION_SECRET, see services/secrets.ts), disabled_at, last_login_at`.
+SESSION_SECRET, see services/secrets.ts), server_claude (0/1, `0018`: may use the
+server's Claude credentials when there is no personal token), disabled_at, last_login_at`.
   The migration inserts the admin with the fixed id `owner` and username `admin`,
   and an empty password hash that `UserService.syncAdminPassword()` fills from
   `APP_PASSWORD_HASH` on boot (again whenever that variable changes; the applied

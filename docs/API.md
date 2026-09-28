@@ -36,15 +36,15 @@ Ids are 10-char base36 strings.
 
 ## Administration (admin only)
 
-| Method | Path                         | Notes                                                                                             |
-| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| GET    | `/api/admin/users`           | `AdminUser[]` (no user data beyond name, PDF count, token yes/no, last login).                    |
-| POST   | `/api/admin/users`           | `{ username, password }` → 201 `AdminUser`.                                                       |
-| PATCH  | `/api/admin/users/:id`       | `{ disabled?, password? }`; both log the user out. The admin cannot be disabled (`409`).          |
-| DELETE | `/api/admin/users/:id`       | Deletes the account, its rows (cascade) and files. Not the admin (`409 cannot_delete_admin`).     |
-| GET    | `/api/admin/invitations`     | `Invitation[]`, newest first.                                                                     |
-| POST   | `/api/admin/invitations`     | `{ note? }` → 201 `CreatedInvitation` with the one-time `token` (link `/invite/<token>`, 7 days). |
-| DELETE | `/api/admin/invitations/:id` | Revokes it.                                                                                       |
+| Method | Path                         | Notes                                                                                                                                                                                                                   |
+| ------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/admin/users`           | `AdminUser[]` (no user data beyond name, PDF count, token yes/no, last login).                                                                                                                                          |
+| POST   | `/api/admin/users`           | `{ username, password }` → 201 `AdminUser`.                                                                                                                                                                             |
+| PATCH  | `/api/admin/users/:id`       | `{ disabled?, password?, serverClaude? }`; the first two log the user out; `serverClaude` lets the user run on the server's (admin's) Claude credentials when they have no token. The admin cannot be disabled (`409`). |
+| DELETE | `/api/admin/users/:id`       | Deletes the account, its rows (cascade) and files. Not the admin (`409 cannot_delete_admin`).                                                                                                                           |
+| GET    | `/api/admin/invitations`     | `Invitation[]`, newest first.                                                                                                                                                                                           |
+| POST   | `/api/admin/invitations`     | `{ note? }` → 201 `CreatedInvitation` with the one-time `token` (link `/invite/<token>`, 7 days).                                                                                                                       |
+| DELETE | `/api/admin/invitations/:id` | Revokes it.                                                                                                                                                                                                             |
 
 ## Library
 

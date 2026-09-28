@@ -161,6 +161,13 @@ change them if he disagrees.
   - the existing production data **goes to the admin account**.
   - **one name per account** (owner, 2026-09-26): the username is also the name
     shown; there is no separate display name (migration `0013`).
+  - **sharing the admin's Claude with an account** (owner, 2026-09-28): from
+    `/admin` ("Dejar usar mi Claude" / "Quitar mi Claude") the admin can let an
+    account run on the server's Claude credentials. The owner wants it for **his own
+    demo accounts** (he is the one using them, to show the app), which keeps it within
+    personal use; it is not meant for other people. Per account, off by default,
+    confirmed with a warning that usage counts against the admin's limits. A personal
+    token saved by the account always wins. Migration `0018`.
 
 ## Provisional product choices (Claude, "don't ask until deploy")
 

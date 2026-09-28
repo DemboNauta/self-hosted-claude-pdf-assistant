@@ -41,3 +41,33 @@ test('invitation sign-up, isolated library and own Claude token', async ({ page,
   const account = page.getByRole('listitem').filter({ hasText: username });
   await expect(account.filter({ hasText: 'Claude conectado' })).toBeVisible();
 });
+
+// The admin lets an account without a token use the admin's Claude subscription.
+test("admin shares the server's Claude with a user", async ({ page, browser }) => {
+  const username = `pablo${Date.now() % 1_000_000}`;
+  await login(page);
+  await page.goto('/admin');
+  await page.getByLabel('Usuario').fill(username);
+  await page.getByLabel('Contraseña inicial').fill('pablo-password');
+  await page.getByRole('button', { name: 'Crear cuenta' }).click();
+  const account = page.getByRole('listitem').filter({ hasText: username });
+  await expect(account.getByText('Sin token de Claude', { exact: false })).toBeVisible();
+
+  page.once('dialog', (d) => void d.accept());
+  await account.getByRole('button', { name: 'Dejar usar mi Claude' }).click();
+  await expect(account.getByText('Usa tu suscripción de Claude', { exact: false })).toBeVisible();
+
+  const other = await browser.newContext();
+  const guest = await other.newPage();
+  await login(guest, username, 'pablo-password');
+  await guest.goto('/settings');
+  await expect(guest.getByText('El administrador te deja usar su suscripción')).toBeVisible();
+  await expect(guest.getByTestId('claude-state')).toHaveText('Conectado con tu suscripción');
+
+  // Taking it back leaves the account without Claude again.
+  await account.getByRole('button', { name: 'Quitar mi Claude' }).click();
+  await expect(account.getByText('Sin token de Claude', { exact: false })).toBeVisible();
+  await guest.reload();
+  await expect(guest.getByTestId('claude-state')).toHaveText('Sin conectar');
+  await other.close();
+});

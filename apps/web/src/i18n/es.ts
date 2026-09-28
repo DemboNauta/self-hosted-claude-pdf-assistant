@@ -80,7 +80,7 @@ export const es = {
   admin: {
     title: 'Usuarios',
     intro:
-      'Cada usuario tiene su propia biblioteca, anotaciones, chats, memoria y tarjetas. Nadie ve los datos de otro, tampoco el administrador. Cada uno conecta su propia suscripción de Claude en Ajustes.',
+      'Cada usuario tiene su propia biblioteca, anotaciones, chats, memoria y tarjetas. Nadie ve los datos de otro, tampoco el administrador. Cada uno conecta su propia suscripción de Claude en Ajustes, o puedes dejarle usar la tuya.',
     users: 'Cuentas',
     you: 'tú',
     adminRole: 'administrador',
@@ -88,6 +88,11 @@ export const es = {
     documents: (n: number) => (n === 1 ? '1 PDF' : `${n} PDF`),
     claudeYes: 'Claude conectado',
     claudeNo: 'Sin token de Claude',
+    claudeShared: 'Usa tu suscripción de Claude',
+    shareClaude: 'Dejar usar mi Claude',
+    unshareClaude: 'Quitar mi Claude',
+    shareClaudeConfirm: (name: string) =>
+      `¿Dejar que ${name} use tu suscripción de Claude? Sus preguntas contarán en tus límites de uso. Si pega su propio token, usará el suyo.`,
     lastLogin: (d: string) => `Última entrada: ${d}`,
     neverLoggedIn: 'Aún no ha entrado',
     disable: 'Desactivar',
@@ -827,6 +832,8 @@ export const es = {
         help: 'Cada usuario usa su propia suscripción de Claude (Pro o Max). En un equipo con Claude Code ejecuta «claude setup-token», inicia sesión con tu cuenta y pega aquí el token que te da. Se guarda cifrado y solo se usa para tus preguntas.',
         adminHelp:
           'Como administrador usas las credenciales de Claude configuradas en el servidor. Si prefieres usar otra cuenta, pega aquí su token.',
+        sharedHelp:
+          'El administrador te deja usar su suscripción de Claude. Si prefieres usar la tuya (Pro o Max), ejecuta «claude setup-token» en un equipo con Claude Code y pega aquí el token: se guarda cifrado y tendrá prioridad.',
         label: 'Token (CLAUDE_CODE_OAUTH_TOKEN)',
         saved: 'Token guardado',
         none: 'Sin token guardado',

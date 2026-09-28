@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-27 (visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-09-28 (the admin can share the server's Claude with an account, for his own demo accounts: migration `0018`, **not deployed yet**; before that: visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -27,6 +27,12 @@ Last updated: 2026-09-27 (visual interaction block 1: page layout, `[[mark:ID]]`
   `DATA_DIR` with generated PDFs (see `DEVELOPMENT.md`).
 
 ## Where the work stopped
+
+Session of 2026-09-28: the owner asked for an admin option to let an account use
+his Claude subscription, for demo accounts that he uses himself (see DECISIONS).
+`/admin` → "Dejar usar mi Claude" (`users.server_claude`, migration `0018`,
+`claude/credentials.ts`); a personal token wins. Server test in `users.test.ts`, e2e
+in `users.spec.ts`. Deploy it with the rest (migrations `0015`–`0018`).
 
 Session of 2026-09-27 (later): **visual interaction, block 1** (owner's plan, see
 DECISIONS "Visual interaction with the PDF"), not deployed yet:

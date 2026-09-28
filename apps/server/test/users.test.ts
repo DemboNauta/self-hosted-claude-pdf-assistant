@@ -241,42 +241,44 @@ describe('invitations', () => {
   });
 });
 
+async function ask(headers: Record<string, string>) {
+  const { docId } = await seedDocument(app, headers, [['Fotosíntesis.']]);
+  const thread = (
+    await api<ThreadSummary>('GET', `/api/documents/${docId}/threads/active`, headers)
+  ).body;
+  const ws = await app.injectWS('/ws/chat', { headers: headers });
+  const events: ServerChatEvent[] = [];
+  const done = new Promise<void>((resolve) =>
+    ws.on('message', (raw) => {
+      const ev = JSON.parse(String(raw)) as ServerChatEvent;
+      events.push(ev);
+      if (ev.type === 'assistant_done' || (ev.type === 'error' && !ev.messageId)) resolve();
+    }),
+  );
+  ws.send(
+    JSON.stringify({
+      type: 'user_message',
+      threadId: thread.id,
+      clientId: 'c',
+      text: 'Hola',
+      mode: 'free',
+      context: { docId, currentPage: 1 },
+    }),
+  );
+  await done;
+  ws.terminate();
+  return events;
+}
+
 describe('Claude per user', () => {
   it('needs a personal token for users other than the admin, and uses only theirs', async () => {
     const ana = await createUser();
     const status = await api<{ state: string }>('GET', '/api/claude/status', ana.headers);
     expect(status.body.state).toBe('not_configured');
 
-    const ask = async () => {
-      const { docId } = await seedDocument(app, ana.headers, [['Fotosíntesis.']]);
-      const thread = (
-        await api<ThreadSummary>('GET', `/api/documents/${docId}/threads/active`, ana.headers)
-      ).body;
-      const ws = await app.injectWS('/ws/chat', { headers: ana.headers });
-      const events: ServerChatEvent[] = [];
-      const done = new Promise<void>((resolve) =>
-        ws.on('message', (raw) => {
-          const ev = JSON.parse(String(raw)) as ServerChatEvent;
-          events.push(ev);
-          if (ev.type === 'assistant_done' || (ev.type === 'error' && !ev.messageId)) resolve();
-        }),
-      );
-      ws.send(
-        JSON.stringify({
-          type: 'user_message',
-          threadId: thread.id,
-          clientId: 'c',
-          text: 'Hola',
-          mode: 'free',
-          context: { docId, currentPage: 1 },
-        }),
-      );
-      await done;
-      ws.terminate();
-      return events;
-    };
-
-    expect((await ask()).find((e) => e.type === 'error')).toMatchObject({ code: 'not_configured' });
+    expect((await ask(ana.headers)).find((e) => e.type === 'error')).toMatchObject({
+      code: 'not_configured',
+    });
     expect(calls).toHaveLength(0);
 
     const token = 'sk-ant-oat01-' + 'a'.repeat(40);
@@ -293,10 +295,47 @@ describe('Claude per user', () => {
       .get(ana.id) as { enc: string };
     expect(raw.enc).not.toContain(token);
 
-    expect((await ask()).find((e) => e.type === 'assistant_done')).toBeTruthy();
+    expect((await ask(ana.headers)).find((e) => e.type === 'assistant_done')).toBeTruthy();
     const env = calls.at(-1)!.options.env;
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);
     expect(env.CLAUDE_CONFIG_DIR).toContain(ana.id);
+  });
+
+  it("lets the admin give a user access to the server's Claude, and take it back", async () => {
+    const ana = await createUser();
+    const grant = await api<AdminUser>('PATCH', `/api/admin/users/${ana.id}`, admin, {
+      serverClaude: true,
+    });
+    expect(grant.body.serverClaude).toBe(true);
+    const me = await api<SessionInfo>('GET', '/api/auth/session', ana.headers);
+    expect(me.body.user).toMatchObject({ hasClaudeToken: false, serverClaude: true });
+    // Only the admin decides it.
+    expect(
+      (await api('PATCH', `/api/admin/users/${ana.id}`, ana.headers, { serverClaude: true }))
+        .status,
+    ).toBe(403);
+
+    expect((await ask(ana.headers)).find((e) => e.type === 'assistant_done')).toBeTruthy();
+    // The server's credentials, never a personal token of hers.
+    expect(calls.at(-1)!.options.env.CLAUDE_CODE_OAUTH_TOKEN).toBe(
+      process.env.CLAUDE_CODE_OAUTH_TOKEN,
+    );
+
+    // A personal token wins over the shared access.
+    const token = 'sk-ant-oat01-' + 'b'.repeat(40);
+    await api('PUT', '/api/account/claude-token', ana.headers, { token });
+    await ask(ana.headers);
+    expect(calls.at(-1)!.options.env.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);
+    await api('DELETE', '/api/account/claude-token', ana.headers);
+
+    await api('PATCH', `/api/admin/users/${ana.id}`, admin, { serverClaude: false });
+    const status = await api<{ state: string }>('GET', '/api/claude/status', ana.headers);
+    expect(status.body.state).toBe('not_configured');
+    const before = calls.length;
+    expect((await ask(ana.headers)).find((e) => e.type === 'error')).toMatchObject({
+      code: 'not_configured',
+    });
+    expect(calls).toHaveLength(before);
   });
 });
 

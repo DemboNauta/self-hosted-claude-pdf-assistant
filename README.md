@@ -9,7 +9,7 @@ interrupt.
 
 Multi-user, runs on your own VPS: the admin creates accounts or sends single-use
 invitation links, every user's data is isolated, and each user connects their own
-Claude subscription. See [`SPEC.md`](SPEC.md) for the full product spec.
+Claude subscription (the admin can let their own demo accounts use theirs). See [`SPEC.md`](SPEC.md) for the full product spec.
 
 > **Claude runs through your Claude subscription (Pro/Max), never an API key.**
 > The backend uses the Claude Agent SDK, which drives Claude Code with your
