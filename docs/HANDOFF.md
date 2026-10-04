@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, migration `0019`, **not deployed yet**; before that: tablet: whiteboard next to the PDF, highlighter tool, resizable chat, **not deployed yet**; before that: the admin can share the server's Claude with an account, for his own demo accounts: migration `0018`, **not deployed yet**; before that: visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, migration `0019`; **revision `40572e6` deployed on 2026-10-04**, which also brought every earlier undeployed change: migrations `0015`–`0019`, Supertonic voice, multi-user, visual interaction blocks 1–4, tablet use). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -38,9 +38,7 @@ highlights hold pictures (file, camera, paste, drop), and Claude adds free pictu
 Wikimedia Commons to its margin notes (`search_web_images`). Server tests
 `note-media.test.ts`, e2e `note-media.spec.ts`. **Not tried with real Claude yet**:
 check that it uses `search_web_images` sparingly and picks fitting pictures, and that
-it proposes saving boards at sensible moments. Commons was reachable from the owner's
-PC; check from the VPS after the deploy (outbound HTTPS to commons.wikimedia.org and
-*.wikimedia.org). Deploy with migrations `0015`–`0019`.
+it proposes saving boards at sensible moments. Deployed; Commons answers from the VPS.
 
 Session of 2026-09-28 (later), tablet use, owner's requests and choices (DECISIONS
 "Tablet use"): the whiteboard opens next to the PDF, a highlighter tool highlights by
@@ -212,7 +210,7 @@ The **deployment** milestone:
 - **In production since 2026-09-26** and Phase 0 accepted (see
   `DEPLOYMENT.md` "Status"). Deploy new commits with `.\scripts\deploy.ps1`
   (`PCA_DEPLOY_HOST` and `PCA_DOMAIN` set in the shell; the host is the
-  `known_hosts` entry of the `garmin-ia` VPS). Commits are still unpushed; the
+  `known_hosts` entry of the `garmin-ia` VPS). Commits since the last push are unpushed; the
   Docker image (alternative) is only built by CI.
 
 ## Verification done so far
