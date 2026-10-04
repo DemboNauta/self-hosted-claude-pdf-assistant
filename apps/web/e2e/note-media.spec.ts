@@ -39,15 +39,26 @@ test('pictures in notes, from the student and from Claude', async ({ page }, inf
   await viewer.getByRole('textbox', { name: 'Pie de imagen' }).press('Enter');
   await viewer.getByRole('button', { name: 'Cerrar' }).click();
   await expect(viewer).toHaveCount(0);
-  await expect
-    .poll(async () => {
-      const list = (await (
-        await page.request.get(`/api/documents/${docId}/annotations`)
-      ).json()) as Annotation[];
-      return list[0]?.images[0]?.caption;
-    })
-    .toBe('Mi esquema');
-  await page.keyboard.press('Escape');
+  const notes = async () =>
+    (await (await page.request.get(`/api/documents/${docId}/annotations`)).json()) as Annotation[];
+  await expect.poll(async () => (await notes())[0]?.images[0]?.caption).toBe('Mi esquema');
+  await popover.getByRole('button', { name: 'Cerrar panel' }).click();
+
+  // The note's marker can be dragged off the text it covers; the note keeps its passage.
+  if (info.project.name === 'desktop') {
+    const marker = page.locator('[data-page="1"]').getByRole('button', { name: 'Abrir nota' });
+    const box = (await marker.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 60, box.y + 80, { steps: 5 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await notes())[0]?.anchor)
+      .toMatchObject({ kind: 'text', quote: 'La fotosintesis ocurre', pin: {} });
+    const moved = (await marker.boundingBox())!;
+    expect(moved.y).toBeGreaterThan(box.y + 40);
+    await page.screenshot({ path: info.outputPath('moved-marker.png') });
+  }
 
   // Claude proposes a margin note with a free picture from the web, credited.
   if (info.project.name !== 'desktop') {
@@ -135,20 +146,21 @@ test('the whiteboard is saved in a note on the PDF and edited again', async ({ p
   await page.getByTestId('board-linked').getByRole('button', { name: 'Terminar' }).click();
   await expect(page.getByTestId('board-linked')).toHaveCount(0);
 
-  // Claude proposes keeping its board on the PDF; accepting copies it.
+  // Claude keeps its board on the PDF at once; the note follows the board until the next
+  // question.
   await page.getByRole('tab', { name: 'Conversación' }).click();
   await composer.fill('Hazlo en la pizarra y guarda la pizarra');
   await composer.press('Enter');
   await expect(page.getByRole('button', { name: 'Detener' })).toBeHidden();
   await expect(marker).toHaveCount(2);
-  const proposal = async () =>
+  const kept = async () =>
     (
       (await (await page.request.get(`/api/documents/${docId}/annotations`)).json()) as Annotation[]
     ).find((a) => a.author === 'claude');
-  expect((await proposal())?.board?.pending).toBe(true);
-  await popover.getByRole('button', { name: 'Cerrar panel' }).click();
-  await expect(popover).toHaveCount(0);
-  await marker.last().click();
-  await page.getByTestId('annotation-popover').getByRole('button', { name: 'Aceptar' }).click();
-  await expect.poll(async () => (await proposal())?.board?.pending).toBe(false);
+  expect((await kept())?.status).toBe('active');
+  expect((await kept())?.board?.pending).toBe(true);
+  await composer.fill('Gracias');
+  await composer.press('Enter');
+  await expect(page.getByRole('button', { name: 'Detener' })).toBeHidden();
+  await expect.poll(async () => (await kept())?.board?.pending).toBe(false);
 });

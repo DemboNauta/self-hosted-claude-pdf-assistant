@@ -29,6 +29,12 @@ Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, mi
 
 ## Where the work stopped
 
+Later on 2026-10-04 (owner): Claude saves directly, with no accepting step (margin notes,
+boards on the PDF, flashcards; "Deshacer" in the chat and delete on the note), and every
+note marker can be dragged on the page (board thumbnails covering the text; text notes
+keep their passage via `pin`). Claude's board note follows the board until the next
+question.
+
 Session of 2026-10-04, owner's requests and choices (DECISIONS "Whiteboards on the PDF
 and pictures in notes"): the whiteboard is saved as an editable copy inside a note
 ("Guardar en el PDF" / "Guardar pizarra aquí"), shown on the page as a thumbnail,

@@ -89,6 +89,12 @@ export class WhiteboardService {
       }),
       ...(input.studentEdited && { studentEditedAt: now() }),
     });
+    // Boards Claude kept in this answer follow the drawing until the next turn.
+    this.media.followThread(
+      threadId,
+      JSON.stringify(input.scene),
+      input.snapshot === undefined ? undefined : (input.snapshot?.png ?? null),
+    );
     // Editing a note's board: the note keeps the latest drawing too.
     const linked = this.row(threadId)?.linkedBoardId;
     if (linked && this.linkedInfo(linked)) {
@@ -115,9 +121,14 @@ export class WhiteboardService {
    * Claude's earlier steps count as merged, so they are not drawn again.
    */
   replace(threadId: string, boardId: string | null): Whiteboard {
+    // What Claude kept from this board stays as it is now.
+    this.media.settleThread(threadId);
     const board = this.get(threadId);
-    const saved = boardId ? this.media.board(boardId) : null;
-    if (saved?.pendingThreadId) throw new HttpError(409, 'board_pending');
+    let saved = boardId ? this.media.board(boardId) : null;
+    if (saved?.pendingThreadId) {
+      this.media.settleThread(saved.pendingThreadId);
+      saved = this.media.board(saved.id);
+    }
     const scene: BoardScene = saved?.sceneJson
       ? (JSON.parse(saved.sceneJson) as BoardScene)
       : { elements: [], files: {} };

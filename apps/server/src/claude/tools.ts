@@ -552,7 +552,7 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
-/** Annotations: read the student's marks, propose key-idea highlights, add notes (F-ANN-04). */
+/** Annotations: read the student's marks, highlight key ideas, add notes (F-ANN-04). */
 export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
   const changed = () =>
     ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'annotations' });
@@ -712,8 +712,8 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
     tool(
       'add_margin_notes',
       [
-        'Propose short comments written in the margin next to passages of the PDF, like a teacher annotating a book: a clarification, a link to another idea, a warning about a common mistake, a mini example.',
-        'They appear as proposals in your colour that the student accepts (they become notes) or discards.',
+        'Write short comments in the margin next to passages of the PDF, like a teacher annotating a book: a clarification, a link to another idea, a warning about a common mistake, a mini example.',
+        'They are saved at once as notes in your colour (the student can edit, delete or undo them).',
         'Quote each passage verbatim (3 to 40 consecutive words from the page); keep each comment brief (one or two sentences) and in the language of the student.',
       ].join(' '),
       {
@@ -743,7 +743,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
         ctx,
         'add_margin_notes',
         ({ notes }) => `(${notes.length})`,
-        async ({ docId, notes }) => {
+        async ({ docId, notes }, extra) => {
           const id = docId ?? ctx.docId;
           if (!id) return fail('docId is required here (no document is open).');
           deps.library.getLive(id);
@@ -762,7 +762,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
               content: n.text,
               anchor: { kind: 'text' as const, quote: n.quote },
             })),
-            { author: 'claude', status: 'proposed' },
+            { author: 'claude' },
           );
           // A note whose passage was not found has nowhere to sit in the margin: drop it.
           const missing = created.filter((a) => !(a.anchor as { rects?: unknown[] }).rects?.length);
@@ -785,19 +785,19 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
               failed.push(`${n.image.id} (${err instanceof Error ? err.message : String(err)})`);
             }
           }
+          const kept = created.filter((a) => !missing.includes(a));
+          if (kept.length) extra.annotationIds = kept.map((a) => a.id);
           changed();
-          const shown = created.length - missing.length;
+          const shown = kept.length;
           const warn = missing.length
             ? ` ${missing.length} quote(s) were not found verbatim on their page (pages ${missing
                 .map((m) => m.page)
-                .join(', ')}) and were not added: check the exact wording and propose them again.`
+                .join(', ')}) and were not added: check the exact wording and add them again.`
             : '';
           const picWarn = failed.length
             ? ` These pictures could not be added (the notes were kept without them): ${failed.join('; ')}.`
             : '';
-          return text(
-            `Proposed ${shown} margin note(s); the student can accept or discard them.${warn}${picWarn}`,
-          );
+          return text(`Added ${shown} margin note(s).${warn}${picWarn}`);
         },
       ),
     ),
@@ -847,8 +847,8 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
     tool(
       'save_whiteboard_to_pdf',
       [
-        'Propose keeping the whiteboard you drew in this conversation inside a note on the PDF, next to the passage or section it explains, so the student finds it again while reading.',
-        'It appears as a proposal in your colour; when the student accepts it, the board is copied as it is at that moment (with everything you drew in this answer). Use it after drawing, for boards worth keeping (a summary scheme, a worked example), not for every drawing.',
+        'Keep the whiteboard you drew in this conversation inside a note on the PDF, next to the passage or section it explains, so the student finds it again while reading.',
+        'It is saved at once as a note in your colour; the note keeps following the board until the student sends the next message, so everything you draw in this answer is included. Use it for boards worth keeping (a summary scheme, a worked example), not for every drawing.',
         'Quote the passage verbatim (3 to 40 consecutive words), or give only the page to put it at the top of that page. "text" says what the board shows (one sentence, in the language of the student).',
       ].join(' '),
       {
@@ -861,7 +861,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
         ctx,
         'save_whiteboard_to_pdf',
         ({ page }) => `p. ${page}`,
-        async ({ docId, page, quote, text: body }) => {
+        async ({ docId, page, quote, text: body }, extra) => {
           const id = docId ?? ctx.docId;
           if (!id) return fail('docId is required here (no document is open).');
           deps.library.getLive(id);
@@ -882,7 +882,7 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
                   : boardNoteSpot(pointNotes(deps.annotations.list(id), page)),
               },
             ],
-            { author: 'claude', status: 'proposed' },
+            { author: 'claude' },
           );
           if (quote && !(note!.anchor as { rects?: unknown[] }).rects?.length) {
             deps.annotations.delete([note!.id]);
@@ -891,10 +891,9 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
             );
           }
           deps.media.createBoard(id, note!.id, { pendingThreadId: ctx.threadId });
+          extra.annotationIds = [note!.id];
           changed();
-          return text(
-            'Proposed: the student sees a note with the board and can accept it (the board is copied then) or discard it.',
-          );
+          return text(`Saved: a note with the board on page ${page}.`);
         },
       ),
     ),
@@ -1040,12 +1039,12 @@ export function memoryTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
-/** Flashcards proposed by Claude (F-REV-01), accepted by the student in Repaso. */
+/** Flashcards written by Claude (F-REV-01), ready to review (owner: no accepting step). */
 export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
   return [
     tool(
       'create_flashcards',
-      'Propose flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are shown as proposals the student accepts in the review screen. They are answered as multiple choice: give three plausible wrong answers ("wrong") in the same style and length as the right one. Ask about the subject, never about how the document is organised (what a module covers, what comes first).',
+      'Create flashcards (question on the front, concise answer on the back, in the language of the document or the student) linked to the page they come from. They are added at once to the student\'s review (the student can edit or delete them). They are answered as multiple choice: give three plausible wrong answers ("wrong") in the same style and length as the right one. Ask about the subject, never about how the document is organised (what a module covers, what comes first).',
       {
         cards: z
           .array(
@@ -1074,10 +1073,10 @@ export function reviewTools(deps: ToolDeps, ctx: ToolContext) {
               documentId: c.docId ?? ctx.docId ?? null,
             })),
             'claude',
-            'proposed',
+            'active',
           );
           ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'flashcards' });
-          return text(`Proposed ${created.length} flashcard(s).`);
+          return text(`Added ${created.length} flashcard(s) to the review.`);
         },
       ),
     ),

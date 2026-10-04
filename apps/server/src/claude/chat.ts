@@ -139,6 +139,8 @@ export class ChatService {
       emit({ type: 'assistant_done', threadId: thread.id, message });
     };
 
+    // Boards Claude kept on the PDF during the previous answer stop following the board.
+    svc.media.settleThread(thread.id);
     try {
       const markImage =
         docId && ctx.mark

@@ -243,7 +243,40 @@ export class NoteMediaService {
       .run();
   }
 
-  /** Claude's proposals were accepted: their boards copy the conversation's board now. */
+  /**
+   * The conversation's board was saved: boards Claude kept in this answer
+   * (`pending_thread_id`) take the new drawing, so steps revealed later are included.
+   */
+  followThread(threadId: string, sceneJson: string, snapshotPng: string | null | undefined) {
+    this.db
+      .update(savedBoards)
+      .set({
+        sceneJson,
+        ...(snapshotPng !== undefined && { snapshotPng }),
+        updatedAt: now(),
+      })
+      .where(
+        and(
+          eq(savedBoards.userId, this.userId),
+          eq(savedBoards.pendingThreadId, threadId),
+          isNull(savedBoards.orphanedAt),
+        ),
+      )
+      .run();
+  }
+
+  /** A new turn (or the board is replaced): Claude's boards of this thread are final. */
+  settleThread(threadId: string) {
+    const ids = this.db
+      .select({ annotationId: savedBoards.annotationId })
+      .from(savedBoards)
+      .where(and(eq(savedBoards.userId, this.userId), eq(savedBoards.pendingThreadId, threadId)))
+      .all()
+      .map((r) => r.annotationId);
+    this.materializeBoards(ids);
+  }
+
+  /** Boards still following their thread get the board as it is now, and stop following. */
   materializeBoards(annotationIds: string[]) {
     if (!annotationIds.length) return;
     const pending = this.db

@@ -43,7 +43,12 @@ const quoteAnchor = {
 export const highlightAnchorSchema = z.object(quoteAnchor);
 export const noteAnchorSchema = z.union([
   z.object({ kind: z.literal('point'), x: unit, y: unit }),
-  z.object({ kind: z.literal('text'), ...quoteAnchor }),
+  z.object({
+    kind: z.literal('text'),
+    ...quoteAnchor,
+    /** Where the student moved the note's marker (page space); default: end of the passage. */
+    pin: z.object({ x: unit, y: unit }).optional(),
+  }),
 ]);
 export const strokeSchema = z.object({
   /** [x, y, pressure] triples in page space. */

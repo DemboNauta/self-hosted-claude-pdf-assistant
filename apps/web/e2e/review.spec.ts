@@ -20,7 +20,7 @@ test('create flashcards, review them and see today and the stats', async ({ page
   await dialog.getByRole('button', { name: 'Guardar' }).click();
   await expect(dialog).toBeHidden();
 
-  // Claude proposes another card (create_flashcards).
+  // Claude writes another card (create_flashcards), ready to review at once.
   await selectInPdf(page, 'produce ATP');
   await menu.getByRole('button', { name: 'Preguntar' }).click();
   const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
@@ -34,8 +34,6 @@ test('create flashcards, review them and see today and the stats', async ({ page
       return tree.subjects.find((s: { name: string }) => s.name === n).id;
     }, name)}`,
   );
-  await expect(page.getByTestId('proposal')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Aceptar todas' }).click();
   await expect(page.getByTestId('proposal')).toHaveCount(0);
 
   // Cards without wrong answers get them from Claude and are answered by choosing:

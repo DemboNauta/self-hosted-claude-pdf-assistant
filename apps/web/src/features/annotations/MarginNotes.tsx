@@ -1,9 +1,10 @@
 import { CLAUDE_COLOR, type Annotation } from '@pdfclaudeassistant/shared';
-import { Check, ChevronRight, MessageSquareText, X } from 'lucide-react';
+import { Check, ChevronRight, MessageSquareText, PenLine, Trash2, X } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
-import { setProposalStatus } from './api';
+import { useReader } from '../reader/store';
+import { deleteAnnotations, setProposalStatus } from './api';
 import { NoteMedia } from './NoteMedia';
 
 const GAP = 12;
@@ -13,13 +14,18 @@ const INSIDE_W = 220;
 /** Inside the page, keep clear of the question badges at its right edge (QuestionMarks). */
 const BADGE_LANE = 36;
 
-/** Claude's proposed margin notes: text notes by Claude still waiting for the student. */
+/**
+ * Claude's margin notes: its text notes on a passage (saved directly since 2026-10-04;
+ * older ones may still be proposals), unless the student moved the note's marker.
+ */
 export function isMarginNote(a: Annotation) {
+  const anchor = a.anchor as { kind?: string; pin?: unknown };
   return (
     a.author === 'claude' &&
     a.type === 'note' &&
-    a.status === 'proposed' &&
-    (a.anchor as { kind?: string }).kind === 'text'
+    a.status !== 'rejected' &&
+    anchor.kind === 'text' &&
+    !anchor.pin
   );
 }
 
@@ -174,25 +180,50 @@ export function MarginNotes({
               )}
             </div>
             <div className="flex shrink-0">
-              <button
-                type="button"
-                aria-label={t.annotations.rejectNote}
-                title={t.annotations.rejectNote}
-                onClick={() => void setProposalStatus(docId, [a.id], 'rejected')}
-                className="text-text-muted hover:text-text hover:bg-surface-muted rounded p-1"
-              >
-                <X size={14} aria-hidden />
-              </button>
-              <button
-                type="button"
-                aria-label={t.annotations.acceptNote}
-                title={t.annotations.acceptNote}
-                onClick={() => void setProposalStatus(docId, [a.id], 'active')}
-                className="hover:bg-surface-muted rounded p-1"
-                style={{ color: CLAUDE_COLOR }}
-              >
-                <Check size={14} aria-hidden />
-              </button>
+              {a.status === 'proposed' ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label={t.annotations.rejectNote}
+                    title={t.annotations.rejectNote}
+                    onClick={() => void setProposalStatus(docId, [a.id], 'rejected')}
+                    className="text-text-muted hover:text-text hover:bg-surface-muted rounded p-1"
+                  >
+                    <X size={14} aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t.annotations.acceptNote}
+                    title={t.annotations.acceptNote}
+                    onClick={() => void setProposalStatus(docId, [a.id], 'active')}
+                    className="hover:bg-surface-muted rounded p-1"
+                    style={{ color: CLAUDE_COLOR }}
+                  >
+                    <Check size={14} aria-hidden />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    aria-label={t.annotations.editNote}
+                    title={t.annotations.editNote}
+                    onClick={() => useReader.getState().setActiveAnnotation(a.id)}
+                    className="text-text-muted hover:text-text hover:bg-surface-muted rounded p-1"
+                  >
+                    <PenLine size={14} aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t.annotations.delete}
+                    title={t.annotations.delete}
+                    onClick={() => void deleteAnnotations(docId, [a])}
+                    className="text-text-muted hover:text-danger hover:bg-surface-muted rounded p-1"
+                  >
+                    <Trash2 size={14} aria-hidden />
+                  </button>
+                </>
+              )}
               {!outside && (
                 <button
                   type="button"

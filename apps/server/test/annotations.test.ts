@@ -190,7 +190,7 @@ describe('annotations', () => {
     expect(JSON.stringify(await read.handler({} as never, {}))).toContain('Idea central');
   });
 
-  it('lets Claude propose margin notes, dropping those whose passage is not on the page', async () => {
+  it('lets Claude write margin notes, dropping those whose passage is not on the page', async () => {
     const ctx: ToolContext = {
       threadId: 't',
       messageId: 'm',
@@ -209,13 +209,13 @@ describe('annotations', () => {
       } as never,
       {},
     );
-    expect(JSON.stringify(result)).toContain('Proposed 1 margin note');
+    expect(JSON.stringify(result)).toContain('Added 1 margin note');
     const notes = await list();
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({
       type: 'note',
       author: 'claude',
-      status: 'proposed',
+      status: 'active',
       content: 'Ocurre en el estroma.',
       anchor: { kind: 'text', quote: 'El ciclo de Calvin' },
     });

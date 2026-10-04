@@ -511,6 +511,7 @@ export const es = {
     foldMarginNote: 'Plegar la nota',
     acceptNote: 'Guardar la nota',
     rejectNote: 'Descartar la nota',
+    editNote: 'Editar la nota',
     color: 'Color',
     comment: 'Comentario',
     commentPlaceholder: 'Añade un comentario…',
@@ -746,8 +747,8 @@ export const es = {
       replay: (pages: string) => `Volver a mostrar lo que Claude señaló (${pages})`,
       undoHighlights: 'Deshacer',
       undoHighlightsLabel: (n: number) =>
-        n === 1 ? 'Quitar el subrayado de Claude' : `Quitar los ${n} subrayados de Claude`,
-      highlightsUndone: 'Subrayados quitados',
+        n === 1 ? 'Quitar lo que Claude ha añadido' : `Quitar las ${n} anotaciones de Claude`,
+      highlightsUndone: 'Quitado',
     },
     selection: {
       menu: 'Acciones sobre la selección',

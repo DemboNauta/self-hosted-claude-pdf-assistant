@@ -190,6 +190,13 @@ change them if he disagrees.
     discards it, like margin notes;
   - notes take **pictures**: the student's own, and **pictures from the web added by
     Claude**.
+  - (later the same day) **Claude saves whatever it wants directly**, with no accepting
+    step: margin notes, boards kept on the PDF, flashcards (highlights already were). The
+    student can still edit, delete or undo ("Deshacer" in the chat). Claude's board note
+    keeps following the board until the student's next message.
+  - **Every note marker can be moved** on the page (a board thumbnail may cover the
+    text): the student's and Claude's; a note on a passage keeps it and shows a dashed
+    line to it.
 
 ## Provisional product choices (Claude, "don't ask until deploy")
 
@@ -198,7 +205,7 @@ change them if he disagrees.
     and licence stored and shown as credit with a link to the source). Claude has no
     general web search in this app, and downloading only from Wikimedia's hosts avoids
     fetching arbitrary addresses. Claude sees small previews and picks one; pictures go
-    only into its proposed margin notes (it never edits the student's notes).
+    only into its own margin notes (it never edits the student's notes).
   - The student adds pictures with "Añadir imagen" (file picker, which offers the
     camera on phones), by pasting into the comment or dropping onto the note window;
     up to 12 per note, also on highlights. Big photos are shrunk (2400 px).
@@ -208,8 +215,7 @@ change them if he disagrees.
     board editor at a time keeps the app light.
   - "Guardar en el PDF" puts the note at the top right of the page being read (stacked
     below other notes there; the note can be dragged); "Guardar pizarra aquí" in the
-    selection menu anchors it to the selected text. Claude's proposal copies the board
-    **when accepted**, so it includes the steps still being revealed.
+    selection menu anchors it to the selected text.
   - Deleting a note keeps its pictures and board for a day, so undo brings them back.
   - The annotated PDF export does not include pictures or boards yet.
 

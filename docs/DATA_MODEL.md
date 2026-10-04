@@ -154,7 +154,8 @@ Shared schemas are in `packages/shared/src/annotations.ts` and `chat.ts`.
 - highlight: `{ quote?, rects?: NormRect[] }`. Browser-made highlights send the
   selection rects. Claude's proposals send a quote, and the server fills in the
   rects.
-- note: `{ kind: 'point', x, y }` or `{ kind: 'text', quote?, rects? }`.
+- note: `{ kind: 'point', x, y }` or `{ kind: 'text', quote?, rects?, pin? }` (`pin`:
+  `{ x, y }` where the student dragged the note's marker; default the end of the passage).
 - drawing: `{ strokes: [{ points: [x, y, pressure][], width (fraction of page
 width), color }] }`.
 - shape (a saved Claude mark): `{ shape: arrow|circle|rect|highlight|label,

@@ -57,8 +57,8 @@ test('highlight, comment, undo, accept Claude proposals and export', async ({ pa
   await expect(panel.getByText('propuesta de Claude')).toHaveCount(0);
   await expect(panel).toContainText('De Claude');
   await panel.getByRole('button', { name: 'Cerrar panel' }).click();
-  await page.getByRole('button', { name: 'Quitar el subrayado de Claude' }).click();
-  await expect(page.getByText('Subrayados quitados')).toBeVisible();
+  await page.getByRole('button', { name: 'Quitar lo que Claude ha añadido' }).click();
+  await expect(page.getByText('· Quitado')).toBeVisible();
   await expect(highlights).toHaveCount(1);
 });
 
@@ -94,22 +94,21 @@ test('Claude margin notes are accepted or discarded, and arrows connect two part
   await expect(note).toContainText('Ojo: esto ocurre en el estroma.');
   await note.getByRole('button', { name: 'Plegar la nota' }).click();
   await expect(note).toHaveCount(0);
+  // Saved at once (owner: no accepting step): it opens like any note, and can be deleted.
   await tab.click();
-  await note.getByRole('button', { name: 'Guardar la nota' }).click();
-  await expect(note).toHaveCount(0);
-  // Accepted, it is a regular note of the page.
-  await expect(
-    page.locator('[data-page="1"]').getByRole('button', { name: 'Abrir nota' }),
-  ).toHaveCount(1);
+  await note.getByRole('button', { name: 'Editar la nota' }).click();
+  const popover = page.getByTestId('annotation-popover');
+  await expect(popover.getByRole('textbox', { name: 'Comentario' })).toHaveValue(
+    'Ojo: esto ocurre en el estroma.',
+  );
+  await popover.getByRole('button', { name: 'Cerrar panel' }).click();
+  await note.getByRole('button', { name: 'Plegar la nota' }).click();
 
   await ask('La fotosintesis ocurre', 'Otra nota al margen');
-  await tab.click();
-  await expect(note).toHaveCount(1);
-  await note.getByRole('button', { name: 'Descartar la nota' }).click();
-  await expect(note).toHaveCount(0);
-  await expect(
-    page.locator('[data-page="1"]').getByRole('button', { name: 'Abrir nota' }),
-  ).toHaveCount(1);
+  await expect(tab).toHaveCount(2);
+  await tab.last().click();
+  await note.getByRole('button', { name: 'Borrar anotación' }).click();
+  await expect(tab).toHaveCount(1);
 
   await ask('La fotosintesis ocurre', 'Conecta esto con el título');
   const pointers = page.locator('[data-page="1"] [data-testid="claude-pointers"]');

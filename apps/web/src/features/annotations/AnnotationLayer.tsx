@@ -8,7 +8,14 @@ import type {
 } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
 import { Image as ImageIcon, MessageSquare, StickyNote } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as RPointerEvent,
+  Fragment,
+} from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
 import { rangeRects } from '../reader/SelectionMenu';
@@ -65,6 +72,14 @@ export function boxOf(a: Annotation): NormRect | null {
     w: Math.max(...rects.map((r) => r.x + r.w)) - x,
     h: Math.max(...rects.map((r) => r.y + r.h)) - y,
   };
+}
+
+/** Where a note's marker sits: its point, where it was moved, or the end of its passage. */
+export function markerOf(a: Annotation, box: NormRect): { x: number; y: number } {
+  const anchor = a.anchor as NoteAnchor;
+  if (anchor.kind === 'point') return { x: anchor.x, y: anchor.y };
+  if (anchor.pin) return anchor.pin;
+  return { x: box.x + box.w, y: box.y };
 }
 
 const pct = (r: NormRect) => ({
@@ -198,7 +213,8 @@ export function AnnotationOverlay({
   const [move, setMove] = useState<{ id: string; dx: number; dy: number } | null>(null);
   const moveStart = useRef<{ id: string; x: number; y: number; moved: boolean } | null>(null);
   const startMove = (a: Annotation) => (e: RPointerEvent<Element>) => {
-    if (tool !== 'select' || a.author !== 'user') return;
+    // Every note's marker can be moved (it may cover the text); drawings only the student's.
+    if (tool !== 'select' || (a.type !== 'note' && a.author !== 'user')) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     moveStart.current = { id: a.id, x: e.clientX, y: e.clientY, moved: false };
@@ -411,55 +427,78 @@ export function AnnotationOverlay({
       {notes.map((a) => {
         const b = boxOf(a);
         if (!b) return null;
-        const point = (a.anchor as NoteAnchor).kind === 'point';
-        const movable = point && tool === 'select' && a.author === 'user';
+        const movable = tool === 'select';
         const o = offset(a);
+        const at = markerOf(a, b);
+        const pinned =
+          (a.anchor as NoteAnchor).kind === 'text' &&
+          (o.dx || o.dy || at.x !== b.x + b.w || at.y !== b.y);
         return (
-          <button
-            key={a.id}
-            type="button"
-            data-annotation-ui
-            aria-label={a.board ? t.annotations.board.marker : t.annotations.openNote}
-            title={a.content ?? ''}
-            data-note-marker={a.id}
-            {...(movable && {
-              onPointerDown: startMove(a),
-              onPointerMove: onMove,
-              onPointerUp: endMove(a),
-              onPointerCancel: cancelMove,
-            })}
-            onClick={(e) => {
-              e.stopPropagation();
-              // Pointer users of a movable note open it on release (endMove); keyboard here.
-              if (!movable || e.detail === 0) setActive(active === a.id ? null : a.id);
-            }}
-            className={clsx(
-              'absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md text-white shadow',
-              a.board ? 'p-0.5' : 'p-1',
-              movable && 'cursor-move',
+          <Fragment key={a.id}>
+            {pinned && (
+              // A marker moved away from its passage keeps a thin line to it.
+              <svg
+                aria-hidden
+                className="pointer-events-none absolute inset-0 overflow-visible"
+                width={width}
+                height={height}
+              >
+                <line
+                  x1={(b.x + b.w) * width}
+                  y1={(b.y + b.h / 2) * height}
+                  x2={(at.x + o.dx) * width}
+                  y2={(at.y + o.dy) * height}
+                  stroke={colorOf(a.color)}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                />
+              </svg>
             )}
-            style={{
-              left: `${((point ? b.x : b.x + b.w) + o.dx) * 100}%`,
-              top: `${(b.y + o.dy) * 100}%`,
-              background: colorOf(a.color),
-              ...(movable && { touchAction: 'none' as const }),
-            }}
-          >
-            {a.board ? (
-              // A note holding a whiteboard shows a small picture of it on the page.
-              <img
-                src={boardSnapshotUrl(a.board)}
-                alt=""
-                draggable={false}
-                className="block h-8 w-12 rounded-sm bg-white object-contain"
-                onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-              />
-            ) : a.images.length ? (
-              <ImageIcon size={14} aria-hidden />
-            ) : (
-              <StickyNote size={14} aria-hidden />
-            )}
-          </button>
+            <button
+              type="button"
+              data-annotation-ui
+              aria-label={a.board ? t.annotations.board.marker : t.annotations.openNote}
+              title={[a.content, movable ? t.annotations.moveHint : ''].filter(Boolean).join(' · ')}
+              data-note-marker={a.id}
+              {...(movable && {
+                onPointerDown: startMove(a),
+                onPointerMove: onMove,
+                onPointerUp: endMove(a),
+                onPointerCancel: cancelMove,
+              })}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Pointer users of a movable note open it on release (endMove); keyboard here.
+                if (!movable || e.detail === 0) setActive(active === a.id ? null : a.id);
+              }}
+              className={clsx(
+                'absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md text-white shadow',
+                a.board ? 'p-0.5' : 'p-1',
+                movable && 'cursor-move',
+              )}
+              style={{
+                left: `${(at.x + o.dx) * 100}%`,
+                top: `${(at.y + o.dy) * 100}%`,
+                background: colorOf(a.color),
+                ...(movable && { touchAction: 'none' as const }),
+              }}
+            >
+              {a.board ? (
+                // A note holding a whiteboard shows a small picture of it on the page.
+                <img
+                  src={boardSnapshotUrl(a.board)}
+                  alt=""
+                  draggable={false}
+                  className="block h-8 w-12 rounded-sm bg-white object-contain"
+                  onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
+                />
+              ) : a.images.length ? (
+                <ImageIcon size={14} aria-hidden />
+              ) : (
+                <StickyNote size={14} aria-hidden />
+              )}
+            </button>
+          </Fragment>
         );
       })}
 
@@ -513,8 +552,13 @@ export function AnnotationOverlay({
 function translateAnchor(a: Annotation, dx: number, dy: number): Annotation['anchor'] {
   const unit = (v: number) => Math.min(1, Math.max(0, v));
   if (a.type === 'note') {
-    const p = a.anchor as { x: number; y: number };
-    return { kind: 'point', x: unit(p.x + dx), y: unit(p.y + dy) };
+    const anchor = a.anchor as NoteAnchor;
+    // A note on a passage keeps it: only its marker moves.
+    if (anchor.kind === 'text') {
+      const at = markerOf(a, boxOf(a) ?? { x: 0, y: 0, w: 0, h: 0 });
+      return { ...anchor, pin: { x: unit(at.x + dx), y: unit(at.y + dy) } };
+    }
+    return { kind: 'point', x: unit(anchor.x + dx), y: unit(anchor.y + dy) };
   }
   const d = a.anchor as DrawingAnchor;
   return {

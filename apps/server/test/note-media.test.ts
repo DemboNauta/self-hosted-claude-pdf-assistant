@@ -172,7 +172,7 @@ describe('pictures in notes', () => {
       {},
     );
     const [note] = servicesOf(app).annotations.list(docId);
-    expect(note!.status).toBe('proposed');
+    expect(note!.status).toBe('active');
     expect(note!.images[0]).toMatchObject({
       source: 'claude',
       credit: 'Jane Doe · CC BY-SA 4.0',
@@ -258,7 +258,7 @@ describe('whiteboards saved on the PDF', () => {
     expect(blank.json<Whiteboard>().scene).toEqual({ elements: [], files: {} });
   });
 
-  it("copies the conversation's board when Claude's proposal is accepted", async () => {
+  it("keeps Claude's board in a note that follows the board until the next turn", async () => {
     const save = annotationTools(servicesOf(app), ctx()).find(
       (t) => t.name === 'save_whiteboard_to_pdf',
     )!;
@@ -271,20 +271,19 @@ describe('whiteboards saved on the PDF', () => {
       {},
     );
     const [note] = servicesOf(app).annotations.list(docId);
-    expect(note).toMatchObject({ status: 'proposed', author: 'claude', board: { pending: true } });
-    // Until accepted, the note shows the conversation's board as it is.
+    expect(note).toMatchObject({ status: 'active', author: 'claude', board: { pending: true } });
+    // During the answer, the note shows the conversation's board as it is.
     const preview = await app.inject({ url: `/api/boards/${note!.board!.id}/snapshot`, headers });
     expect(preview.statusCode).toBe(200);
 
+    // Steps revealed later in the answer reach the note.
     await drawOnBoard('#00ff00');
-    await app.inject({
-      method: 'POST',
-      url: '/api/annotations/status',
-      headers,
-      payload: { ids: [note!.id], status: 'active' },
-    });
-    const [accepted] = servicesOf(app).annotations.list(docId);
-    expect(accepted!.board!.pending).toBe(false);
+    expect(servicesOf(app).media.board(note!.board!.id).sceneJson).toContain('#00ff00');
+    // The next turn settles it: later drawings stay on the conversation's board only.
+    servicesOf(app).media.settleThread(threadId);
+    await drawOnBoard('#0000ff');
+    const [settled] = servicesOf(app).annotations.list(docId);
+    expect(settled!.board!.pending).toBe(false);
     expect(servicesOf(app).media.board(note!.board!.id).sceneJson).toContain('#00ff00');
   });
 });
