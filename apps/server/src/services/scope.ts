@@ -10,11 +10,13 @@ import { DiagramService } from './diagrams.js';
 import { FocusService } from './focus.js';
 import { LibraryService } from './library.js';
 import { MemoryService } from './memory.js';
+import { NoteMediaService } from './noteMedia.js';
 import { ReviewService } from './review.js';
 import { SearchService } from './search.js';
 import { SettingsService } from './settings.js';
 import { StatsService } from './stats.js';
 import { ThreadService } from './threads.js';
+import type { WebImageProvider } from './webImages.js';
 import { WhiteboardService } from './whiteboards.js';
 
 /**
@@ -29,6 +31,7 @@ export interface UserServices {
   search: SearchService;
   threads: ThreadService;
   annotations: AnnotationService;
+  media: NoteMediaService;
   settings: SettingsService;
   memory: MemoryService;
   review: ReviewService;
@@ -38,6 +41,7 @@ export interface UserServices {
   stats: StatsService;
   brief: BriefService;
   cardgen: CardGenService;
+  webImages: WebImageProvider;
 }
 
 export type ServicesFor = (userId: string) => UserServices;
@@ -48,12 +52,14 @@ export function servicesFactory(
   config: AppConfig,
   credentials: ClaudeCredentials,
   runQuery: typeof query,
+  webImages: WebImageProvider,
 ): ServicesFor {
   return (userId) => {
     const library = new LibraryService(db, config, userId);
     const threads = new ThreadService(db, userId);
     const settings = new SettingsService(db, userId);
     const memory = new MemoryService(db, userId);
+    const media = new NoteMediaService(db, userId);
     const review = new ReviewService(db, userId);
     const cardgen = new CardGenService(db, config, review, settings, runQuery, credentials, userId);
     return {
@@ -62,8 +68,9 @@ export function servicesFactory(
       library,
       search: new SearchService(db, userId),
       threads,
-      whiteboards: new WhiteboardService(db, userId, threads),
-      annotations: new AnnotationService(db, userId),
+      whiteboards: new WhiteboardService(db, userId, threads, media),
+      annotations: new AnnotationService(db, userId, media),
+      media,
       settings,
       memory,
       review,
@@ -71,6 +78,7 @@ export function servicesFactory(
       focus: new FocusService(db, userId),
       stats: new StatsService(db, library, userId),
       cardgen,
+      webImages,
       brief: new BriefService(
         db,
         config,

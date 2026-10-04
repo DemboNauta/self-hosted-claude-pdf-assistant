@@ -138,9 +138,17 @@ describe('whiteboard', () => {
         },
       });
     const svc = servicesOf(app);
-    expect(svc.whiteboards.status(threadId)).toEqual({ hasContent: false, studentChanged: false });
+    expect(svc.whiteboards.status(threadId)).toEqual({
+      hasContent: false,
+      studentChanged: false,
+      linkedPage: null,
+    });
     expect((await save(true)).statusCode).toBe(200);
-    expect(svc.whiteboards.status(threadId)).toEqual({ hasContent: true, studentChanged: true });
+    expect(svc.whiteboards.status(threadId)).toEqual({
+      hasContent: true,
+      studentChanged: true,
+      linkedPage: null,
+    });
 
     const ctx: ToolContext = {
       threadId,

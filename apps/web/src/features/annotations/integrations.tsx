@@ -1,5 +1,5 @@
 import type { CreateAnnotation, ToolEvent } from '@pdfclaudeassistant/shared';
-import { Check, StickyNote } from 'lucide-react';
+import { Check, Presentation, StickyNote } from 'lucide-react';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { t } from '../../i18n';
@@ -10,6 +10,7 @@ import { refreshDiagrams } from '../diagrams/api';
 import type { SelectionAction } from '../reader/SelectionMenu';
 import { useReader } from '../reader/store';
 import { invalidateReview } from '../review/api';
+import { saveBoardInNote, useBoard } from '../whiteboard/store';
 import {
   annotationsKey,
   createAnnotations,
@@ -18,9 +19,24 @@ import {
   usePalette,
 } from './api';
 
-/** "Subrayar" (one button per palette colour) and "Nota" in the selection menu (F-ANN-01/02). */
+/**
+ * "Subrayar" (one button per palette colour) and "Nota" in the selection menu
+ * (F-ANN-01/02), plus "Guardar pizarra aquí" while the whiteboard has a drawing.
+ */
 export function useSelectionAnnotationActions(docId: string): SelectionAction[] {
   const { palette } = usePalette();
+  const hasBoard = useBoard((s) => (s.scene?.elements.length ?? 0) > 0);
+  const saveBoard: SelectionAction = {
+    id: 'save-board',
+    label: t.board.saveHere,
+    icon: Presentation,
+    run: (selection, rects) =>
+      void saveBoardInNote(docId, selection.page, {
+        kind: 'text',
+        quote: selection.text,
+        ...(rects.length ? { rects } : {}),
+      }).then((note) => note && useReader.getState().setActiveAnnotation(note.id)),
+  };
   return [
     ...palette.map((p): SelectionAction => ({
       id: `hl-${p.key}`,
@@ -51,6 +67,7 @@ export function useSelectionAnnotationActions(docId: string): SelectionAction[] 
           },
         ]).then(([created]) => created && useReader.getState().setActiveAnnotation(created.id)),
     },
+    ...(hasBoard ? [saveBoard] : []),
   ];
 }
 

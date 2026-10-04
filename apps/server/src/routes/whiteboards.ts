@@ -1,4 +1,4 @@
-import { saveBoardSchema } from '@pdfclaudeassistant/shared';
+import { replaceBoardSchema, saveBoardSchema } from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { RequestServices } from '../services/scope.js';
@@ -16,5 +16,15 @@ export async function registerWhiteboardRoutes(app: FastifyInstance, svc: Reques
   );
   app.put('/api/threads/:id/whiteboard', { bodyLimit: SCENE_BODY_LIMIT }, async (req) =>
     svc(req).whiteboards.save(parse(idParams, req.params).id, parse(saveBoardSchema, req.body)),
+  );
+  // A note's board onto the conversation's board (or a blank board), and back off it.
+  app.post('/api/threads/:id/whiteboard/replace', async (req) =>
+    svc(req).whiteboards.replace(
+      parse(idParams, req.params).id,
+      parse(replaceBoardSchema, req.body).boardId,
+    ),
+  );
+  app.post('/api/threads/:id/whiteboard/unlink', async (req) =>
+    svc(req).whiteboards.unlink(parse(idParams, req.params).id),
   );
 }

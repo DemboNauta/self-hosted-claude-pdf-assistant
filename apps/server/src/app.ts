@@ -31,6 +31,7 @@ import { registerFocusRoutes } from './routes/focus.js';
 import { UploadService } from './services/uploads.js';
 import { SupertonicTts, type Synthesize } from './services/tts.js';
 import { registerTtsRoutes } from './routes/tts.js';
+import { commonsImages, type WebImageProvider } from './services/webImages.js';
 
 export interface AppDeps {
   db?: Db;
@@ -46,6 +47,8 @@ export interface AppDeps {
   claudeQuery?: typeof query;
   /** Speech synthesis; defaults to Supertonic when SUPERTONIC_DIR is complete (tests inject a fake). */
   synthesize?: Synthesize | null;
+  /** Web pictures for Claude's notes; defaults to Wikimedia Commons (tests inject a fake). */
+  webImages?: WebImageProvider;
 }
 
 export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<FastifyInstance> {
@@ -62,7 +65,13 @@ export async function buildApp(config: AppConfig, deps: AppDeps = {}): Promise<F
   const users = new UserService(db, config, sessions);
   users.syncAdminPassword();
   const credentials = new ClaudeCredentials(users, config);
-  const servicesFor = servicesFactory(db, config, credentials, runQuery);
+  const servicesFor = servicesFactory(
+    db,
+    config,
+    credentials,
+    runQuery,
+    deps.webImages ?? commonsImages,
+  );
   const svc: RequestServices = (req) => servicesFor(userOf(req).id);
 
   await app.register(cookie, { secret: config.sessionSecret });

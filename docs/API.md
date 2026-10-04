@@ -151,6 +151,19 @@ Server → client (`ServerChatEvent`):
 | POST   | `/api/annotations/delete`             | `{ ids }`                                                                                                                |
 | GET    | `/api/documents/:id/export-annotated` | Downloads a copy of the PDF with standard annotations.                                                                   |
 
+`Annotation` also carries `images: NoteImage[]` (`id, width, height, source user|claude,
+sourceUrl, credit, caption`) and `board: { id, updatedAt, pending } | null` (a whiteboard
+saved in the note; `pending`: Claude's proposal, copied when accepted).
+
+| Method | Path                          | Notes                                                                                                                                                                                                      |
+| ------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/annotations/:id/images` | `{ dataUrl, caption? }` (PNG/JPEG/WebP/GIF data URL, body limit 25 MB) on a note or highlight → `Annotation` (201). Errors: `unsupported_image`, `image_too_large` (413), `too_many_images` (409, max 12). |
+| GET    | `/api/note-images/:id`        | The picture's bytes (private, immutable cache, `nosniff`).                                                                                                                                                 |
+| PATCH  | `/api/note-images/:id`        | `{ caption }` → `Annotation`.                                                                                                                                                                              |
+| DELETE | `/api/note-images/:id`        | → `Annotation` without it.                                                                                                                                                                                 |
+| POST   | `/api/documents/:id/boards`   | "Guardar en el PDF": `{ threadId, page, anchor (note anchor), color?, content? }` → a note holding a copy of that thread's board (201); 409 `board_empty`.                                                 |
+| GET    | `/api/boards/:id/snapshot`    | PNG of a saved board (a pending proposal shows the conversation's board as it is). 404 when there is none.                                                                                                 |
+
 ## Diagrams
 
 Mermaid schemas saved by Claude (`create_diagram` / `update_diagram`). Diagrams
@@ -170,10 +183,12 @@ The chat context also accepts `pageRange: { from, to }` (the scope of a diagram)
 
 One board per chat thread (`Whiteboard` in `packages/shared/src/whiteboard.ts`).
 
-| Method | Path                          | Notes                                                                                                                                      |
-| ------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/api/threads/:id/whiteboard` | `{ threadId, scene, steps, applied, updatedAt }` (`scene` null until first drawn).                                                         |
-| PUT    | `/api/threads/:id/whiteboard` | `{ scene: { elements, files }, applied, snapshot?: { png, bounds } \| null, studentEdited? }` from the browser; body limit 25 MB (images). |
+| Method | Path                                  | Notes                                                                                                                                                                                            |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/threads/:id/whiteboard`         | `{ threadId, scene, steps, applied, linked, updatedAt }` (`scene` null until first drawn; `linked`: `{ boardId, annotationId, documentId, page }` while editing a note's board).                 |
+| PUT    | `/api/threads/:id/whiteboard`         | `{ scene: { elements, files }, applied, snapshot?: { png, bounds } \| null, studentEdited? }` from the browser; body limit 25 MB (images). While linked, also updates the note's board.          |
+| POST   | `/api/threads/:id/whiteboard/replace` | `{ boardId }`: puts a note's board on the thread's board, linked ("Editar en la pizarra"); `{ boardId: null }`: a blank board ("Nueva pizarra"). Claude's steps count as merged. → `Whiteboard`. |
+| POST   | `/api/threads/:id/whiteboard/unlink`  | Stops saving into the note ("Terminar"); the drawing stays. → `Whiteboard`.                                                                                                                      |
 
 WebSocket `navigate` (`docId`, `page`, `quote?`, `side?`): `go_to_page` /
 `show_side_by_side`. The chat context also accepts `pointed` (`page`, `rect`,

@@ -6,6 +6,7 @@ import {
   type AnnotationDisplay,
   type AppSettings,
   type CreateAnnotation,
+  type SaveBoardToPdf,
   type UpdateAnnotation,
 } from '@pdfclaudeassistant/shared';
 import { useQuery } from '@tanstack/react-query';
@@ -204,4 +205,58 @@ export async function setProposalStatus(
   );
   await apply(status);
   push(docId, { undo: () => apply('proposed'), redo: () => apply(status) });
+}
+
+// ---- pictures and saved whiteboards in notes ----
+
+export const noteImageUrl = (id: string) => `/api/note-images/${id}`;
+/** The board's picture; `updatedAt` makes the browser fetch it again after an edit. */
+export const boardSnapshotUrl = (board: { id: string; updatedAt: string }) =>
+  `/api/boards/${board.id}/snapshot?v=${encodeURIComponent(board.updatedAt)}`;
+
+function replaceInCache(docId: string, updated: Annotation) {
+  setCache(docId, (list) => list.map((a) => (a.id === updated.id ? updated : a)));
+}
+
+/** Adds a picture (already shrunk by `prepareImage`) to a note or highlight. */
+export async function addNoteImage(docId: string, annotationId: string, dataUrl: string) {
+  const updated = await api<Annotation>(`/annotations/${annotationId}/images`, {
+    method: 'POST',
+    json: { dataUrl },
+  });
+  replaceInCache(docId, updated);
+  return updated;
+}
+
+export async function setNoteImageCaption(docId: string, imageId: string, caption: string | null) {
+  const updated = await api<Annotation>(`/note-images/${imageId}`, {
+    method: 'PATCH',
+    json: { caption },
+  });
+  replaceInCache(docId, updated);
+}
+
+export async function removeNoteImage(docId: string, imageId: string) {
+  const updated = await api<Annotation>(`/note-images/${imageId}`, { method: 'DELETE' });
+  replaceInCache(docId, updated);
+}
+
+/** "Guardar en el PDF": a note holding a copy of the conversation's whiteboard (undoable). */
+export async function saveBoardToPdf(docId: string, input: SaveBoardToPdf) {
+  const note = await api<Annotation>(`/documents/${docId}/boards`, {
+    method: 'POST',
+    json: input,
+  });
+  setCache(docId, (list) => [...list, note]);
+  push(docId, {
+    undo: async () => {
+      await remove([note.id]);
+      await refresh(docId);
+    },
+    redo: async () => {
+      await post(docId, [toCreate(note)], [note.id]);
+      await refresh(docId);
+    },
+  });
+  return note;
 }

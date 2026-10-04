@@ -7,7 +7,7 @@ import type {
   Stroke,
 } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { MessageSquare, StickyNote } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, StickyNote } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
@@ -23,6 +23,7 @@ import {
   usePalette,
 } from './api';
 import { AnnotationPopover } from './AnnotationPopover';
+import { boardSnapshotUrl } from './api';
 import { caretInLayer, rangeText, wordRange, type Caret } from './highlighter';
 import { isMarginNote, MarginNotes } from './MarginNotes';
 import { askAboutMark } from './mark';
@@ -418,8 +419,9 @@ export function AnnotationOverlay({
             key={a.id}
             type="button"
             data-annotation-ui
-            aria-label={t.annotations.openNote}
+            aria-label={a.board ? t.annotations.board.marker : t.annotations.openNote}
             title={a.content ?? ''}
+            data-note-marker={a.id}
             {...(movable && {
               onPointerDown: startMove(a),
               onPointerMove: onMove,
@@ -432,7 +434,8 @@ export function AnnotationOverlay({
               if (!movable || e.detail === 0) setActive(active === a.id ? null : a.id);
             }}
             className={clsx(
-              'absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md p-1 text-white shadow',
+              'absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-md text-white shadow',
+              a.board ? 'p-0.5' : 'p-1',
               movable && 'cursor-move',
             )}
             style={{
@@ -442,7 +445,20 @@ export function AnnotationOverlay({
               ...(movable && { touchAction: 'none' as const }),
             }}
           >
-            <StickyNote size={14} aria-hidden />
+            {a.board ? (
+              // A note holding a whiteboard shows a small picture of it on the page.
+              <img
+                src={boardSnapshotUrl(a.board)}
+                alt=""
+                draggable={false}
+                className="block h-8 w-12 rounded-sm bg-white object-contain"
+                onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
+              />
+            ) : a.images.length ? (
+              <ImageIcon size={14} aria-hidden />
+            ) : (
+              <StickyNote size={14} aria-hidden />
+            )}
           </button>
         );
       })}

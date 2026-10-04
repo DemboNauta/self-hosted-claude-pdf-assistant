@@ -134,6 +134,50 @@ export const bulkStatusSchema = z.object({
 
 export type AnnotationType = 'highlight' | 'note' | 'drawing' | 'shape';
 
+/** A picture inside a note or highlight (served by `GET /api/note-images/:id`). */
+export interface NoteImage {
+  id: string;
+  width: number;
+  height: number;
+  source: 'user' | 'claude';
+  /** Page the image comes from (Claude's images from Wikimedia Commons). */
+  sourceUrl: string | null;
+  /** Author and licence, to credit Claude's web images. */
+  credit: string | null;
+  caption: string | null;
+}
+
+/** Image types a note accepts (SVG is left out: it can carry scripts). */
+export const NOTE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+
+/** An image added to a note: a data URL (the browser shrinks big photos first). */
+export const addNoteImageSchema = z.object({
+  dataUrl: z
+    .string()
+    .max(20_000_000)
+    .regex(/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/),
+  caption: z.string().trim().max(300).nullable().optional(),
+});
+export type AddNoteImage = z.infer<typeof addNoteImageSchema>;
+
+/** The whiteboard kept inside a note (its picture: `GET /api/boards/:id/snapshot`). */
+export interface SavedBoardRef {
+  id: string;
+  updatedAt: string;
+  /** Claude's proposal: the conversation's board is copied when it is accepted. */
+  pending: boolean;
+}
+
+/** "Guardar en el PDF": the conversation's whiteboard copied into a new note. */
+export const saveBoardToPdfSchema = z.object({
+  threadId: id,
+  page: z.number().int().min(1),
+  anchor: noteAnchorSchema,
+  color: z.string().min(1).max(32).optional(),
+  content: z.string().max(10_000).nullable().optional(),
+});
+export type SaveBoardToPdf = z.infer<typeof saveBoardToPdfSchema>;
+
 export interface Annotation {
   id: string;
   documentId: string;
@@ -145,6 +189,9 @@ export interface Annotation {
   anchor: HighlightAnchor | NoteAnchor | DrawingAnchor | ShapeAnchor;
   content: string | null;
   display: AnnotationDisplay | null;
+  images: NoteImage[];
+  /** Whiteboard saved in this note. */
+  board: SavedBoardRef | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -181,3 +228,29 @@ export const updateSettingsSchema = z.object({
   studyTimer: studyTimerSchema.optional(),
   voice: voiceSettingsSchema.optional(),
 });
+
+/**
+ * Where a whiteboard note without a passage goes: the top right corner of the page,
+ * below the notes already there (`taken`: the page's point notes).
+ */
+export function boardNoteSpot(taken: { x: number; y: number }[]): {
+  kind: 'point';
+  x: number;
+  y: number;
+} {
+  const x = 0.94;
+  let y = 0.05;
+  while (y < 0.9 && taken.some((p) => Math.abs(p.x - x) < 0.03 && Math.abs(p.y - y) < 0.04)) {
+    y += 0.06;
+  }
+  return { kind: 'point', x, y };
+}
+
+/** The point notes of a page (to place a new one next to them). */
+export function pointNotes(list: Annotation[], page: number): { x: number; y: number }[] {
+  return list
+    .filter(
+      (a) => a.page === page && a.type === 'note' && (a.anchor as NoteAnchor).kind === 'point',
+    )
+    .map((a) => a.anchor as { x: number; y: number });
+}

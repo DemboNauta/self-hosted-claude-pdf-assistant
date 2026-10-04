@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import type { PageLayers } from '../reader/PdfPage';
 import { setProposalStatus } from './api';
+import { NoteMedia } from './NoteMedia';
 
 const GAP = 12;
 const MAX_W = 240;
@@ -72,7 +73,9 @@ export function MarginNotes({
   // below the previous card. Written straight to the DOM (a measure-then-place pass).
   const cards = useRef(new Map<string, HTMLElement>());
   const leaders = useRef(new Map<string, SVGPathElement>());
-  const key = items.map((n) => `${n.a.id}:${n.box.y}:${n.a.content?.length}`).join('|');
+  const key = items
+    .map((n) => `${n.a.id}:${n.box.y}:${n.a.content?.length}:${n.a.images.length}:${!!n.a.board}`)
+    .join('|');
   useLayoutEffect(() => {
     let bottom = -Infinity;
     for (const { a, box } of items) {
@@ -162,7 +165,14 @@ export function MarginNotes({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="min-w-0 flex-1 py-0.5 whitespace-pre-wrap">{a.content}</p>
+            <div className="min-w-0 flex-1 py-0.5">
+              <p className="whitespace-pre-wrap">{a.content}</p>
+              {(a.board || a.images.length > 0) && (
+                <div className="mt-1.5 -mb-2">
+                  <NoteMedia docId={docId} annotation={a} editable={false} compact />
+                </div>
+              )}
+            </div>
             <div className="flex shrink-0">
               <button
                 type="button"

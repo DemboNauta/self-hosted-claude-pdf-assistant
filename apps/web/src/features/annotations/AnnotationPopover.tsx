@@ -2,6 +2,7 @@ import type { Annotation, AnnotationDisplay } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
 import { Check, MessageSquare, Pin, PinOff, Trash2, X } from 'lucide-react';
 import {
+  type DragEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -22,6 +23,8 @@ import {
   updateDisplay,
   usePalette,
 } from './api';
+import { imageFiles } from './images';
+import { NoteMedia, useImageUpload } from './NoteMedia';
 import { MIN_H, MIN_W, usePopoverSize } from './popoverSize';
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
@@ -79,6 +82,25 @@ export function AnnotationPopover({
   const quote = (a.anchor as { quote?: string }).quote;
   const proposal = a.status === 'proposed';
   const editable = a.type === 'highlight' || a.type === 'note';
+  const upload = useImageUpload(docId, a.id);
+  const [dropping, setDropping] = useState(false);
+  // Pictures dropped on the window or pasted into the comment go into the note.
+  const dropProps = editable &&
+    !proposal && {
+      onDragOver: (e: DragEvent) => {
+        if (![...e.dataTransfer.types].includes('Files')) return;
+        e.preventDefault();
+        setDropping(true);
+      },
+      onDragLeave: () => setDropping(false),
+      onDrop: (e: DragEvent) => {
+        const files = imageFiles(e.dataTransfer);
+        setDropping(false);
+        if (!files.length) return;
+        e.preventDefault();
+        void upload.upload(files);
+      },
+    };
 
   const w = live?.w ?? display.w ?? (defaultSize.w || 360);
   // Windows without text to show (a drawing's) just fit their buttons.
@@ -255,8 +277,10 @@ export function AnnotationPopover({
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={() => !focused && onFocus()}
       onKeyDown={(e) => e.key === 'Escape' && close()}
+      {...dropProps}
       className={clsx(
         'border-border bg-surface text-text flex flex-col border shadow-xl',
+        dropping && 'ring-accent ring-2',
         sheet
           ? 'fixed inset-x-0 bottom-0 z-50 rounded-t-2xl px-4 pt-1 text-base'
           : clsx('absolute rounded-xl p-3 pr-4 pb-4 text-sm', focused ? 'z-40' : 'z-30'),
@@ -314,6 +338,7 @@ export function AnnotationPopover({
               {a.content}
             </p>
           )}
+          <NoteMedia docId={docId} annotation={a} editable={false} />
           <div className="flex shrink-0 gap-2">
             <button
               type="button"
@@ -371,6 +396,12 @@ export function AnnotationPopover({
               value={text}
               onChange={(e) => setText(e.target.value)}
               onBlur={saveText}
+              onPaste={(e) => {
+                const files = imageFiles(e.clipboardData);
+                if (!files.length) return;
+                e.preventDefault();
+                void upload.upload(files);
+              }}
               rows={4}
               placeholder={
                 a.type === 'note' ? t.annotations.notePlaceholder : t.annotations.commentPlaceholder
@@ -382,6 +413,7 @@ export function AnnotationPopover({
               )}
             />
           )}
+          {editable && <NoteMedia docId={docId} annotation={a} editable upload={upload} />}
           <div className="flex shrink-0 flex-wrap items-center gap-1">
             {quote && (
               <button

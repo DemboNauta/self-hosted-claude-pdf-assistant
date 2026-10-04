@@ -180,7 +180,38 @@ change them if he disagrees.
     grip) and a **bottom sheet with a free height** (dragged from its grip) in
     portrait.
 
+- **Whiteboards on the PDF and pictures in notes (owner, 2026-10-04):**
+  - a whiteboard is **saved inside a note** anchored to a passage (selection) or to the
+    page, shown on the page as a thumbnail that opens the full board;
+  - the saved board is an **editable copy**: the conversation's board stays free
+    ("Nueva pizarra" for a blank one), and the copy can be opened again to keep working
+    on it, by the student or Claude;
+  - **Claude may propose** saving its board next to a passage; the student accepts or
+    discards it, like margin notes;
+  - notes take **pictures**: the student's own, and **pictures from the web added by
+    Claude**.
+
 ## Provisional product choices (Claude, "don't ask until deploy")
+
+- **Whiteboards on the PDF and pictures in notes (Claude, 2026-10-04):**
+  - Claude's web pictures come from **Wikimedia Commons** only (free licences, author
+    and licence stored and shown as credit with a link to the source). Claude has no
+    general web search in this app, and downloading only from Wikimedia's hosts avoids
+    fetching arbitrary addresses. Claude sees small previews and picks one; pictures go
+    only into its proposed margin notes (it never edits the student's notes).
+  - The student adds pictures with "Añadir imagen" (file picker, which offers the
+    camera on phones), by pasting into the comment or dropping onto the note window;
+    up to 12 per note, also on highlights. Big photos are shrunk (2400 px).
+  - Editing a saved board reuses the conversation's board: "Editar en la pizarra"
+    replaces it (asking first if it has a drawing) and **links** it, so every save
+    also updates the note until "Terminar"; Claude is told in the turn context. One
+    board editor at a time keeps the app light.
+  - "Guardar en el PDF" puts the note at the top right of the page being read (stacked
+    below other notes there; the note can be dragged); "Guardar pizarra aquí" in the
+    selection menu anchors it to the selected text. Claude's proposal copies the board
+    **when accepted**, so it includes the steps still being revealed.
+  - Deleting a note keeps its pictures and board for a day, so undo brings them back.
+  - The annotated PDF export does not include pictures or boards yet.
 
 - **Multi-user details** (choices Claude made while implementing the owner's
   decisions above):

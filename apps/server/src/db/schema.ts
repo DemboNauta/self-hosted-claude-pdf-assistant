@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  blob,
   index,
   integer,
   primaryKey,
@@ -425,5 +426,62 @@ export const whiteboards = sqliteTable('whiteboards', {
   /** When the student last drew on it, and when Claude last looked (`whiteboard_view`). */
   studentEditedAt: text('student_edited_at'),
   seenAt: text('seen_at'),
+  /** Saved board (on the PDF) this board is editing: each save also updates that copy. */
+  linkedBoardId: text('linked_board_id'),
   updatedAt: text('updated_at').notNull(),
 });
+
+/**
+ * Pictures inside notes and highlights: added by the student (file, photo, paste) or by
+ * Claude (a free image from Wikimedia Commons). `annotation_id` has no foreign key so a
+ * deleted annotation can be restored with its images (undo): they are marked
+ * `orphaned_at` and purged a day later.
+ */
+export const annotationImages = sqliteTable(
+  'annotation_images',
+  {
+    id: text('id').primaryKey(),
+    userId: userId(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    annotationId: text('annotation_id').notNull(),
+    mime: text('mime').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    source: text('source', { enum: ['user', 'claude'] }).notNull(),
+    /** Where Claude's web image comes from (its Commons page), its author and licence. */
+    sourceUrl: text('source_url'),
+    credit: text('credit'),
+    caption: text('caption'),
+    orphanedAt: text('orphaned_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('annotation_images_annotation_idx').on(t.annotationId)],
+);
+
+/**
+ * A whiteboard saved on the PDF: an editable copy kept inside a note (owner's choice).
+ * Claude's proposals copy the conversation's board when accepted (`pending_thread_id`),
+ * so the steps it was still revealing are included. Orphaned like annotation images.
+ */
+export const savedBoards = sqliteTable(
+  'saved_boards',
+  {
+    id: text('id').primaryKey(),
+    userId: userId(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    annotationId: text('annotation_id').notNull(),
+    sceneJson: text('scene_json'),
+    /** PNG data URL of the drawing (the thumbnail in the note). */
+    snapshotPng: text('snapshot_png'),
+    pendingThreadId: text('pending_thread_id'),
+    orphanedAt: text('orphaned_at'),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('saved_boards_annotation_idx').on(t.annotationId)],
+);

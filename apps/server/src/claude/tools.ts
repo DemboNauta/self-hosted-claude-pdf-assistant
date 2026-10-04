@@ -1,6 +1,8 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import {
   anchorSchema,
+  boardNoteSpot,
+  pointNotes,
   BOARD_WIDTH,
   boardElementSchema,
   HIGHLIGHT_KEYS,
@@ -30,6 +32,8 @@ import {
   type PageLayout,
 } from '../ingest/layout.js';
 import { pageItems } from '../services/anchoring.js';
+import { normalizeImage, thumbnail } from '../services/images.js';
+import type { WebImage } from '../services/webImages.js';
 import { boardElements, findProblems, place, renderPreview } from './board.js';
 import { newId } from '../services/ids.js';
 import { checkDiagramSource, MAX_DIAGRAM_SOURCE } from '../services/diagrams.js';
@@ -99,6 +103,8 @@ export type ToolDeps = Pick<
   | 'review'
   | 'diagrams'
   | 'whiteboards'
+  | 'media'
+  | 'webImages'
 >;
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -550,6 +556,8 @@ export function pointerTools(deps: ToolDeps, ctx: ToolContext) {
 export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
   const changed = () =>
     ctx.emit({ type: 'data_changed', threadId: ctx.threadId, scope: 'annotations' });
+  /** Pictures found this turn by search_web_images, by the id Claude was shown (i1, i2…). */
+  const found = new Map<string, WebImage>();
   return [
     tool(
       'get_annotations',
@@ -588,7 +596,12 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
                   a.type === 'note' ? 'note' : `highlight "${meanings.get(a.color) ?? a.color}"`;
                 const q = quote ? `: "${quote.slice(0, 300)}"` : '';
                 const c = a.content ? ` — ${a.content.slice(0, 500)}` : '';
-                return `- p. ${a.page} ${kind} by ${who}${q}${c}`;
+                const media = [
+                  a.images.length ? `${a.images.length} picture(s)` : '',
+                  a.board ? 'a saved whiteboard' : '',
+                ].filter(Boolean);
+                const m = media.length ? ` [with ${media.join(' and ')}]` : '';
+                return `- p. ${a.page} ${kind} by ${who}${q}${c}${m}`;
               })
               .join('\n'),
           );
@@ -711,6 +724,16 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
               page: z.number().int().min(1),
               quote: z.string().min(3).max(1000),
               text: z.string().min(1).max(400),
+              image: z
+                .object({
+                  id: z
+                    .string()
+                    .regex(/^i\d{1,2}$/)
+                    .describe('Id of a picture returned by search_web_images in this answer'),
+                  caption: z.string().max(200).optional(),
+                })
+                .optional()
+                .describe('A picture from the web shown inside the note'),
             }),
           )
           .min(1)
@@ -724,6 +747,12 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
           const id = docId ?? ctx.docId;
           if (!id) return fail('docId is required here (no document is open).');
           deps.library.getLive(id);
+          const unknown = notes.filter((n) => n.image && !found.has(n.image.id));
+          if (unknown.length) {
+            return fail(
+              `Unknown picture id(s) ${unknown.map((n) => n.image!.id).join(', ')}: call search_web_images first and use the ids it returns.`,
+            );
+          }
           const created = deps.annotations.create(
             id,
             notes.map((n) => ({
@@ -738,6 +767,24 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
           // A note whose passage was not found has nowhere to sit in the margin: drop it.
           const missing = created.filter((a) => !(a.anchor as { rects?: unknown[] }).rects?.length);
           if (missing.length) deps.annotations.delete(missing.map((m) => m.id));
+          // Pictures go into the notes that found their passage.
+          const failed: string[] = [];
+          for (const [i, n] of notes.entries()) {
+            const note = created[i];
+            if (!n.image || !note || missing.includes(note)) continue;
+            const pic = found.get(n.image.id)!;
+            try {
+              const img = await normalizeImage(await deps.webImages.download(pic.imageUrl));
+              deps.media.addImage(id, note.id, img, {
+                source: 'claude',
+                sourceUrl: pic.pageUrl,
+                credit: pic.credit || null,
+                caption: n.image.caption ?? null,
+              });
+            } catch (err) {
+              failed.push(`${n.image.id} (${err instanceof Error ? err.message : String(err)})`);
+            }
+          }
           changed();
           const shown = created.length - missing.length;
           const warn = missing.length
@@ -745,8 +792,108 @@ export function annotationTools(deps: ToolDeps, ctx: ToolContext) {
                 .map((m) => m.page)
                 .join(', ')}) and were not added: check the exact wording and propose them again.`
             : '';
+          const picWarn = failed.length
+            ? ` These pictures could not be added (the notes were kept without them): ${failed.join('; ')}.`
+            : '';
           return text(
-            `Proposed ${shown} margin note(s); the student can accept or discard them.${warn}`,
+            `Proposed ${shown} margin note(s); the student can accept or discard them.${warn}${picWarn}`,
+          );
+        },
+      ),
+    ),
+    tool(
+      'search_web_images',
+      [
+        'Search freely licensed pictures on the web (Wikimedia Commons: photos, drawings, diagrams, maps, portraits) to show inside a margin note when a picture helps understand a passage: what something looks like, an anatomical drawing, a map, a historical portrait, a real example of a concept.',
+        'Returns small previews with ids (i1, i2…) so you can choose: look at them and only use one that really fits; pass its id as "image" in add_margin_notes. Search in English for better results. Do not add pictures to every note: only when they add something.',
+      ].join(' '),
+      {
+        query: z.string().min(2).max(120),
+        count: z.number().int().min(1).max(6).default(4),
+      },
+      tracked(
+        ctx,
+        'search_web_images',
+        ({ query }) => query,
+        async ({ query, count }) => {
+          const results = await deps.webImages.search(query, count);
+          if (!results.length) return text('No pictures found: try other words (in English).');
+          const content: CallToolResult['content'] = [];
+          for (const r of results) {
+            const key = `i${found.size + 1}`;
+            found.set(key, r);
+            let preview: Buffer | null;
+            try {
+              preview = await thumbnail(await deps.webImages.download(r.previewUrl), 330);
+            } catch {
+              preview = null;
+            }
+            if (preview) {
+              content.push({
+                type: 'image',
+                data: preview.toString('base64'),
+                mimeType: 'image/jpeg',
+              });
+            }
+            content.push({
+              type: 'text',
+              text: `${key}: ${r.title}${r.description ? ` — ${r.description}` : ''} (${r.width}×${r.height}${r.credit ? `; ${r.credit}` : ''})${preview ? '' : ' [no preview]'}`,
+            });
+          }
+          return { content };
+        },
+      ),
+    ),
+    tool(
+      'save_whiteboard_to_pdf',
+      [
+        'Propose keeping the whiteboard you drew in this conversation inside a note on the PDF, next to the passage or section it explains, so the student finds it again while reading.',
+        'It appears as a proposal in your colour; when the student accepts it, the board is copied as it is at that moment (with everything you drew in this answer). Use it after drawing, for boards worth keeping (a summary scheme, a worked example), not for every drawing.',
+        'Quote the passage verbatim (3 to 40 consecutive words), or give only the page to put it at the top of that page. "text" says what the board shows (one sentence, in the language of the student).',
+      ].join(' '),
+      {
+        docId: z.string().optional(),
+        page: z.number().int().min(1),
+        quote: z.string().min(3).max(1000).optional(),
+        text: z.string().min(1).max(400),
+      },
+      tracked(
+        ctx,
+        'save_whiteboard_to_pdf',
+        ({ page }) => `p. ${page}`,
+        async ({ docId, page, quote, text: body }) => {
+          const id = docId ?? ctx.docId;
+          if (!id) return fail('docId is required here (no document is open).');
+          deps.library.getLive(id);
+          const board = deps.whiteboards.get(ctx.threadId);
+          if (!board.steps.length && !board.scene?.elements.length) {
+            return fail('The whiteboard is empty: draw on it with whiteboard_draw first.');
+          }
+          const [note] = deps.annotations.create(
+            id,
+            [
+              {
+                type: 'note',
+                page,
+                color: 'claude',
+                content: body,
+                anchor: quote
+                  ? { kind: 'text', quote }
+                  : boardNoteSpot(pointNotes(deps.annotations.list(id), page)),
+              },
+            ],
+            { author: 'claude', status: 'proposed' },
+          );
+          if (quote && !(note!.anchor as { rects?: unknown[] }).rects?.length) {
+            deps.annotations.delete([note!.id]);
+            return fail(
+              `The quote was not found verbatim on page ${page}: check the exact wording, or give only the page.`,
+            );
+          }
+          deps.media.createBoard(id, note!.id, { pendingThreadId: ctx.threadId });
+          changed();
+          return text(
+            'Proposed: the student sees a note with the board and can accept it (the board is copied then) or discard it.',
           );
         },
       ),

@@ -1,9 +1,13 @@
+import { boardNoteSpot, pointNotes, type Annotation } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
 import {
+  BookmarkPlus,
   CheckCheck,
   ChevronDown,
   ChevronUp,
   Columns2,
+  FilePlus2,
+  Link2,
   Loader2,
   Maximize2,
   Minimize2,
@@ -11,9 +15,12 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { t } from '../../i18n';
+import { queryClient } from '../../lib/queryClient';
 import { Markdown } from '../chat/Markdown';
+import { annotationsKey } from '../annotations/api';
 import { useChat } from '../chat/store';
-import { flushBoard, useBoard } from './store';
+import { useReader } from '../reader/store';
+import { flushBoard, newBoard, saveBoardInNote, unlinkBoard, useBoard } from './store';
 
 const BoardCanvas = lazy(() => import('./BoardCanvas'));
 
@@ -59,11 +66,136 @@ function CheckButton() {
         useBoard.getState().setExpanded(false);
         void flushBoard().then(() => useChat.getState().send(t.board.checkPrompt));
       }}
-      className="hover:bg-surface-muted flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium disabled:opacity-50"
+      className={footerButton}
     >
       <CheckCheck size={14} aria-hidden />
       {t.board.check}
     </button>
+  );
+}
+
+const footerButton =
+  'hover:bg-surface-muted flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium disabled:opacity-50';
+
+/**
+ * "Guardar en el PDF": keeps a copy of the board in a note on the page being read
+ * (owner's choice: an editable copy inside a note), then offers to show it.
+ */
+function SaveToPdfButton() {
+  const docId = useReader((s) => s.docId);
+  // A reader is open (the reader store keeps its last document after leaving it).
+  const reading = useBoard((s) => s.dockable);
+  const hasDrawing = useBoard((s) => (s.scene?.elements.length ?? 0) > 0);
+  const [state, setState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'busy' }
+    | { kind: 'saved'; page: number; id: string }
+    | { kind: 'error' }
+  >({ kind: 'idle' });
+  useEffect(() => {
+    if (state.kind !== 'saved' && state.kind !== 'error') return;
+    const timer = setTimeout(() => setState({ kind: 'idle' }), 6000);
+    return () => clearTimeout(timer);
+  }, [state]);
+  if (!docId || !reading || (!hasDrawing && state.kind === 'idle')) return null;
+  if (state.kind === 'saved') {
+    return (
+      <span role="status" className="text-ok flex items-center gap-1 text-xs">
+        {t.board.saved(state.page)}
+        <button
+          type="button"
+          onClick={() => {
+            useReader.getState().goTo(state.page);
+            useReader.getState().setActiveAnnotation(state.id);
+          }}
+          className="text-text font-medium hover:underline"
+        >
+          {t.board.goToNote}
+        </button>
+      </span>
+    );
+  }
+  if (state.kind === 'error') {
+    return (
+      <span role="alert" className="text-danger text-xs">
+        {t.board.saveFailed}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={state.kind === 'busy'}
+      title={t.board.saveToPdfHint}
+      onClick={() => {
+        const page = useReader.getState().currentPage;
+        setState({ kind: 'busy' });
+        // Top right corner of the page being read, below other notes there.
+        const list = queryClient.getQueryData<Annotation[]>(annotationsKey(docId)) ?? [];
+        saveBoardInNote(docId, page, boardNoteSpot(pointNotes(list, page)))
+          .then((note) => setState(note ? { kind: 'saved', page, id: note.id } : { kind: 'idle' }))
+          .catch(() => setState({ kind: 'error' }));
+      }}
+      className={footerButton}
+    >
+      <BookmarkPlus size={14} aria-hidden />
+      {t.board.saveToPdf}
+    </button>
+  );
+}
+
+/** "Nueva pizarra": starts over on a blank board. */
+function NewBoardButton() {
+  const hasDrawing = useBoard((s) => (s.scene?.elements.length ?? 0) > 0);
+  const running = useChat((s) => s.running);
+  if (!hasDrawing) return null;
+  return (
+    <button
+      type="button"
+      disabled={running}
+      onClick={() => void newBoard()}
+      aria-label={t.board.newBoard}
+      title={t.board.newBoard}
+      className={iconButton}
+    >
+      <FilePlus2 size={16} aria-hidden />
+    </button>
+  );
+}
+
+/** Shown while the board is a note's board opened to keep working on it. */
+function LinkedBanner() {
+  const linked = useBoard((s) => s.linked);
+  const docId = useReader((s) => s.docId);
+  const reading = useBoard((s) => s.dockable);
+  if (!linked) return null;
+  return (
+    <div
+      className="border-border bg-surface-muted flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5 text-xs"
+      data-testid="board-linked"
+    >
+      <Link2 size={14} aria-hidden className="text-text-muted shrink-0" />
+      <span className="min-w-0 flex-1">{t.board.linked(linked.page)}</span>
+      {reading && docId === linked.documentId && (
+        <button
+          type="button"
+          onClick={() => {
+            useReader.getState().goTo(linked.page);
+            useReader.getState().setActiveAnnotation(linked.annotationId);
+          }}
+          className="font-medium hover:underline"
+        >
+          {t.board.goToNote}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => void unlinkBoard()}
+        className="font-medium hover:underline"
+      >
+        {t.board.unlink}
+      </button>
+    </div>
   );
 }
 
@@ -119,6 +251,7 @@ export function WhiteboardPanel({ docked = false }: { docked?: boolean }) {
       aria-modal={expanded || undefined}
       aria-label={expanded ? t.board.title : undefined}
     >
+      <LinkedBanner />
       <div className="relative min-h-0 flex-1">
         <Suspense
           fallback={
@@ -133,7 +266,9 @@ export function WhiteboardPanel({ docked = false }: { docked?: boolean }) {
       </div>
       <div className="border-border flex items-center gap-2 border-t px-2 py-1">
         <CheckButton />
+        <SaveToPdfButton />
         <span className="flex-1" />
+        <NewBoardButton />
         {docked ? (
           <button
             type="button"

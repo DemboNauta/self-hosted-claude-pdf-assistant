@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createCanvas } from '@napi-rs/canvas';
 import { hash } from '@node-rs/argon2';
 import { buildApp } from '../src/app.js';
 import { assertNoApiKey } from '../src/auth-guard.js';
@@ -123,11 +124,19 @@ const fakeChat = ((args: {
       );
     }
     // "Nota al margen" makes the fake propose a margin note on the selection.
+    // With "imagen" too, the note carries a picture found with search_web_images.
     if (/nota al margen/i.test(question) && tools?.add_margin_notes && selected?.[2]) {
+      const withImage = /imagen/i.test(question) && tools.search_web_images;
+      if (withImage) await tools.search_web_images!.handler({ query: 'chloroplast', count: 2 }, {});
       await tools.add_margin_notes.handler(
         {
           notes: [
-            { page: Number(page), quote: selected[2], text: 'Ojo: esto ocurre en el estroma.' },
+            {
+              page: Number(page),
+              quote: selected[2],
+              text: 'Ojo: esto ocurre en el estroma.',
+              ...(withImage && { image: { id: 'i1', caption: 'Un cloroplasto' } }),
+            },
           ],
         },
         {},
@@ -234,6 +243,13 @@ const fakeChat = ((args: {
           },
           {},
         ),
+      );
+    }
+    // "Guarda la pizarra" proposes keeping the board in a note at the top of page 1.
+    if (/guarda la pizarra/i.test(question) && tools?.save_whiteboard_to_pdf) {
+      await tools.save_whiteboard_to_pdf.handler(
+        { page: 1, text: 'Esquema de la fotosíntesis' },
+        {},
       );
     }
     // "Conecta" makes the fake draw an arrow from the selection to the top of the page.
@@ -367,6 +383,27 @@ const app = await buildApp(config, {
   synthesize: async (text) => silentWav(text),
   loginAttemptsPerMinute: 1000,
   claudeQuery: fakeChat,
+  // Claude's web pictures: a green square instead of Wikimedia Commons.
+  webImages: {
+    search: async (query, limit) =>
+      Array.from({ length: limit }, (_, i) => ({
+        title: `${query} ${i + 1}.png`,
+        pageUrl: `https://commons.wikimedia.org/wiki/File:E2e_${i + 1}.png`,
+        imageUrl: 'e2e://image',
+        previewUrl: 'e2e://preview',
+        width: 320,
+        height: 240,
+        credit: 'E2E Author · CC BY 4.0',
+        description: '',
+      })),
+    download: async () => {
+      const canvas = createCanvas(320, 240);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#2f9e44';
+      ctx.fillRect(0, 0, 320, 240);
+      return canvas.encode('png');
+    },
+  },
   claudeStatus: new ClaudeStatusService(config, fakeQuery),
 });
 await app.listen({ host: '127.0.0.1', port: config.port });

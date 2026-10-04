@@ -16,8 +16,8 @@ function useDark() {
   return dark;
 }
 
-/** The Excalidraw board of one thread; `key` remounts it for another thread. */
-function Board({ threadId }: { threadId: string }) {
+/** The Excalidraw board of one thread; `key` remounts it for another thread or scene. */
+function Board({ threadId, revision }: { threadId: string; revision: number }) {
   const dark = useDark();
 
   // A layout effect: its cleanup runs before Excalidraw tears its scene down.
@@ -31,7 +31,7 @@ function Board({ threadId }: { threadId: string }) {
       onKeyDownCapture={noteUserInput}
     >
       <Excalidraw
-        excalidrawAPI={(api) => setBoardApi(api)}
+        excalidrawAPI={(api) => setBoardApi(api, revision)}
         initialData={{ appState: { currentItemRoughness: 1 } }}
         onChange={(elements, _appState, files) =>
           noteChange(elements, files as Record<string, unknown>)
@@ -58,6 +58,7 @@ function Board({ threadId }: { threadId: string }) {
 export default function BoardCanvas() {
   const threadId = useBoard((s) => s.threadId);
   const loaded = useBoard((s) => s.loaded);
+  const revision = useBoard((s) => s.revision);
   if (!loaded || !threadId) return null;
-  return <Board key={threadId} threadId={threadId} />;
+  return <Board key={`${threadId}:${revision}`} threadId={threadId} revision={revision} />;
 }

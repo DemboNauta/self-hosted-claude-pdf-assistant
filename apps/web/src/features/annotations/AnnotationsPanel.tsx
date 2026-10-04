@@ -1,6 +1,15 @@
 import type { Annotation } from '@pdfclaudeassistant/shared';
 import clsx from 'clsx';
-import { Download, Eye, EyeOff, PenLine, Shapes, StickyNote } from 'lucide-react';
+import {
+  Download,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+  PenLine,
+  Presentation,
+  Shapes,
+  StickyNote,
+} from 'lucide-react';
 import { t } from '../../i18n';
 import { SidePanelFrame } from '../reader/SidePanels';
 import { useReader } from '../reader/store';
@@ -18,7 +27,13 @@ function Item({ a, colorOf }: { a: Annotation; colorOf: (k: string) => string })
       <Shapes size={12} aria-hidden />
     ) : null;
   const label =
-    quote ?? a.content ?? (a.type === 'drawing' ? t.annotations.drawing : t.annotations.shape);
+    quote ??
+    a.content ??
+    (a.board
+      ? t.annotations.board.label
+      : a.type === 'drawing'
+        ? t.annotations.drawing
+        : t.annotations.shape);
   return (
     <li>
       <button
@@ -43,6 +58,10 @@ function Item({ a, colorOf }: { a: Annotation; colorOf: (k: string) => string })
         <span className="min-w-0 flex-1">
           <span className="text-text-muted flex items-center gap-1 text-xs">
             {icon}
+            {a.board && <Presentation size={12} aria-label={t.annotations.board.label} />}
+            {a.images.length > 0 && (
+              <ImageIcon size={12} aria-label={t.annotations.images.viewer} />
+            )}
             p. {a.page} · {a.author === 'claude' ? t.annotations.byClaude : t.annotations.byYou}
           </span>
           <span className={clsx('line-clamp-3 text-sm', quote && 'italic')}>{label}</span>

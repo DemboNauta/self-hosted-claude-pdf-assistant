@@ -11,6 +11,7 @@ import { annotations } from '../db/schema.js';
 import { quoteRects, pageItems } from './anchoring.js';
 import { HttpError, notFound } from './errors.js';
 import { newId } from './ids.js';
+import type { NoteMediaService } from './noteMedia.js';
 
 type Row = typeof annotations.$inferSelect;
 
@@ -21,7 +22,7 @@ const ANCHOR_SCHEMAS = {
   shape: shapeAnchorSchema,
 } as const;
 
-function toDto(row: Row): Annotation {
+function toDto(row: Row, media: Pick<Annotation, 'images' | 'board'>): Annotation {
   return {
     id: row.id,
     documentId: row.documentId,
@@ -33,6 +34,8 @@ function toDto(row: Row): Annotation {
     anchor: JSON.parse(row.anchorJson) as Annotation['anchor'],
     content: row.content,
     display: row.displayJson ? (JSON.parse(row.displayJson) as Annotation['display']) : null,
+    images: media.images,
+    board: media.board,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -45,10 +48,21 @@ export class AnnotationService {
   constructor(
     private readonly db: Db,
     private readonly userId: string,
+    readonly media: NoteMediaService,
   ) {}
 
+  /** Rows → DTOs with their pictures and saved whiteboard. */
+  private withMedia(rows: Row[]): Annotation[] {
+    const ids = rows.map((r) => r.id);
+    const images = this.media.imagesFor(ids);
+    const boards = this.media.boardsFor(ids);
+    return rows.map((r) =>
+      toDto(r, { images: images.get(r.id) ?? [], board: boards.get(r.id) ?? null }),
+    );
+  }
+
   list(documentId: string, { includeRejected = false } = {}): Annotation[] {
-    return this.db
+    const rows = this.db
       .select()
       .from(annotations)
       .where(
@@ -59,14 +73,14 @@ export class AnnotationService {
         ),
       )
       .orderBy(asc(annotations.page), asc(annotations.createdAt))
-      .all()
-      .map(toDto);
+      .all();
+    return this.withMedia(rows);
   }
 
   get(id: string): Annotation {
     const row = this.db.select().from(annotations).where(this.own(id)).get();
     if (!row) throw notFound();
-    return toDto(row);
+    return this.withMedia([row])[0]!;
   }
 
   /** Creates annotations; `ids` restores previously deleted ones (undo). */
@@ -104,6 +118,7 @@ export class AnnotationService {
           .run();
       }
     });
+    if (opts.ids) this.media.restore(opts.ids);
     return rows.map((r) => this.get(r.id));
   }
 
@@ -121,6 +136,7 @@ export class AnnotationService {
       set.anchorJson = JSON.stringify(parsed.data);
     }
     this.db.update(annotations).set(set).where(this.own(id)).run();
+    if (patch.status === 'active') this.media.materializeBoards([id]);
     return this.get(id);
   }
 
@@ -130,6 +146,7 @@ export class AnnotationService {
       .set({ status, updatedAt: now() })
       .where(and(eq(annotations.userId, this.userId), inArray(annotations.id, ids)))
       .run();
+    if (status === 'active') this.media.materializeBoards(ids);
   }
 
   delete(ids: string[]) {
@@ -137,6 +154,7 @@ export class AnnotationService {
       .delete(annotations)
       .where(and(eq(annotations.userId, this.userId), inArray(annotations.id, ids)))
       .run();
+    this.media.orphan(ids);
   }
 
   private own(id: string) {

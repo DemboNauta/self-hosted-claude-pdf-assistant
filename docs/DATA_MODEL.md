@@ -34,6 +34,7 @@ To change the schema:
 | `0016_whiteboards`           | `whiteboards` (one per thread)                                                                   |
 | `0017_whiteboard_snapshot`   | `whiteboards.snapshot_png`, `snapshot_bounds_json`, `student_edited_at`, `seen_at`               |
 | `0018_server_claude`         | `users.server_claude`: the admin lets the account use the server's Claude credentials            |
+| `0019_note_media`            | `annotation_images`, `saved_boards`, `whiteboards.linked_board_id`                               |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
@@ -114,6 +115,21 @@ updated_at` (a step may carry `remove`: ids it takes off the board), plus `snaps
   made by the browser on each save) with `snapshot_bounds_json` (board area it shows),
   `student_edited_at` (the student changed it) and `seen_at` (Claude last called
   `whiteboard_view`). PDF crops travel as PNG data URLs inside the steps and the scene.
+- **whiteboards.linked_board_id** (`0019`): the saved board this thread's board is
+  editing ("Editar en la pizarra"); each save also updates that saved board.
+- **annotation_images** (`0019`) `id, user_id, document_id (cascade), annotation_id, mime,
+data (BLOB), width, height, source (user|claude), source_url?, credit?, caption?,
+orphaned_at?`: pictures in notes and highlights (max 12 each). Stored in SQLite, so the
+  backup carries them. The server checks the real type by its first bytes and decodes it
+  (PNG, JPEG, WebP, GIF; never SVG) and scales pictures over 2400 px or 3 MB down to WebP
+  (`services/images.ts`); the browser already shrinks big photos to JPEG.
+- **saved_boards** (`0019`) `id, user_id, document_id (cascade), annotation_id (unique),
+scene_json, snapshot_png (data URL), pending_thread_id?, orphaned_at?`: a whiteboard
+  copied into a note. `pending_thread_id` (Claude's proposal): the thread's board is
+  copied when the note is accepted.
+- `annotation_id` has **no foreign key** in both tables: deleting an annotation sets
+  `orphaned_at` (`NoteMediaService.orphan`), restoring it with its id (undo) clears it,
+  and media orphaned for more than a day are purged on the next delete.
 - **memory_items** `scope (global|document), document_id?, category, content`.
 - **concepts** `name, key (canonical name for merging), document_id?, page?,
 mastery 0–1, times_failed, last_evidence, last_seen_at`.

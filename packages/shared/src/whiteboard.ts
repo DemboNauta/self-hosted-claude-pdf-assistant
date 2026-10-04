@@ -123,8 +123,21 @@ export interface Whiteboard {
   steps: BoardStep[];
   /** Keys (`messageId:stepId`) of the steps already merged into `scene`. */
   applied: string[];
+  /** The saved board (in a note on the PDF) this board is editing, if any. */
+  linked: LinkedBoard | null;
   updatedAt: string;
 }
+
+/** A note's whiteboard opened in the conversation: saves go to the note too. */
+export interface LinkedBoard {
+  boardId: string;
+  annotationId: string;
+  documentId: string;
+  page: number;
+}
+
+/** Puts a saved board on the conversation's board (to edit it with Claude), or clears it. */
+export const replaceBoardSchema = z.object({ boardId: z.string().min(1).max(64).nullable() });
 
 /** Part of the board a snapshot shows, in board units. */
 export const boardBoundsSchema = z.object({

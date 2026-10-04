@@ -1,13 +1,19 @@
 import {
   boardStepKey,
+  type Annotation,
   type BoardScene,
   type BoardStep,
+  type LinkedBoard,
+  type NoteAnchor,
   type SaveBoard,
   type Whiteboard,
 } from '@pdfclaudeassistant/shared';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { create } from 'zustand';
+import { t } from '../../i18n';
 import { api as http } from '../../lib/api';
+import { queryClient } from '../../lib/queryClient';
+import { annotationsKey, saveBoardToPdf } from '../annotations/api';
 import { chatSocket, setBoardRevealer, useChat } from '../chat/store';
 import { bottomOf, sceneId, stepSkeletons, type Box } from './convert';
 
@@ -67,6 +73,10 @@ interface BoardState {
   loaded: boolean;
   /** Scene ids of the elements each step drew (this session), to scroll to them. */
   stepElements: Record<string, string[]>;
+  /** The note's board being edited here ("Editar en la pizarra"): saves go there too. */
+  linked: LinkedBoard | null;
+  /** Bumped when the scene is replaced as a whole, to mount a fresh canvas. */
+  revision: number;
   setView: (view: 'chat' | 'board') => void;
   setExpanded: (expanded: boolean) => void;
   setDocked: (docked: boolean) => void;
@@ -105,6 +115,8 @@ export const useBoard = create<BoardState>((set) => ({
   scene: null,
   loaded: false,
   stepElements: {},
+  linked: null,
+  revision: 0,
   setView: (view) => set({ view }),
   setExpanded: (expanded) => set({ expanded }),
   // Docking shows the conversation in the chat again: the board is beside the PDF.
@@ -129,9 +141,9 @@ let excalidrawApi: ExcalidrawImperativeAPI | null = null;
 let readyApi: ExcalidrawImperativeAPI | null = null;
 
 /** The mounted board registers itself; while it is not mounted the store keeps the scene. */
-export function setBoardApi(api: ExcalidrawImperativeAPI | null) {
-  // Excalidraw may hand the same API again on re-render.
-  if (api === excalidrawApi) return;
+export function setBoardApi(api: ExcalidrawImperativeAPI | null, revision: number) {
+  // Excalidraw may hand the same API again on re-render; a canvas being replaced is ignored.
+  if (api === excalidrawApi || revision !== useBoard.getState().revision) return;
   excalidrawApi = api;
   if (api) void attach(api);
 }
@@ -234,6 +246,9 @@ async function save() {
     throw err;
   }
   if (useBoard.getState().threadId === threadId) lastSaved = signature;
+  // The note's thumbnail shows the new drawing.
+  const linked = useBoard.getState().linked;
+  if (linked) void queryClient.invalidateQueries({ queryKey: annotationsKey(linked.documentId) });
 }
 
 /** Saves now (before asking Claude about the board, so it sees the latest drawing). */
@@ -474,6 +489,7 @@ async function load(threadId: string | null) {
     loaded: false,
     stepElements: {},
     expanded: false,
+    linked: null,
   });
   if (!threadId) return;
   const board = await http<Whiteboard>(`/threads/${threadId}/whiteboard`);
@@ -482,6 +498,7 @@ async function load(threadId: string | null) {
     steps: board.steps,
     applied: board.applied,
     scene: board.scene,
+    linked: board.linked,
     loaded: true,
   });
   // Steps drawn while the board was not open (another device, a reload mid-answer).
@@ -514,6 +531,102 @@ chatSocket.subscribe((event) => {
       .catch((err) => console.error(err));
   }
 });
+
+// ---- boards kept in notes on the PDF ----
+
+/**
+ * The server replaced the whole board (a note's board opened, or a blank one): the
+ * current canvas is dropped without saving and a fresh one shows the new scene.
+ */
+function resetTo(board: Whiteboard) {
+  clearTimeout(saveTimer);
+  excalidrawApi = null;
+  readyApi = null;
+  lastLive = null;
+  lastSaved = '';
+  useBoard.setState((s) => ({
+    steps: board.steps,
+    applied: board.applied,
+    scene: board.scene,
+    linked: board.linked,
+    stepElements: {},
+    loaded: true,
+    revision: s.revision + 1,
+  }));
+}
+
+/** Brings the board into view, next to the PDF when a reader is open. */
+function revealBoard() {
+  const s = useBoard.getState();
+  if (s.dockable) s.setDocked(true);
+  else {
+    s.setView('board');
+    // Loaded on demand: the chat dock brings the whole chat panel with it.
+    void import('../chat/ChatDock').then((m) => m.useChatDock.getState().show());
+  }
+}
+
+const hasDrawing = () => currentElements().length > 0;
+
+/**
+ * "Editar en la pizarra": puts a note's board on the conversation's board, so the
+ * student (and Claude) keep working on it; every save also updates the note. Asks first
+ * when that would replace another drawing. Resolves false when the student cancels.
+ */
+export async function openSavedBoard(boardId: string): Promise<boolean> {
+  const { threadId, linked } = useBoard.getState();
+  if (!threadId) return false;
+  if (linked?.boardId === boardId) {
+    revealBoard();
+    return true;
+  }
+  if (hasDrawing() && !window.confirm(t.board.replaceConfirm)) return false;
+  // The last strokes of a board being edited reach its note first.
+  await flushBoard();
+  const board = await http<Whiteboard>(`/threads/${threadId}/whiteboard/replace`, {
+    method: 'POST',
+    json: { boardId },
+  });
+  if (useBoard.getState().threadId !== threadId) return false;
+  resetTo(board);
+  revealBoard();
+  return true;
+}
+
+/** "Nueva pizarra": a blank board (what was saved on the PDF stays in its notes). */
+export async function newBoard(): Promise<void> {
+  const { threadId } = useBoard.getState();
+  if (!threadId || !window.confirm(t.board.newBoardConfirm)) return;
+  await flushBoard();
+  const board = await http<Whiteboard>(`/threads/${threadId}/whiteboard/replace`, {
+    method: 'POST',
+    json: { boardId: null },
+  });
+  if (useBoard.getState().threadId === threadId) resetTo(board);
+}
+
+/** "Terminar": stops saving into the note; the drawing stays on the board. */
+export async function unlinkBoard(): Promise<void> {
+  const { threadId } = useBoard.getState();
+  if (!threadId) return;
+  await flushBoard();
+  const board = await http<Whiteboard>(`/threads/${threadId}/whiteboard/unlink`, {
+    method: 'POST',
+  });
+  if (useBoard.getState().threadId === threadId) useBoard.setState({ linked: board.linked });
+}
+
+/** "Guardar en el PDF": a note on the page holding a copy of the board as it is now. */
+export async function saveBoardInNote(
+  docId: string,
+  page: number,
+  anchor: NoteAnchor,
+): Promise<Annotation | null> {
+  const { threadId } = useBoard.getState();
+  if (!threadId || !hasDrawing()) return null;
+  await flushBoard();
+  return saveBoardToPdf(docId, { threadId, page, anchor, color: 'yellow' });
+}
 
 // A thread may already be open when the board module loads.
 void load(useChat.getState().threadId);

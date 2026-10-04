@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-09-28 (tablet: whiteboard next to the PDF, highlighter tool, resizable chat, **not deployed yet**; before that: the admin can share the server's Claude with an account, for his own demo accounts: migration `0018`, **not deployed yet**; before that: visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, migration `0019`, **not deployed yet**; before that: tablet: whiteboard next to the PDF, highlighter tool, resizable chat, **not deployed yet**; before that: the admin can share the server's Claude with an account, for his own demo accounts: migration `0018`, **not deployed yet**; before that: visual interaction block 1: page layout, `[[mark:ID]]`, direct highlights, **not deployed yet**; before that: Claude's voice switched to Supertonic 3, **not deployed yet**; before that: multi-user and voice mode committed, **not deployed yet**; revision `88d6dcf` in production). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -28,6 +28,19 @@ Last updated: 2026-09-28 (tablet: whiteboard next to the PDF, highlighter tool, 
   `DATA_DIR` with generated PDFs (see `DEVELOPMENT.md`).
 
 ## Where the work stopped
+
+Session of 2026-10-04, owner's requests and choices (DECISIONS "Whiteboards on the PDF
+and pictures in notes"): the whiteboard is saved as an editable copy inside a note
+("Guardar en el PDF" / "Guardar pizarra aquí"), shown on the page as a thumbnail,
+opened again with "Editar en la pizarra" (linked: saves go to the note) and "Nueva
+pizarra"; Claude proposes saving its board (`save_whiteboard_to_pdf`). Notes and
+highlights hold pictures (file, camera, paste, drop), and Claude adds free pictures from
+Wikimedia Commons to its margin notes (`search_web_images`). Server tests
+`note-media.test.ts`, e2e `note-media.spec.ts`. **Not tried with real Claude yet**:
+check that it uses `search_web_images` sparingly and picks fitting pictures, and that
+it proposes saving boards at sensible moments. Commons was reachable from the owner's
+PC; check from the VPS after the deploy (outbound HTTPS to commons.wikimedia.org and
+*.wikimedia.org). Deploy with migrations `0015`–`0019`.
 
 Session of 2026-09-28 (later), tablet use, owner's requests and choices (DECISIONS
 "Tablet use"): the whiteboard opens next to the PDF, a highlighter tool highlights by
@@ -204,13 +217,13 @@ The **deployment** milestone:
 
 ## Verification done so far
 
-- `apps/server`: 76 unit/integration tests pass (`vitest`), 9 of them for
+- `apps/server`: 109 unit/integration tests pass (`vitest`, 2026-10-04), 9 of them for
   multi-user isolation, invitations, admin rights and per-user Claude
   (`test/users.test.ts`), 4 for voice (`test/tts.test.ts`).
-- `apps/web`: 15 unit tests pass (citations, relative time, timer engine, speech
-  splitting). The Playwright suite has 40 tests over desktop and mobile projects:
-  35 pass and 5 are skipped on mobile by design (pointer drag, drawing, keyboard
-  shortcuts).
+- `apps/web`: 26 unit tests pass. The Playwright suite (2026-10-04) has 68 runs over
+  the desktop and mobile projects: 54 pass, 12 are skipped by design (pointer drag,
+  drawing, keyboard shortcuts, desktop-only board flows), and two known flaky tests
+  (diagrams desktop, reader mobile selection) pass when run again.
 - Real Claude, run through the owner's subscription with a temp data dir and
   generated PDFs:
   - A document question: Claude used `get_pages`, answered with correct

@@ -134,6 +134,13 @@
       "when": 1790592642949,
       "tag": "0018_server_claude",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791130786801,
+      "tag": "0019_note_media",
+      "breakpoints": true
     }
   ]
 }
