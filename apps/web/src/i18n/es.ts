@@ -642,6 +642,19 @@ export const es = {
     removeAttachedMark: 'Quitar marca',
     markNoText: 'Sin texto: Claude verá la imagen de la zona marcada.',
     placeholderMark: 'Pregunta sobre lo que has marcado…',
+    placeholderImages: 'Pregunta sobre la imagen…',
+    images: {
+      add: 'Adjuntar captura o imagen',
+      addHint:
+        'Adjunta capturas o fotos (también puedes pegarlas con Ctrl+V o arrastrarlas al chat)',
+      uploading: 'Subiendo imagen…',
+      remove: 'Quitar imagen',
+      open: (n: number) => `Ver imagen ${n}`,
+      viewer: 'Imagen adjunta',
+      close: 'Cerrar',
+      drop: 'Suelta las imágenes para adjuntarlas a la pregunta',
+      tooMany: (max: number) => `Como máximo ${max} imágenes por pregunta.`,
+    },
     goToPage: (page: number) => `Ir a la página ${page}`,
     citationLabel: (label: string) => `Ir a ${label}`,
     voice: {

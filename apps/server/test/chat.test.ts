@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createCanvas } from '@napi-rs/canvas';
 import type {
+  ChatImage,
   ChatMessage,
   DocumentQuestion,
   ServerChatEvent,
@@ -398,6 +400,75 @@ describe('chat', () => {
     expect(typeof calls[0]!.prompt).toBe('string');
     expect(calls[0]!.prompt).toContain('freehand marks');
     expect(calls[0]!.prompt).not.toContain('attached to this message');
+  });
+
+  it('sends attached screenshots to Claude and keeps them with the question', async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const upload = async (color: string) => {
+      const canvas = createCanvas(80, 40);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 80, 40);
+      const dataUrl = `data:image/png;base64,${(await canvas.encode('png')).toString('base64')}`;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/chat-images',
+        headers,
+        payload: { dataUrl },
+      });
+      expect(res.statusCode).toBe(201);
+      return res.json<ChatImage>();
+    };
+    const first = await upload('#ff0000');
+    const second = await upload('#00ff00');
+    expect(first).toMatchObject({ width: 80, height: 40 });
+
+    const events = await ask(thread.id, '', { imageIds: [second.id, first.id] });
+    expect(events.at(-1)).toMatchObject({ type: 'assistant_done' });
+    const prompt = calls[0]!.prompt as unknown as AsyncIterable<{
+      message: { content: { type: string; text?: string; source?: { media_type: string } }[] };
+    }>;
+    const messages = [];
+    for await (const m of prompt) messages.push(m);
+    const blocks = messages[0]!.message.content;
+    expect(blocks.map((b) => b.type)).toEqual(['image', 'image', 'text']);
+    expect(blocks[0]!.source!.media_type).toBe('image/png');
+    expect(blocks[2]!.text).toContain('attached 2 pictures');
+    expect(blocks[2]!.text).toContain('explain what the attached picture shows');
+
+    // Stored with the question, in the order sent, and served back.
+    const echoed = events.find((e) => e.type === 'user_message');
+    expect(echoed).toMatchObject({ message: { images: [{ id: second.id }, { id: first.id }] } });
+    const history = (
+      await app.inject({ url: `/api/threads/${thread.id}/messages`, headers })
+    ).json<{ messages: ChatMessage[] }>().messages;
+    expect(history[0]!.images?.map((i) => i.id)).toEqual([second.id, first.id]);
+    const bytes = await app.inject({ url: `/api/chat-images/${first.id}`, headers });
+    expect(bytes.statusCode).toBe(200);
+    expect(bytes.headers['content-type']).toBe('image/png');
+
+    // A picture already sent (or unknown) cannot go with another question.
+    const again = await ask(thread.id, '¿Y esto?', { imageIds: [first.id] });
+    expect(again).toEqual([expect.objectContaining({ type: 'error', code: 'internal' })]);
+    expect(calls).toHaveLength(1);
+
+    // Deleting the conversation deletes its pictures.
+    await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers });
+    expect((await app.inject({ url: `/api/chat-images/${first.id}`, headers })).statusCode).toBe(
+      404,
+    );
+  });
+
+  it('refuses files that are not pictures', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/chat-images',
+      headers,
+      payload: { dataUrl: `data:image/png;base64,${Buffer.from('nope').toString('base64')}` },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('reports usage limits as rate_limited and keeps the failed turn', async () => {

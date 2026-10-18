@@ -29,6 +29,14 @@ Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, mi
 
 ## Where the work stopped
 
+Session of 2026-10-18 (owner's request): **screenshots in the chat** (F-CHAT-10, see
+DECISIONS "Screenshots in the chat"). Paste, drop or attach pictures (max 6) to any
+question; Claude gets them as image blocks; they stay in the history. Migration
+`0020_chat_images`, `services/chatImages.ts`, `POST/GET /api/chat-images`. Server
+tests in `chat.test.ts` and `users.test.ts`, e2e `chat-images.spec.ts`. **Not deployed
+and not tried with real Claude yet**: check that it reads real screenshots well (small
+text, formulas).
+
 Later on 2026-10-04 (owner): Claude saves directly, with no accepting step (margin notes,
 boards on the PDF, flashcards; "Deshacer" in the chat and delete on the note), and every
 note marker can be dragged on the page (board thumbnails covering the text; text notes

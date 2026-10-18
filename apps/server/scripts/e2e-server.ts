@@ -326,8 +326,11 @@ const fakeChat = ((args: {
               'Al final, la planta guarda esa energía en forma de azúcar.',
             ]
           : null;
+    // Pictures the student attached: say how many image blocks came with the question.
+    const shots = /The student attached (?:a picture|(\d+) pictures)/.exec(prompt);
     const parts = voiceParts ?? [
       ...(diagram ? [diagram] : []),
+      ...(shots && image ? [`Veo ${shots[1] ?? 1} captura(s) adjunta(s). `] : []),
       ...(marked
         ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]
         : []),

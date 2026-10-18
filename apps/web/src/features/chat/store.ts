@@ -1,6 +1,8 @@
 import {
+  MAX_CHAT_IMAGES,
   markRefs,
   type ChatErrorCode,
+  type ChatImage,
   type ChatMessage,
   type ClientChatEvent,
   type DrawingMark,
@@ -14,8 +16,19 @@ import {
   type ThreadSummary,
 } from '@pdfclaudeassistant/shared';
 import { create } from 'zustand';
+import { t } from '../../i18n';
 import { api } from '../../lib/api';
+import { imageErrorText, prepareImage } from '../annotations/images';
 import { useReader } from '../reader/store';
+
+/** A picture attached to the next question: uploading, ready (`image`) or failed. */
+export interface PendingImage {
+  key: string;
+  /** Local preview while it uploads. */
+  previewUrl: string;
+  image?: ChatImage;
+  error?: string;
+}
 
 type Listener = (event: ServerChatEvent) => void;
 
@@ -104,6 +117,10 @@ interface ChatState {
   attachedMark: DrawingMark | null;
   /** One of Claude's marks the student clicked to ask about it. */
   attachedPointed: PointedMark | null;
+  /** Pictures (screenshots, photos) attached to the next question. */
+  images: PendingImage[];
+  /** Why some pictures were not attached (e.g. too many). */
+  imageNotice: string | null;
   /** Claude's temporary marks on the PDF (F-POINT-03: gone with the next question). */
   pointers: PointerGroup[];
   /** Voice mode (F-CHAT-09): questions ask for a spoken, tutor-style answer. */
@@ -135,6 +152,9 @@ interface ChatState {
   attach: (selection: TextSelection | null) => void;
   attachMark: (mark: DrawingMark | null) => void;
   attachPointed: (pointed: PointedMark | null) => void;
+  /** Pasted, dropped or chosen pictures: shrunk, uploaded and attached to the next question. */
+  addImages: (files: File[]) => void;
+  removeImage: (key: string) => void;
   dismissError: () => void;
   clearPointers: (messageId?: string) => void;
   /**
@@ -150,6 +170,12 @@ const scopePath = (s: ThreadScope) =>
 
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** Drops the pictures attached to the next question (sent, or the chat changed). */
+function clearImages() {
+  for (const img of useChat.getState().images) URL.revokeObjectURL(img.previewUrl);
+  useChat.setState({ images: [], imageNotice: null });
+}
+
 export const useChat = create<ChatState>((set, get) => ({
   scope: null,
   threadId: null,
@@ -164,6 +190,8 @@ export const useChat = create<ChatState>((set, get) => ({
   attached: null,
   attachedMark: null,
   attachedPointed: null,
+  images: [],
+  imageNotice: null,
   pointers: [],
   voice: false,
 
@@ -183,6 +211,7 @@ export const useChat = create<ChatState>((set, get) => ({
       attachedPointed: null,
       pointers: [],
     });
+    clearImages();
     chatSocket.connect();
     const active = await api<ThreadSummary>(`${scopePath(scope)}/threads/active`);
     if (get().scope !== scope) return;
@@ -227,6 +256,9 @@ export const useChat = create<ChatState>((set, get) => ({
     const mark = opts.mark === undefined ? get().attachedMark : opts.mark;
     const pointed = get().attachedPointed;
     const mode = opts.mode ?? get().mode;
+    // Pictures still uploading would be lost: the composer waits for them.
+    if (get().images.some((i) => !i.image && !i.error)) return;
+    const images = get().images.flatMap((i) => (i.image ? [i.image] : []));
     const clientId = crypto.randomUUID();
     const context = {
       ...(scope.kind === 'document'
@@ -252,6 +284,7 @@ export const useChat = create<ChatState>((set, get) => ({
       content: text,
       mode,
       context,
+      ...(images.length ? { images } : {}),
       status: 'complete',
       createdAt: new Date().toISOString(),
     };
@@ -264,7 +297,16 @@ export const useChat = create<ChatState>((set, get) => ({
       attachedPointed: null,
       pointers: [],
     });
-    chatSocket.send({ type: 'user_message', threadId, clientId, text, mode, context });
+    clearImages();
+    chatSocket.send({
+      type: 'user_message',
+      threadId,
+      clientId,
+      text,
+      mode,
+      context,
+      imageIds: images.map((i) => i.id),
+    });
   },
 
   stop: () => {
@@ -281,6 +323,25 @@ export const useChat = create<ChatState>((set, get) => ({
     set({ attachedMark, ...(attachedMark ? { attached: null, attachedPointed: null } : {}) }),
   attachPointed: (attachedPointed) =>
     set({ attachedPointed, ...(attachedPointed ? { attached: null, attachedMark: null } : {}) }),
+  addImages: (files) => {
+    const room = MAX_CHAT_IMAGES - get().images.length;
+    set({ imageNotice: files.length > room ? t.chat.images.tooMany(MAX_CHAT_IMAGES) : null });
+    for (const file of files.slice(0, Math.max(0, room))) {
+      const key = crypto.randomUUID();
+      const update = (patch: Partial<PendingImage>) =>
+        set({ images: get().images.map((i) => (i.key === key ? { ...i, ...patch } : i)) });
+      set({ images: [...get().images, { key, previewUrl: URL.createObjectURL(file) }] });
+      void prepareImage(file)
+        .then((dataUrl) => api<ChatImage>('/chat-images', { method: 'POST', json: { dataUrl } }))
+        .then((image) => update({ image }))
+        .catch((err: unknown) => update({ error: imageErrorText(err) }));
+    }
+  },
+  removeImage: (key) => {
+    const img = get().images.find((i) => i.key === key);
+    if (img) URL.revokeObjectURL(img.previewUrl);
+    set({ images: get().images.filter((i) => i.key !== key), imageNotice: null });
+  },
   dismissError: () => set({ error: null }),
   setVoice: (voice) => set({ voice }),
   clearPointers: (messageId) =>

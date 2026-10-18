@@ -12,6 +12,7 @@ import type {
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { messages, threads } from '../db/schema.js';
+import type { ChatImageService } from './chatImages.js';
 import { pageItems, quoteRects } from './anchoring.js';
 import { notFound } from './errors.js';
 import { newId } from './ids.js';
@@ -57,6 +58,7 @@ export class ThreadService {
   constructor(
     private readonly db: Db,
     private readonly userId: string,
+    private readonly images: ChatImageService,
   ) {}
 
   list(scope: ThreadScope): ThreadSummary[] {
@@ -109,7 +111,7 @@ export class ThreadService {
 
   messages(threadId: string, limit = 500): ChatMessage[] {
     this.get(threadId);
-    return this.db
+    const list = this.db
       .select()
       .from(messages)
       .where(eq(messages.threadId, threadId))
@@ -117,6 +119,8 @@ export class ThreadService {
       .limit(limit)
       .all()
       .map(toMessage);
+    const images = this.images.forMessages(list.filter((m) => m.role === 'user').map((m) => m.id));
+    return list.map((m) => (images.has(m.id) ? { ...m, images: images.get(m.id) } : m));
   }
 
   /** Last messages as plain text, used to rebuild context if a Claude session is lost. */
@@ -137,7 +141,14 @@ export class ThreadService {
     return out.trim();
   }
 
-  addUserMessage(threadId: string, text: string, mode: StudyMode, context: ChatContext) {
+  /** `imageIds` were checked with `ChatImageService.unsent`. */
+  addUserMessage(
+    threadId: string,
+    text: string,
+    mode: StudyMode,
+    context: ChatContext,
+    imageIds: string[] = [],
+  ): ChatMessage {
     const row = {
       id: newId(),
       threadId,
@@ -146,6 +157,7 @@ export class ThreadService {
       contextJson: JSON.stringify({ mode, context } satisfies StoredContext),
     };
     this.db.insert(messages).values(row).run();
+    this.images.attach(row.id, imageIds);
     const thread = this.get(threadId);
     this.db
       .update(threads)
@@ -156,7 +168,9 @@ export class ThreadService {
       })
       .where(eq(threads.id, threadId))
       .run();
-    return toMessage(this.getMessage(row.id));
+    const message = toMessage(this.getMessage(row.id));
+    const images = this.images.forMessages([row.id]).get(row.id);
+    return images ? { ...message, images } : message;
   }
 
   addAssistantMessage(threadId: string): ChatMessage {

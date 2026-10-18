@@ -37,6 +37,8 @@ export interface TurnInput {
   text: string;
   mode: StudyMode;
   context: ChatContext;
+  /** Pictures the student attached (`POST /api/chat-images`), in order. */
+  imageIds?: string[];
 }
 
 class TurnError extends Error {
@@ -103,6 +105,7 @@ export class ChatService {
       });
       return;
     }
+    const attachedImages = svc.chatImages.unsent(input.imageIds ?? []);
     const docId = scope.kind === 'document' ? scope.id : null;
     const scopeLines = this.describeScope(svc, scope, ctx.currentPage);
 
@@ -113,6 +116,7 @@ export class ChatService {
       input.text,
       input.mode,
       input.context,
+      attachedImages.map((i) => i.id),
     );
     emit({ type: 'user_message', clientId: input.clientId, message: userMessage });
     const assistant = svc.threads.addAssistantMessage(thread.id);
@@ -158,10 +162,14 @@ export class ChatService {
           board: svc.whiteboards.status(thread.id),
           recoveredTranscript,
           markImage: markImage !== null,
+          attachedImages: attachedImages.length,
         });
       const run = (resume: string | null, recovered?: string) =>
         this.runTurn(svc, auth, {
-          prompt: withImage(prompt(recovered), markImage),
+          prompt: withImages(prompt(recovered), [
+            ...(markImage ? [{ data: markImage, mime: 'image/png' }] : []),
+            ...attachedImages,
+          ]),
           resume,
           abort,
           threadId: thread.id,
@@ -365,19 +373,31 @@ export class ChatService {
   }
 }
 
-/** The turn prompt, as a user message with an image block when there is one. */
-function withImage(text: string, png: Buffer | null): string | AsyncIterable<SDKUserMessage> {
-  if (!png) return text;
+type ImageMime = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+
+/**
+ * The turn prompt, as a user message with image blocks before the text when there are
+ * images (the marked area first, then the student's pictures).
+ */
+function withImages(
+  text: string,
+  images: { data: Buffer; mime: string }[],
+): string | AsyncIterable<SDKUserMessage> {
+  if (!images.length) return text;
   const message: SDKUserMessage = {
     type: 'user',
     parent_tool_use_id: null,
     message: {
       role: 'user',
       content: [
-        {
-          type: 'image',
-          source: { type: 'base64', media_type: 'image/png', data: png.toString('base64') },
-        },
+        ...images.map((img) => ({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: img.mime as ImageMime,
+            data: img.data.toString('base64'),
+          },
+        })),
         { type: 'text', text },
       ],
     },

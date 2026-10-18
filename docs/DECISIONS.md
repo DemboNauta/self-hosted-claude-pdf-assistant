@@ -19,6 +19,15 @@ change them if he disagrees.
 
 ## Other owner decisions
 
+- **Screenshots in the chat (2026-10-18, F-CHAT-10).** The owner asked to pass
+  screenshots to Claude so it can read and use them. His choices: in **every chat**
+  (document, topic, subject) but **not in voice mode**; added by **pasting (Ctrl+V),
+  dropping on the chat and an attach button** (files, or the camera on a phone); **kept
+  with the message** in the history (thumbnails, full size on click), deleted with the
+  conversation. No "crop an area of the PDF" button for now (drawing marks already
+  cover that). Claude's choices: up to 6 pictures per question, uploaded while the
+  student writes (the send button waits for them), stored in SQLite like note pictures.
+
 - **Visual interaction with the PDF (2026-09-27).** The owner asked how Claude could
   interact better visually and chose, in this order: precise pointing
   (`get_page_layout`), marks tied to the explanation (`[[mark:ID]]`) and marks that

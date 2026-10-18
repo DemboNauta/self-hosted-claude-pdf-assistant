@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createCanvas } from '@napi-rs/canvas';
 import { hash } from '@node-rs/argon2';
 import type {
   AdminUser,
@@ -107,6 +108,13 @@ describe('accounts', () => {
     ).body;
     expect((await api('GET', `/api/threads/${thread.id}/messages`, ana.headers)).status).toBe(404);
     expect((await api('DELETE', `/api/threads/${thread.id}`, ana.headers)).status).toBe(404);
+    // Nor a picture the admin attached to a question.
+    const shot = await api<{ id: string }>('POST', '/api/chat-images', admin, {
+      dataUrl: `data:image/png;base64,${(await createCanvas(20, 20).encode('png')).toString('base64')}`,
+    });
+    expect(shot.status).toBe(201);
+    expect((await api('GET', `/api/chat-images/${shot.body.id}`, ana.headers)).status).toBe(404);
+    expect(() => servicesOf(app, ana.id).chatImages.unsent([shot.body.id])).toThrow();
 
     // Her own library works as usual, and the admin does not see it.
     await seedDocument(app, ana.headers, [['Apuntes de Ana.']]);

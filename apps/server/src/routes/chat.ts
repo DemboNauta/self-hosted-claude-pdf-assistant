@@ -1,13 +1,21 @@
 import websocket from '@fastify/websocket';
-import { clientChatEventSchema, type ServerChatEvent } from '@pdfclaudeassistant/shared';
+import {
+  addChatImageSchema,
+  clientChatEventSchema,
+  type ServerChatEvent,
+} from '@pdfclaudeassistant/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ChatService } from '../claude/chat.js';
 import { HttpError } from '../services/errors.js';
+import { fromDataUrl, normalizeImage } from '../services/images.js';
 import type { RequestServices } from '../services/scope.js';
 import { parse } from './validate.js';
 
 const idParams = z.object({ id: z.string().min(1).max(64) });
+
+/** Room for a picture sent as a data URL (the browser shrinks big ones first). */
+const IMAGE_BODY_LIMIT = 25 * 1024 * 1024;
 
 /** Rejects cross-site WebSocket handshakes (cookies alone do not prove the page is ours). */
 function sameOrigin(req: FastifyRequest): boolean {
@@ -66,6 +74,22 @@ export async function registerChatRoutes(
     if (chat.isRunning(threadId)) throw new HttpError(409, 'busy');
     threads.delete(threadId);
     return reply.code(204).send();
+  });
+
+  // Pictures attached to questions (screenshots, photos): uploaded while the student
+  // writes, then sent with the question by id.
+  app.post('/api/chat-images', { bodyLimit: IMAGE_BODY_LIMIT }, async (req, reply) => {
+    const { dataUrl } = parse(addChatImageSchema, req.body);
+    const img = await normalizeImage(fromDataUrl(dataUrl));
+    return reply.code(201).send(svc(req).chatImages.add(img));
+  });
+  app.get('/api/chat-images/:id', async (req, reply) => {
+    const { data, mime } = svc(req).chatImages.image(id(req.params));
+    return reply
+      .header('content-type', mime)
+      .header('cache-control', 'private, max-age=31536000, immutable')
+      .header('x-content-type-options', 'nosniff')
+      .send(data);
   });
 
   await app.register(websocket, { options: { maxPayload: 256 * 1024 } });

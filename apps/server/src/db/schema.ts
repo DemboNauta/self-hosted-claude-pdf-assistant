@@ -223,6 +223,28 @@ export const messages = sqliteTable(
 );
 
 /**
+ * Pictures the student attached to a chat question (screenshots, photos), sent to Claude
+ * with it and shown in the conversation. Uploaded before the question is sent, so a
+ * picture has no message until then; unclaimed ones are dropped after a day.
+ */
+export const chatImages = sqliteTable(
+  'chat_images',
+  {
+    id: text('id').primaryKey(),
+    userId: userId(),
+    messageId: text('message_id').references(() => messages.id, { onDelete: 'cascade' }),
+    /** Order within the message. */
+    position: integer('position').notNull().default(0),
+    mime: text('mime').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('chat_images_message_idx').on(t.messageId)],
+);
+
+/**
  * Permanent annotations (F-ANN-*): highlights, notes, freehand drawings and saved
  * Claude marks. Anchors live in normalised page space (0–1, top-left origin).
  */

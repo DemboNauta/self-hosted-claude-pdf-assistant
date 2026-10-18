@@ -84,6 +84,24 @@ export const chatContextSchema = z
   });
 export type ChatContext = z.infer<typeof chatContextSchema>;
 
+/** Most pictures (screenshots, photos) one question carries. */
+export const MAX_CHAT_IMAGES = 6;
+
+/** A picture attached to a question: `POST /api/chat-images` with `{ dataUrl }`. */
+export const addChatImageSchema = z.object({
+  dataUrl: z
+    .string()
+    .max(20_000_000)
+    .regex(/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/),
+});
+
+/** A picture the student attached to a question (bytes: `GET /api/chat-images/:id`). */
+export interface ChatImage {
+  id: string;
+  width: number;
+  height: number;
+}
+
 export const clientChatEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('user_message'),
@@ -93,6 +111,8 @@ export const clientChatEventSchema = z.discriminatedUnion('type', [
     text: z.string().trim().max(20_000),
     mode: z.enum(STUDY_MODES).default('free'),
     context: chatContextSchema,
+    /** Pictures uploaded with `POST /api/chat-images`, in order. */
+    imageIds: z.array(id).max(MAX_CHAT_IMAGES).default([]),
   }),
   z.object({ type: z.literal('stop'), threadId: id }),
 ]);
@@ -119,6 +139,8 @@ export interface ChatMessage {
   content: string;
   mode?: StudyMode;
   context?: ChatContext;
+  /** User turns: pictures attached to the question. */
+  images?: ChatImage[];
   toolEvents?: ToolEvent[];
   /** Assistant turns: the marks Claude drew on the PDF, kept so they can be shown again. */
   pointers?: PointerGroup[];

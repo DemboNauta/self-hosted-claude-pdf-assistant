@@ -35,6 +35,7 @@ To change the schema:
 | `0017_whiteboard_snapshot`   | `whiteboards.snapshot_png`, `snapshot_bounds_json`, `student_edited_at`, `seen_at`               |
 | `0018_server_claude`         | `users.server_claude`: the admin lets the account use the server's Claude credentials            |
 | `0019_note_media`            | `annotation_images`, `saved_boards`, `whiteboards.linked_board_id`                               |
+| `0020_chat_images`           | `chat_images` (screenshots and photos attached to chat questions)                                |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
@@ -117,6 +118,12 @@ updated_at` (a step may carry `remove`: ids it takes off the board), plus `snaps
   `whiteboard_view`). PDF crops travel as PNG data URLs inside the steps and the scene.
 - **whiteboards.linked_board_id** (`0019`): the saved board this thread's board is
   editing ("Editar en la pizarra"); each save also updates that saved board.
+- **chat_images** (`0020`) `id, user_id, message_id? (cascade), position, mime, data (BLOB),
+width, height`: pictures attached to chat questions (F-CHAT-10). Uploaded before the
+  question (`message_id` null), then claimed by the user message that carries them, in
+  order; deleting the thread deletes them with its messages. Unclaimed ones older than a
+  day are dropped on the next upload. Same checks and shrinking as note pictures
+  (`services/images.ts`); in SQLite, so the backup carries them.
 - **annotation_images** (`0019`) `id, user_id, document_id (cascade), annotation_id, mime,
 data (BLOB), width, height, source (user|claude), source_url?, credit?, caption?,
 orphaned_at?`: pictures in notes and highlights (max 12 each). Stored in SQLite, so the

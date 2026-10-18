@@ -94,14 +94,16 @@ Ids are 10-char base36 strings.
 
 `:scope` is `documents`, `topics` or `subjects`.
 
-| Method | Path                             | Notes                                                                                                               |
-| ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/:scope/:id/threads`        | `ThreadSummary[]`, most recent first.                                                                               |
-| GET    | `/api/:scope/:id/threads/active` | The most recent thread, created if missing.                                                                         |
-| POST   | `/api/:scope/:id/threads`        | New thread.                                                                                                         |
-| GET    | `/api/threads/:id/messages`      | `{ running, messages: ChatMessage[] }`                                                                              |
-| GET    | `/api/documents/:id/questions`   | `DocumentQuestion[]`: questions asked about a selection or drawn area, with the answer that followed, oldest first. |
-| DELETE | `/api/threads/:id`               | 409 `busy` while a turn runs.                                                                                       |
+| Method | Path                             | Notes                                                                                                                                                                                                                                                                      |
+| ------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/:scope/:id/threads`        | `ThreadSummary[]`, most recent first.                                                                                                                                                                                                                                      |
+| GET    | `/api/:scope/:id/threads/active` | The most recent thread, created if missing.                                                                                                                                                                                                                                |
+| POST   | `/api/:scope/:id/threads`        | New thread.                                                                                                                                                                                                                                                                |
+| GET    | `/api/threads/:id/messages`      | `{ running, messages: ChatMessage[] }`                                                                                                                                                                                                                                     |
+| POST   | `/api/chat-images`               | `{ dataUrl }` (PNG/JPEG/WebP/GIF data URL, body limit 25 MB) → `ChatImage { id, width, height }` (201): a picture for the next question, sent by id in `user_message.imageIds`. Errors: `unsupported_image`, `image_too_large` (413). Unsent ones are dropped after a day. |
+| GET    | `/api/chat-images/:id`           | The picture's bytes (private, immutable cache, `nosniff`).                                                                                                                                                                                                                 |
+| GET    | `/api/documents/:id/questions`   | `DocumentQuestion[]`: questions asked about a selection or drawn area, with the answer that followed, oldest first.                                                                                                                                                        |
+| DELETE | `/api/threads/:id`               | 409 `busy` while a turn runs.                                                                                                                                                                                                                                              |
 
 ## WebSocket `/ws/chat`
 
@@ -119,13 +121,16 @@ Client → server:
                // renders it with the drawings on top and sends Claude the image.
                "mark": { "page": 12, "rect": { "x": 0.1, "y": 0.2, "w": 0.4, "h": 0.1 },
                          "annotationIds": ["…"], "text": "text inside the area" },
-               "summaryFormat": "prose|outline|glossary" } }
+               "summaryFormat": "prose|outline|glossary" },
+  // Pictures uploaded with POST /api/chat-images (max 6, not sent before). Any
+  // unknown, foreign or already sent id rejects the question (error, nothing stored).
+  "imageIds": ["…"] }
 { "type": "stop", "threadId": "…" }
 ```
 
 Server → client (`ServerChatEvent`):
 
-- `user_message` (`clientId` + stored message)
+- `user_message` (`clientId` + stored message; `images: ChatImage[]` when it carries pictures)
 - `assistant_start`
 - `assistant_delta` (`text`)
 - `tool_event` (`ToolEvent`: `name`, `summary`, `status`, plus `annotationIds` for

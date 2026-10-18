@@ -132,6 +132,8 @@ export function buildTurnPrompt(input: {
   recoveredTranscript?: string;
   /** An image of the marked area goes with the message (see `context.mark`). */
   markImage?: boolean;
+  /** Pictures the student attached (screenshots, photos), sent after the marked area. */
+  attachedImages?: number;
 }): string {
   const { text, mode, context } = input;
   const lines = [...input.scope];
@@ -170,6 +172,12 @@ export function buildTurnPrompt(input: {
       ]
         .filter(Boolean)
         .join('\n'),
+    );
+  }
+  if (input.attachedImages) {
+    const n = input.attachedImages;
+    lines.push(
+      `The student attached ${n === 1 ? 'a picture' : `${n} pictures`} to this message (screenshots or photos, ${input.markImage ? 'after the image of the marked area' : 'before this text'}): read ${n === 1 ? 'it' : 'them'} carefully (text, formulas, diagrams, exercises, code, error messages…) and use ${n === 1 ? 'it' : 'them'} to answer. They may come from outside the PDF; relate them to the material when it helps.`,
     );
   }
   if (context.pageRange) {
@@ -221,6 +229,8 @@ export function buildTurnPrompt(input: {
           ? mode === 'free'
             ? '(No question typed: explain what the student marked.)'
             : '(No question typed: apply the mode to what the student marked.)'
-          : '(No question typed.)');
+          : input.attachedImages
+            ? '(No question typed: explain what the attached picture shows, or solve it if it is an exercise.)'
+            : '(No question typed.)');
   return `<context>\n${lines.join('\n\n')}\n</context>\n\n${question}`;
 }

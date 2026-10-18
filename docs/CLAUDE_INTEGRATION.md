@@ -135,8 +135,16 @@ When the student asks about an area marked with freehand drawings
 (`context.mark`), `ChatService` renders that part of the page with the strokes
 on top (`renderMarkImage`, up to 4× zoom) and passes the prompt as an
 `AsyncIterable<SDKUserMessage>` whose content is an image block plus the text
-(`withImage`). Without drawings (deleted, other page) the text goes alone.
+(`withImages`). Without drawings (deleted, other page) the text goes alone.
 Checked against the real subscription.
+
+Screenshots and photos the student attaches (F-CHAT-10, `imageIds`) go the same way:
+one image block each (their real type: PNG, JPEG, WebP or GIF), after the marked area's
+image and before the text. The context block says how many pictures are attached and
+asks Claude to read them (text, formulas, diagrams, exercises, error messages) and use
+them; with no question typed it explains or solves what they show. On resume the SDK
+session already holds earlier pictures; a session rebuilt from the transcript loses
+them (text only). Not yet tried with the real subscription.
 
 ## Citations
 

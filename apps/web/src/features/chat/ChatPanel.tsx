@@ -1,6 +1,7 @@
 import {
   STUDY_MODES,
   SUMMARY_FORMATS,
+  type ChatImage,
   type ChatMessage,
   type ToolEvent,
 } from '@pdfclaudeassistant/shared';
@@ -12,6 +13,7 @@ import {
   Check,
   Copy,
   History,
+  ImagePlus,
   Loader2,
   MessageSquare,
   Mic,
@@ -30,11 +32,14 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type DragEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { Menu } from '../../components/Menu';
+import { imageFiles } from '../annotations/images';
 import { t } from '../../i18n';
 import { useReader } from '../reader/store';
 import { useVoice } from '../voice/store';
@@ -45,6 +50,86 @@ import { CITATION_EVENT } from './CitationChip';
 import { dictationSupported, useDictation } from './dictation';
 import { Markdown } from './Markdown';
 import { useChat } from './store';
+
+const chatImageUrl = (id: string) => `/api/chat-images/${id}`;
+
+/** A picture attached to a question, at full size over everything. */
+function ImageViewer({ image, onClose }: { image: ChatImage; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t.chat.images.viewer}
+      data-testid="chat-image-viewer"
+      className="fixed inset-0 z-[60] flex flex-col bg-black/85 p-3 text-white"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="flex shrink-0 items-center justify-end pb-2">
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label={t.chat.images.close}
+          className="rounded-md p-1.5 hover:bg-white/15"
+        >
+          <X size={20} aria-hidden />
+        </button>
+      </div>
+      <div
+        className="flex min-h-0 flex-1 items-center justify-center"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <img
+          src={chatImageUrl(image.id)}
+          alt=""
+          className="max-h-full max-w-full rounded object-contain"
+        />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Thumbnails of the pictures sent with a question; a click shows one at full size. */
+function MessageImages({ images }: { images: ChatImage[] }) {
+  const [shown, setShown] = useState<ChatImage | null>(null);
+  return (
+    <>
+      <div className="flex max-w-[90%] flex-wrap justify-end gap-1.5" data-testid="message-images">
+        {images.map((img, i) => (
+          <button
+            key={img.id}
+            type="button"
+            onClick={() => setShown(img)}
+            aria-label={t.chat.images.open(i + 1)}
+            className="border-border overflow-hidden rounded-lg border"
+          >
+            <img
+              src={chatImageUrl(img.id)}
+              alt=""
+              loading="lazy"
+              className="h-20 max-w-40 object-cover"
+              style={{ aspectRatio: `${img.width} / ${img.height}` }}
+            />
+          </button>
+        ))}
+      </div>
+      {shown && <ImageViewer image={shown} onClose={() => setShown(null)} />}
+    </>
+  );
+}
 
 function ToolLine({ event }: { event: ToolEvent }) {
   const label = t.chat.tools[event.name] ?? event.name;
@@ -212,6 +297,7 @@ function MessageItem({ message }: { message: ChatMessage }) {
               .join(' · ')}
           </span>
         )}
+        {message.images && message.images.length > 0 && <MessageImages images={message.images} />}
         {quoted && (
           <blockquote className="border-border text-text-muted line-clamp-3 max-w-[90%] border-l-2 pl-2 text-xs italic">
             {quoted}
@@ -488,9 +574,12 @@ function Composer() {
   const attachedMark = useChat((s) => s.attachedMark);
   const attachedPointed = useChat((s) => s.attachedPointed);
   const attachPointed = useChat((s) => s.attachPointed);
+  const images = useChat((s) => s.images);
+  const imageNotice = useChat((s) => s.imageNotice);
   const mode = useChat((s) => s.mode);
-  const { send, stop, attach, attachMark } = useChat.getState();
+  const { send, stop, attach, attachMark, addImages, removeImage } = useChat.getState();
   const area = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [canDictate] = useState(dictationSupported);
   const [canTalk] = useState(voiceSupported);
   const voiceMode = useVoice((s) => s.active);
@@ -506,9 +595,12 @@ function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
 
+  const uploading = images.some((i) => !i.image && !i.error);
   const canSend =
     !running &&
+    !uploading &&
     (text.trim().length > 0 ||
+      images.some((i) => i.image) ||
       attached !== null ||
       attachedMark !== null ||
       attachedPointed !== null ||
@@ -588,6 +680,46 @@ function Composer() {
           </button>
         </div>
       )}
+      {images.length > 0 && (
+        <ul className="flex flex-wrap gap-2" data-testid="pending-images">
+          {images.map((img) => (
+            <li key={img.key} className="relative">
+              <img
+                src={img.previewUrl}
+                alt=""
+                title={img.error}
+                className={clsx(
+                  'h-14 w-14 rounded-lg border object-cover',
+                  img.error ? 'border-danger opacity-50' : 'border-border',
+                )}
+              />
+              {!img.image && !img.error && (
+                <span
+                  role="status"
+                  aria-label={t.chat.images.uploading}
+                  className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30 text-white"
+                >
+                  <Loader2 size={16} aria-hidden className="animate-spin" />
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => removeImage(img.key)}
+                aria-label={t.chat.images.remove}
+                title={t.chat.images.remove}
+                className="bg-text text-bg absolute -top-1.5 -right-1.5 rounded-full p-0.5"
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(imageNotice || images.some((i) => i.error)) && (
+        <p role="alert" className="text-danger text-xs">
+          {imageNotice ?? images.find((i) => i.error)?.error}
+        </p>
+      )}
       <VoiceBar />
       {dictation.listening && (
         <p className="text-text-muted text-xs italic" aria-live="polite">
@@ -607,6 +739,12 @@ function Composer() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={(e) => {
+            const files = imageFiles(e.clipboardData);
+            if (!files.length) return;
+            e.preventDefault();
+            addImages(files);
+          }}
           placeholder={
             attached
               ? t.chat.placeholderSelection
@@ -614,11 +752,38 @@ function Composer() {
                 ? t.chat.placeholderMark
                 : attachedPointed
                   ? t.chat.pointers.placeholder
-                  : t.chat.placeholder
+                  : images.length
+                    ? t.chat.placeholderImages
+                    : t.chat.placeholder
           }
           aria-label={t.chat.placeholder}
           className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"
         />
+        {!voiceMode && (
+          <>
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              aria-label={t.chat.images.add}
+              title={t.chat.images.addHint}
+              className="text-text-muted hover:text-text rounded-full p-1.5"
+            >
+              <ImagePlus size={14} aria-hidden />
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              data-testid="chat-image-input"
+              onChange={(e) => {
+                addImages([...(e.target.files ?? [])]);
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
         {canTalk && <VoiceToggle />}
         {canDictate && !voiceMode && (
           <button
@@ -757,6 +922,8 @@ export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
   const view = useBoard((s) => s.view);
   const docked = useBoard(isDocked);
   const title = useChat((s) => s.threads.find((th) => th.id === s.threadId)?.title);
+  const [dropping, setDropping] = useState(false);
+  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
   useEffect(() => {
     const focus = () => document.getElementById(COMPOSER_ID)?.focus();
@@ -765,7 +932,34 @@ export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
   }, []);
 
   return (
-    <section aria-label={t.chat.title} className="bg-surface flex h-full min-h-0 flex-col">
+    <section
+      aria-label={t.chat.title}
+      className="bg-surface relative flex h-full min-h-0 flex-col"
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        setDropping(false);
+        const files = imageFiles(e.dataTransfer);
+        if (!files.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        useChat.getState().addImages(files);
+      }}
+    >
+      {dropping && (
+        <div
+          aria-hidden
+          className="border-text bg-surface/90 pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-sm"
+        >
+          {t.chat.images.drop}
+        </div>
+      )}
       <header className="border-border flex items-center gap-1 border-b px-3 py-1.5">
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
           {title ?? t.chat.title}
