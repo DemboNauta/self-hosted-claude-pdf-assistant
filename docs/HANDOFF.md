@@ -33,8 +33,8 @@ Session of 2026-10-18 (owner's request): **screenshots in the chat** (F-CHAT-10,
 DECISIONS "Screenshots in the chat"). Paste, drop or attach pictures (max 6) to any
 question; Claude gets them as image blocks; they stay in the history. Migration
 `0020_chat_images`, `services/chatImages.ts`, `POST/GET /api/chat-images`. Server
-tests in `chat.test.ts` and `users.test.ts`, e2e `chat-images.spec.ts`. **Not deployed
-and not tried with real Claude yet**: check that it reads real screenshots well (small
+tests in `chat.test.ts` and `users.test.ts`, e2e `chat-images.spec.ts`. **Deployed on 2026-10-18 (`e64f3ea`), not
+tried with real Claude yet**: check that it reads real screenshots well (small
 text, formulas).
 
 Later on 2026-10-04 (owner): Claude saves directly, with no accepting step (margin notes,
