@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-10-24 (files in the chat, F-CHAT-11, migration `0021`; **not deployed yet**, last deploy `e64f3ea` on 2026-10-18). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-10-24 (files in the chat, F-CHAT-11, migration `0021`; **revision `02ddca2` deployed on 2026-10-24**). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -36,7 +36,7 @@ Text extracted on upload (`services/chatFiles.ts`, Mammoth for Word), inlined up
 characters, the rest through `read_attachment` / `get_attachment_page_image`. Migration
 `0021_chat_files`, `POST/GET /api/chat-files`, new dependency `mammoth` (the deploy
 installs it). Server tests in `chat.test.ts`, `chat-files.test.ts`, `users.test.ts`; e2e
-`chat-files.spec.ts`. **Not deployed and not tried with real Claude yet**: check that it
+`chat-files.spec.ts`. **Deployed on 2026-10-24 (`02ddca2`), not tried with real Claude yet**: check that it
 uses the inlined text, reads further parts when needed and names files instead of
 writing `[[cite:…]]` for them.
 
