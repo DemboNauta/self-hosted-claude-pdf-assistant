@@ -33,8 +33,14 @@ export interface ExtractResult {
 const COVER_WIDTH = 360;
 const round = (n: number) => Math.round(n * 10_000) / 10_000;
 
-export async function openPdf(filePath: string): Promise<PDFDocumentProxy> {
-  const data = new Uint8Array(await fs.promises.readFile(filePath));
+/** A PDF on disk (path) or in memory (bytes, e.g. a file attached to the chat). */
+export type PdfSource = string | Buffer;
+
+export async function openPdf(source: PdfSource): Promise<PDFDocumentProxy> {
+  // Always a copy: PDF.js may take over the buffer it is given.
+  const data = new Uint8Array(
+    typeof source === 'string' ? await fs.promises.readFile(source) : source,
+  );
   return getDocument({
     data,
     standardFontDataUrl: asDirUrl('standard_fonts'),
@@ -94,6 +100,28 @@ export async function extractPdf(
 
     await renderCover(pdf, coverPath);
     return { pageCount: pdf.numPages, outline: await readOutline(pdf), pagesWithoutText };
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+}
+
+/** Plain text of every page (no coordinates), for a PDF attached to the chat. */
+export async function pdfPageTexts(source: PdfSource): Promise<string[]> {
+  const pdf = await openPdf(source);
+  try {
+    const out: string[] = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      let text = '';
+      for (const raw of (await page.getTextContent()).items) {
+        if (!('str' in raw)) continue;
+        const item = raw as TextItem;
+        text += item.str + (item.hasEOL ? '\n' : item.str && !item.str.endsWith(' ') ? ' ' : '');
+      }
+      out.push(text.replace(/[ \t]+\n/g, '\n').trim());
+      page.cleanup();
+    }
+    return out;
   } finally {
     await pdf.loadingTask.destroy();
   }
@@ -171,7 +199,7 @@ function drawGrid(ctx: Canvas2D, region: Region, pw: number, ph: number) {
  * within what the model reads well.
  */
 export async function renderPageImage(
-  filePath: string,
+  filePath: PdfSource,
   pageNumber: number,
   opts: { region?: Region; grid?: boolean; maxSide?: number } = {},
 ) {

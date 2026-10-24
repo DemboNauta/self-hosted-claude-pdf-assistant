@@ -102,6 +102,8 @@ Ids are 10-char base36 strings.
 | GET    | `/api/threads/:id/messages`      | `{ running, messages: ChatMessage[] }`                                                                                                                                                                                                                                     |
 | POST   | `/api/chat-images`               | `{ dataUrl }` (PNG/JPEG/WebP/GIF data URL, body limit 25 MB) → `ChatImage { id, width, height }` (201): a picture for the next question, sent by id in `user_message.imageIds`. Errors: `unsupported_image`, `image_too_large` (413). Unsent ones are dropped after a day. |
 | GET    | `/api/chat-images/:id`           | The picture's bytes (private, immutable cache, `nosniff`).                                                                                                                                                                                                                 |
+| POST   | `/api/chat-files`                | Raw bytes (`application/octet-stream`, up to 30 MB) with the URI-encoded name in `x-file-name` → `ChatFile { id, name, kind: pdf                                                                                                                                           | docx | text, size, parts }`(201): a file for the next question, sent by id in`user_message.fileIds`. The type comes from the bytes (`%PDF-`, a .docx zip, or UTF-8 text without NULs). Errors: `unsupported_file`(e.g. old .doc),`unreadable_file`(broken or encrypted),`file_too_large` (413). Unsent ones are dropped after a day. |
+| GET    | `/api/chat-files/:id`            | The file's bytes: `inline` for a PDF, `attachment` otherwise (private, immutable cache, `nosniff`).                                                                                                                                                                        |
 | GET    | `/api/documents/:id/questions`   | `DocumentQuestion[]`: questions asked about a selection or drawn area, with the answer that followed, oldest first.                                                                                                                                                        |
 | DELETE | `/api/threads/:id`               | 409 `busy` while a turn runs.                                                                                                                                                                                                                                              |
 
@@ -124,13 +126,15 @@ Client → server:
                "summaryFormat": "prose|outline|glossary" },
   // Pictures uploaded with POST /api/chat-images (max 6, not sent before). Any
   // unknown, foreign or already sent id rejects the question (error, nothing stored).
-  "imageIds": ["…"] }
+  "imageIds": ["…"],
+  // Files uploaded with POST /api/chat-files (max 4, not sent before), same rules.
+  "fileIds": ["…"] }
 { "type": "stop", "threadId": "…" }
 ```
 
 Server → client (`ServerChatEvent`):
 
-- `user_message` (`clientId` + stored message; `images: ChatImage[]` when it carries pictures)
+- `user_message` (`clientId` + stored message; `images: ChatImage[]` / `files: ChatFile[]` when it carries them)
 - `assistant_start`
 - `assistant_delta` (`text`)
 - `tool_event` (`ToolEvent`: `name`, `summary`, `status`, plus `annotationIds` for

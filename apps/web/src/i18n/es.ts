@@ -655,6 +655,28 @@ export const es = {
       drop: 'Suelta las imágenes para adjuntarlas a la pregunta',
       tooMany: (max: number) => `Como máximo ${max} imágenes por pregunta.`,
     },
+    placeholderFiles: 'Pregunta sobre el archivo…',
+    files: {
+      add: 'Adjuntar archivo o imagen',
+      addHint:
+        'Adjunta PDF, Word, texto o imágenes para que Claude los lea (no se abren en el lector). También puedes pegarlos o arrastrarlos al chat.',
+      uploading: 'Subiendo archivo…',
+      remove: (name: string) => `Quitar ${name}`,
+      open: (name: string) => `Abrir ${name}`,
+      pages: (n: number) => (n === 1 ? '1 pág.' : `${n} págs.`),
+      kb: (n: number) => `${n} KB`,
+      mb: (n: string) => `${n} MB`,
+      drop: 'Suelta los archivos o imágenes para adjuntarlos a la pregunta',
+      tooMany: (max: number) => `Como máximo ${max} archivos por pregunta.`,
+      errors: {
+        unsupported:
+          'Claude no puede leer ese tipo de archivo. Usa PDF, Word (.docx) o texto (si es un .doc antiguo, guárdalo como .docx o PDF).',
+        unreadable: 'No se ha podido leer el archivo (¿está dañado o protegido con contraseña?).',
+        tooLarge:
+          'El archivo es demasiado grande (máximo 30 MB). Si es un libro, súbelo a la biblioteca.',
+        failed: 'No se ha podido adjuntar el archivo.',
+      },
+    },
     goToPage: (page: number) => `Ir a la página ${page}`,
     citationLabel: (label: string) => `Ir a ${label}`,
     voice: {
@@ -702,6 +724,8 @@ export const es = {
       get_pages: 'Leyendo',
       get_page_image: 'Mirando la imagen de la',
       get_page_layout: 'Estudiando la estructura de la',
+      read_attachment: 'Leyendo el archivo adjunto',
+      get_attachment_page_image: 'Mirando el archivo adjunto,',
       whiteboard_draw: 'Dibujando en la pizarra',
       whiteboard_view: 'Mirando la pizarra',
       go_to_page: 'Yendo a la',

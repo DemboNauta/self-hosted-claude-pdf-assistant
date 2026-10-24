@@ -35,6 +35,7 @@ import { pageItems } from '../services/anchoring.js';
 import { normalizeImage, thumbnail } from '../services/images.js';
 import type { WebImage } from '../services/webImages.js';
 import { boardElements, findProblems, place, renderPreview } from './board.js';
+import { partHeading, partText } from './prompt.js';
 import { newId } from '../services/ids.js';
 import { checkDiagramSource, MAX_DIAGRAM_SOURCE } from '../services/diagrams.js';
 import type { UserServices } from '../services/scope.js';
@@ -105,6 +106,7 @@ export type ToolDeps = Pick<
   | 'whiteboards'
   | 'media'
   | 'webImages'
+  | 'chatFiles'
 >;
 
 const text = (t: string): CallToolResult => ({ content: [{ type: 'text', text: t }] });
@@ -1325,10 +1327,95 @@ export function whiteboardTools(deps: ToolDeps, ctx: ToolContext) {
   ];
 }
 
+/** Files the student attached to the conversation (PDF, Word, text), outside the library. */
+export function attachmentTools(deps: ToolDeps, ctx: ToolContext) {
+  const { chatFiles } = deps;
+  const unknown = (fileId: string) =>
+    fail(`Unknown file ${fileId}: only files attached to this conversation can be read.`);
+  return [
+    tool(
+      'read_attachment',
+      `Text of a file the student attached to this conversation (not a library document): pages of a PDF or parts of a Word or text file, at most ${MAX_PAGES_PER_CALL} per call, 1-based.`,
+      {
+        fileId: z.string(),
+        from: z.number().int().min(1),
+        to: z.number().int().min(1),
+      },
+      tracked(
+        ctx,
+        'read_attachment',
+        ({ from, to }) => (from === to ? `(${from})` : `(${from}–${to})`),
+        async ({ fileId, from, to }) => {
+          const file = chatFiles.inThread(ctx.threadId, fileId);
+          if (!file) return unknown(fileId);
+          const last = Math.min(to, from + MAX_PAGES_PER_CALL - 1, file.parts);
+          const unit = file.kind === 'pdf' ? 'pages' : 'parts';
+          if (last < from) return fail(`"${file.name}" has ${file.parts} ${unit}.`);
+          const body = file.texts
+            .slice(from - 1, last)
+            .map((t, i) => `${partHeading(file.kind, from + i)}\n${partText(file.kind, t)}`)
+            .join('\n\n');
+          const note =
+            last < to && last < file.parts
+              ? `\n\n(Truncated at ${unit.slice(0, -1)} ${last}; request the rest separately.)`
+              : '';
+          return text(`File "${file.name}" (${fileId}, ${file.parts} ${unit})\n\n${body}${note}`);
+        },
+      ),
+    ),
+
+    tool(
+      'get_attachment_page_image',
+      'Rendered image of one page of a PDF the student attached to this conversation, for figures, tables, formulas and scanned pages. "region" (page fractions, origin top-left) zooms into part of the page.',
+      {
+        fileId: z.string(),
+        page: z.number().int().min(1),
+        region: z
+          .object({
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            w: z.number().min(0.02).max(1),
+            h: z.number().min(0.02).max(1),
+          })
+          .optional(),
+      },
+      tracked(
+        ctx,
+        'get_attachment_page_image',
+        ({ page }) => `p. ${page}`,
+        async ({ fileId, page, region }) => {
+          const file = chatFiles.inThread(ctx.threadId, fileId);
+          if (!file) return unknown(fileId);
+          if (file.kind !== 'pdf')
+            return fail(`"${file.name}" is not a PDF: read its text with read_attachment.`);
+          if (page > file.parts) return fail(`"${file.name}" has ${file.parts} pages.`);
+          const r = region && {
+            x: region.x,
+            y: region.y,
+            w: Math.min(region.w, 1 - region.x),
+            h: Math.min(region.h, 1 - region.y),
+          };
+          const img = await renderPageImage(file.data, page, { region: r });
+          return {
+            content: [
+              { type: 'image', data: img.png.toString('base64'), mimeType: 'image/png' },
+              {
+                type: 'text',
+                text: `Page ${page} of the attached file "${file.name}" (${img.width}×${img.height}px).`,
+              },
+            ],
+          };
+        },
+      ),
+    ),
+  ];
+}
+
 /** Builds the per-turn in-process MCP server and the matching tool allow-list. */
 export function buildStudyServer(deps: ToolDeps, ctx: ToolContext) {
   const tools = [
     ...readingTools(deps, ctx),
+    ...attachmentTools(deps, ctx),
     ...pointerTools(deps, ctx),
     ...annotationTools(deps, ctx),
     ...memoryTools(deps, ctx),

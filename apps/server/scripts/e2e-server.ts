@@ -328,8 +328,17 @@ const fakeChat = ((args: {
           : null;
     // Pictures the student attached: say how many image blocks came with the question.
     const shots = /The student attached (?:a picture|(\d+) pictures)/.exec(prompt);
+    // Files the student attached: name them and quote the start of the first one's text.
+    const files = [
+      ...prompt.matchAll(
+        /<file id="[^"]+" name="([^"]+)"[^>]*>\n--- (?:Page|Part) 1 ---\n(.{0,40})/g,
+      ),
+    ];
     const parts = voiceParts ?? [
       ...(diagram ? [diagram] : []),
+      ...(files.length
+        ? [`He leído ${files.map((f) => f[1]).join(' y ')}: «${files[0]![2]}». `]
+        : []),
       ...(shots && image ? [`Veo ${shots[1] ?? 1} captura(s) adjunta(s). `] : []),
       ...(marked
         ? [`Veo tu marca en la página ${marked[1]}${image ? ' (con imagen)' : ''}. `]

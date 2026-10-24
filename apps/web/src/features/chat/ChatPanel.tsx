@@ -1,6 +1,7 @@
 import {
   STUDY_MODES,
   SUMMARY_FORMATS,
+  type ChatFile,
   type ChatImage,
   type ChatMessage,
   type ToolEvent,
@@ -12,12 +13,13 @@ import {
   ArrowUp,
   Check,
   Copy,
+  FileText,
   History,
-  ImagePlus,
   Loader2,
   MessageSquare,
   Mic,
   MousePointer2,
+  Paperclip,
   PenLine,
   Plus,
   Presentation,
@@ -39,7 +41,6 @@ import {
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { Menu } from '../../components/Menu';
-import { imageFiles } from '../annotations/images';
 import { t } from '../../i18n';
 import { useReader } from '../reader/store';
 import { useVoice } from '../voice/store';
@@ -49,7 +50,7 @@ import { DockedNotice, WhiteboardPanel } from '../whiteboard/WhiteboardPanel';
 import { CITATION_EVENT } from './CitationChip';
 import { dictationSupported, useDictation } from './dictation';
 import { Markdown } from './Markdown';
-import { useChat } from './store';
+import { CHAT_FILE_ACCEPT, useChat } from './store';
 
 const chatImageUrl = (id: string) => `/api/chat-images/${id}`;
 
@@ -128,6 +129,38 @@ function MessageImages({ images }: { images: ChatImage[] }) {
       </div>
       {shown && <ImageViewer image={shown} onClose={() => setShown(null)} />}
     </>
+  );
+}
+
+/** Size of a file in words ("2,4 MB"). */
+function fileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return t.chat.files.kb(Math.max(1, Math.round(bytes / 1024)));
+  return t.chat.files.mb((bytes / (1024 * 1024)).toFixed(1).replace('.', ','));
+}
+
+/** Files sent with a question, as chips: a PDF opens in a new tab, others download. */
+function MessageFiles({ files }: { files: ChatFile[] }) {
+  return (
+    <ul className="flex max-w-[90%] flex-wrap justify-end gap-1.5" data-testid="message-files">
+      {files.map((f) => (
+        <li key={f.id}>
+          <a
+            href={`/api/chat-files/${f.id}`}
+            target="_blank"
+            rel="noopener"
+            {...(f.kind === 'pdf' ? {} : { download: f.name })}
+            title={t.chat.files.open(f.name)}
+            className="border-border hover:bg-surface-muted flex max-w-64 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs"
+          >
+            <FileText size={14} aria-hidden className="shrink-0" />
+            <span className="min-w-0 truncate">{f.name}</span>
+            <span className="text-text-muted shrink-0">
+              {f.kind === 'pdf' ? t.chat.files.pages(f.parts) : fileSize(f.size)}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -298,6 +331,7 @@ function MessageItem({ message }: { message: ChatMessage }) {
           </span>
         )}
         {message.images && message.images.length > 0 && <MessageImages images={message.images} />}
+        {message.files && message.files.length > 0 && <MessageFiles files={message.files} />}
         {quoted && (
           <blockquote className="border-border text-text-muted line-clamp-3 max-w-[90%] border-l-2 pl-2 text-xs italic">
             {quoted}
@@ -575,9 +609,11 @@ function Composer() {
   const attachedPointed = useChat((s) => s.attachedPointed);
   const attachPointed = useChat((s) => s.attachPointed);
   const images = useChat((s) => s.images);
-  const imageNotice = useChat((s) => s.imageNotice);
+  const files = useChat((s) => s.files);
+  const attachNotice = useChat((s) => s.attachNotice);
   const mode = useChat((s) => s.mode);
-  const { send, stop, attach, attachMark, addImages, removeImage } = useChat.getState();
+  const { send, stop, attach, attachMark, addAttachments, removeImage, removeFile } =
+    useChat.getState();
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [canDictate] = useState(dictationSupported);
@@ -595,12 +631,14 @@ function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
 
-  const uploading = images.some((i) => !i.image && !i.error);
+  const uploading =
+    images.some((i) => !i.image && !i.error) || files.some((f) => !f.file && !f.error);
   const canSend =
     !running &&
     !uploading &&
     (text.trim().length > 0 ||
       images.some((i) => i.image) ||
+      files.some((f) => f.file) ||
       attached !== null ||
       attachedMark !== null ||
       attachedPointed !== null ||
@@ -715,9 +753,49 @@ function Composer() {
           ))}
         </ul>
       )}
-      {(imageNotice || images.some((i) => i.error)) && (
+      {files.length > 0 && (
+        <ul className="flex flex-wrap gap-2" data-testid="pending-files">
+          {files.map((f) => (
+            <li
+              key={f.key}
+              title={f.error}
+              className={clsx(
+                'flex max-w-56 items-center gap-1.5 rounded-lg border py-1 pr-1 pl-2 text-xs',
+                f.error ? 'border-danger text-danger' : 'border-border',
+              )}
+            >
+              {!f.file && !f.error ? (
+                <Loader2
+                  size={14}
+                  role="status"
+                  aria-label={t.chat.files.uploading}
+                  className="shrink-0 animate-spin"
+                />
+              ) : (
+                <FileText size={14} aria-hidden className="shrink-0" />
+              )}
+              <span className="min-w-0 truncate">{f.name}</span>
+              {f.file && (
+                <span className="text-text-muted shrink-0">
+                  {f.file.kind === 'pdf' ? t.chat.files.pages(f.file.parts) : fileSize(f.file.size)}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => removeFile(f.key)}
+                aria-label={t.chat.files.remove(f.name)}
+                title={t.chat.files.remove(f.name)}
+                className="hover:bg-surface-muted shrink-0 rounded p-0.5"
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(attachNotice || images.some((i) => i.error) || files.some((f) => f.error)) && (
         <p role="alert" className="text-danger text-xs">
-          {imageNotice ?? images.find((i) => i.error)?.error}
+          {attachNotice ?? images.find((i) => i.error)?.error ?? files.find((f) => f.error)?.error}
         </p>
       )}
       <VoiceBar />
@@ -740,10 +818,10 @@ function Composer() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={(e) => {
-            const files = imageFiles(e.clipboardData);
-            if (!files.length) return;
+            const pasted = [...e.clipboardData.files];
+            if (!pasted.length) return;
             e.preventDefault();
-            addImages(files);
+            addAttachments(pasted);
           }}
           placeholder={
             attached
@@ -752,9 +830,11 @@ function Composer() {
                 ? t.chat.placeholderMark
                 : attachedPointed
                   ? t.chat.pointers.placeholder
-                  : images.length
-                    ? t.chat.placeholderImages
-                    : t.chat.placeholder
+                  : files.length
+                    ? t.chat.placeholderFiles
+                    : images.length
+                      ? t.chat.placeholderImages
+                      : t.chat.placeholder
           }
           aria-label={t.chat.placeholder}
           className="max-h-40 min-w-0 flex-1 resize-none bg-transparent text-base outline-none focus-visible:outline-none sm:text-sm"
@@ -764,21 +844,21 @@ function Composer() {
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
-              aria-label={t.chat.images.add}
-              title={t.chat.images.addHint}
+              aria-label={t.chat.files.add}
+              title={t.chat.files.addHint}
               className="text-text-muted hover:text-text rounded-full p-1.5"
             >
-              <ImagePlus size={14} aria-hidden />
+              <Paperclip size={14} aria-hidden />
             </button>
             <input
               ref={fileInput}
               type="file"
-              accept="image/*"
+              accept={`image/*,${CHAT_FILE_ACCEPT}`}
               multiple
               hidden
-              data-testid="chat-image-input"
+              data-testid="chat-attach-input"
               onChange={(e) => {
-                addImages([...(e.target.files ?? [])]);
+                addAttachments([...(e.target.files ?? [])]);
                 e.target.value = '';
               }}
             />
@@ -945,11 +1025,11 @@ export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
       }}
       onDrop={(e) => {
         setDropping(false);
-        const files = imageFiles(e.dataTransfer);
-        if (!files.length) return;
+        const dropped = [...e.dataTransfer.files];
+        if (!dropped.length) return;
         e.preventDefault();
         e.stopPropagation();
-        useChat.getState().addImages(files);
+        useChat.getState().addAttachments(dropped);
       }}
     >
       {dropping && (
@@ -957,7 +1037,7 @@ export function ChatPanel({ headerActions }: { headerActions?: ReactNode }) {
           aria-hidden
           className="border-text bg-surface/90 pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed p-4 text-center text-sm"
         >
-          {t.chat.images.drop}
+          {t.chat.files.drop}
         </div>
       )}
       <header className="border-border flex items-center gap-1 border-b px-3 py-1.5">

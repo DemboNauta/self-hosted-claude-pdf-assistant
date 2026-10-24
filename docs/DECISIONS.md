@@ -19,6 +19,19 @@ change them if he disagrees.
 
 ## Other owner decisions
 
+- **Files in the chat (2026-10-24, F-CHAT-11).** The owner asked to pass PDFs, Word
+  documents and similar to Claude without opening them in the reader ("que no las ponga
+  en la palestra"), just for Claude to see. His choices: **PDF, Word (.docx) and text**
+  (txt, md, csv, code…), no PowerPoint or Excel for now; **kept with the message** like
+  screenshots (a chip with the name; PDF opens in a new tab, others download), Claude can
+  read them again in later questions, deleted with the conversation. Claude's choices:
+  same attach button (now a paperclip), paste and drop as pictures; up to 4 files per
+  question and 30 MB each (a whole book belongs in the library); not in voice mode;
+  Claude gets the extracted text (up to 60 000 characters inline, the rest through
+  `read_attachment` and page images for PDFs) rather than native PDF blocks; pictures
+  inside Word files are not passed on; old .doc files are refused with a hint to save
+  as .docx or PDF.
+
 - **Screenshots in the chat (2026-10-18, F-CHAT-10).** The owner asked to pass
   screenshots to Claude so it can read and use them. His choices: in **every chat**
   (document, topic, subject) but **not in voice mode**; added by **pasting (Ctrl+V),

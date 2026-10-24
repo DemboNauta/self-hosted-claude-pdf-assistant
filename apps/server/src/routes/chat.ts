@@ -2,17 +2,31 @@ import websocket from '@fastify/websocket';
 import {
   addChatImageSchema,
   clientChatEventSchema,
+  MAX_CHAT_FILE_BYTES,
   type ServerChatEvent,
 } from '@pdfclaudeassistant/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ChatService } from '../claude/chat.js';
+import { readChatFile } from '../services/chatFiles.js';
 import { HttpError } from '../services/errors.js';
 import { fromDataUrl, normalizeImage } from '../services/images.js';
 import type { RequestServices } from '../services/scope.js';
 import { parse } from './validate.js';
 
 const idParams = z.object({ id: z.string().min(1).max(64) });
+
+const chatFileHeaders = z.object({ name: z.string().trim().min(1).max(1000) });
+
+/** The `x-file-name` header, URI-encoded by the browser (names can be in any script). */
+function decodeName(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  try {
+    return decodeURIComponent(value ?? '');
+  } catch {
+    return '';
+  }
+}
 
 /** Room for a picture sent as a data URL (the browser shrinks big ones first). */
 const IMAGE_BODY_LIMIT = 25 * 1024 * 1024;
@@ -87,6 +101,38 @@ export async function registerChatRoutes(
     const { data, mime } = svc(req).chatImages.image(id(req.params));
     return reply
       .header('content-type', mime)
+      .header('cache-control', 'private, max-age=31536000, immutable')
+      .header('x-content-type-options', 'nosniff')
+      .send(data);
+  });
+
+  // Files attached to questions (PDF, Word, text): raw bytes, the name in `x-file-name`
+  // (URI-encoded). Claude reads their text; they never open in the reader.
+  await app.register(async (scope) => {
+    scope.addContentTypeParser(
+      'application/octet-stream',
+      { parseAs: 'buffer', bodyLimit: MAX_CHAT_FILE_BYTES + 1024 },
+      (_req, body, done) => done(null, body),
+    );
+    scope.post('/api/chat-files', async (req, reply) => {
+      if (!Buffer.isBuffer(req.body)) throw new HttpError(400, 'invalid_request');
+      const { name } = parse(chatFileHeaders, {
+        name: decodeName(req.headers['x-file-name']),
+      });
+      const file = await readChatFile(req.body, name);
+      return reply.code(201).send(svc(req).chatFiles.add(name, req.body, file));
+    });
+  });
+  app.get('/api/chat-files/:id', async (req, reply) => {
+    const { data, mime, name, kind } = svc(req).chatFiles.file(id(req.params));
+    // A PDF opens in a browser tab; Word and text files are downloaded.
+    const disposition = kind === 'pdf' ? 'inline' : 'attachment';
+    return reply
+      .header('content-type', mime)
+      .header(
+        'content-disposition',
+        `${disposition}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      )
       .header('cache-control', 'private, max-age=31536000, immutable')
       .header('x-content-type-options', 'nosniff')
       .send(data);

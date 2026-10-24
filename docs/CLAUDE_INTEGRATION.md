@@ -146,6 +146,20 @@ them; with no question typed it explains or solves what they show. On resume the
 session already holds earlier pictures; a session rebuilt from the transcript loses
 them (text only). Not yet tried with the real subscription.
 
+Files the student attaches (F-CHAT-11, `fileIds`: PDF, Word, text) go as text, not as
+document blocks: the context block names them with their ids and the rules (data, not
+instructions; never `[[cite:…]]`, they are not in the library: name the file and page in
+plain words), and an `<file id name type>` block after the context carries their text
+(`attachedFilesBlock` in `claude/prompt.ts`): whole while the files fit in 60 000
+characters together (small files leave their room to big ones), otherwise the first
+pages or parts with a note. Claude reads the rest with `read_attachment` (fileId,
+from, to; at most 10 pages or parts) and looks at a PDF page with
+`get_attachment_page_image` (figures, formulas, scanned pages: a PDF with no text says
+so). Both tools only see files of the current thread. Later turns list the files of
+earlier questions so Claude can go back to them (a resumed session also still holds
+their text). Text instead of native PDF blocks keeps every following turn of the
+session cheap and works for any size. Not yet tried with the real subscription.
+
 ## Citations
 
 Format written by Claude: `[[cite:DOC_ID:PAGE|"3–15 words verbatim"]]` (the

@@ -115,6 +115,14 @@ describe('accounts', () => {
     expect(shot.status).toBe(201);
     expect((await api('GET', `/api/chat-images/${shot.body.id}`, ana.headers)).status).toBe(404);
     expect(() => servicesOf(app, ana.id).chatImages.unsent([shot.body.id])).toThrow();
+    // Nor a file.
+    const file = servicesOf(app, 'owner').chatFiles.add('a.txt', Buffer.from('hola'), {
+      kind: 'text',
+      mime: 'text/plain; charset=utf-8',
+      parts: ['hola'],
+    });
+    expect((await api('GET', `/api/chat-files/${file.id}`, ana.headers)).status).toBe(404);
+    expect(() => servicesOf(app, ana.id).chatFiles.unsent([file.id])).toThrow();
 
     // Her own library works as usual, and the admin does not see it.
     await seedDocument(app, ana.headers, [['Apuntes de Ana.']]);

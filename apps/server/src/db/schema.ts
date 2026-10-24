@@ -245,6 +245,33 @@ export const chatImages = sqliteTable(
 );
 
 /**
+ * Files the student attached to a chat question (PDF, Word, text) for Claude to read,
+ * never opened in the reader. Like `chat_images`, uploaded before the question is sent
+ * and dropped after a day if it never is. `parts_json` holds the extracted text: one
+ * entry per PDF page, or chunks of a few pages for other files.
+ */
+export const chatFiles = sqliteTable(
+  'chat_files',
+  {
+    id: text('id').primaryKey(),
+    userId: userId(),
+    messageId: text('message_id').references(() => messages.id, { onDelete: 'cascade' }),
+    /** Order within the message. */
+    position: integer('position').notNull().default(0),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: ['pdf', 'docx', 'text'] }).notNull(),
+    mime: text('mime').notNull(),
+    size: integer('size').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+    /** Pages or parts in `parts_json` (listed without reading the text). */
+    partCount: integer('part_count').notNull(),
+    partsJson: text('parts_json').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('chat_files_message_idx').on(t.messageId)],
+);
+
+/**
  * Permanent annotations (F-ANN-*): highlights, notes, freehand drawings and saved
  * Claude marks. Anchors live in normalised page space (0–1, top-left origin).
  */

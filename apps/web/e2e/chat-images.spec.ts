@@ -21,13 +21,11 @@ test('attaches screenshots to a question', async ({ page }, info) => {
   }
 
   // One from a file (the attach button), one pasted into the composer.
-  await page
-    .getByTestId('chat-image-input')
-    .setInputFiles({
-      name: 'captura.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(SHOT, 'base64'),
-    });
+  await page.getByTestId('chat-attach-input').setInputFiles({
+    name: 'captura.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(SHOT, 'base64'),
+  });
   const composer = page.getByRole('textbox', { name: 'Pregunta sobre el documento…' });
   await composer.focus();
   await page.evaluate(async (b64) => {
@@ -45,13 +43,11 @@ test('attaches screenshots to a question', async ({ page }, info) => {
   // Removing one and adding it again works too.
   await pending.getByRole('button', { name: 'Quitar imagen' }).first().click();
   await expect(pending.locator('li')).toHaveCount(1);
-  await page
-    .getByTestId('chat-image-input')
-    .setInputFiles({
-      name: 'otra.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(SHOT, 'base64'),
-    });
+  await page.getByTestId('chat-attach-input').setInputFiles({
+    name: 'otra.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(SHOT, 'base64'),
+  });
   await expect(pending.getByRole('status')).toHaveCount(0);
   await expect(pending.locator('li')).toHaveCount(2);
 

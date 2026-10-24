@@ -39,6 +39,8 @@ export interface TurnInput {
   context: ChatContext;
   /** Pictures the student attached (`POST /api/chat-images`), in order. */
   imageIds?: string[];
+  /** Files the student attached (`POST /api/chat-files`), in order. */
+  fileIds?: string[];
 }
 
 class TurnError extends Error {
@@ -106,6 +108,8 @@ export class ChatService {
       return;
     }
     const attachedImages = svc.chatImages.unsent(input.imageIds ?? []);
+    const attachedFiles = svc.chatFiles.unsent(input.fileIds ?? []);
+    const earlierFiles = svc.chatFiles.listThread(thread.id);
     const docId = scope.kind === 'document' ? scope.id : null;
     const scopeLines = this.describeScope(svc, scope, ctx.currentPage);
 
@@ -116,7 +120,7 @@ export class ChatService {
       input.text,
       input.mode,
       input.context,
-      attachedImages.map((i) => i.id),
+      { imageIds: attachedImages.map((i) => i.id), files: attachedFiles },
     );
     emit({ type: 'user_message', clientId: input.clientId, message: userMessage });
     const assistant = svc.threads.addAssistantMessage(thread.id);
@@ -163,6 +167,8 @@ export class ChatService {
           recoveredTranscript,
           markImage: markImage !== null,
           attachedImages: attachedImages.length,
+          attachedFiles,
+          earlierFiles,
         });
       const run = (resume: string | null, recovered?: string) =>
         this.runTurn(svc, auth, {

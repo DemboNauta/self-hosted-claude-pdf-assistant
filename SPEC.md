@@ -87,6 +87,7 @@ Cada funcionalidad tiene un ID para referenciarla en commits, issues y en el roa
 - **F-CHAT-07** Hilos: cada documento tiene su conversación activa; se puede empezar una nueva. Las conversaciones antiguas se pueden consultar, pero la memoria a largo plazo es la destilada (ver 3.6).
 - **F-CHAT-08** Chat a nivel de **tema o asignatura** (preguntas sobre varios PDFs a la vez).
 - **F-CHAT-10** **Capturas e imágenes en el chat:** se pueden adjuntar capturas de pantalla o fotos a una pregunta (pegar con Ctrl+V, arrastrar al chat o botón de adjuntar; hasta 6 por pregunta) y Claude las lee y las usa en la respuesta. Se guardan con el mensaje en el historial. Disponible en todos los chats salvo en modo voz.
+- **F-CHAT-11** **Archivos en el chat:** se pueden adjuntar PDF, Word (.docx) y archivos de texto (txt, md, csv, código…) a una pregunta (botón de adjuntar, pegar o arrastrar; hasta 4 por pregunta, 30 MB cada uno). Claude lee su contenido para responder, pero no se abren en el lector ni pasan a la biblioteca. Se guardan con el mensaje en el historial (se pueden abrir o descargar) y Claude puede volver a consultarlos en preguntas siguientes. Disponible en todos los chats salvo en modo voz.
 - **F-CHAT-09** **Modo voz:** conversación hablada con Claude, micro siempre abierto. Claude explica con sus palabras y con ejemplos (no lee el PDF tal cual), con voz natural de España (chica o chico); se le puede interrumpir con una pregunta y después sigue donde lo dejó.
 
 ### 3.5 Anotaciones y señalización

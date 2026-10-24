@@ -1,7 +1,10 @@
 import {
+  MAX_CHAT_FILE_BYTES,
+  MAX_CHAT_FILES,
   MAX_CHAT_IMAGES,
   markRefs,
   type ChatErrorCode,
+  type ChatFile,
   type ChatImage,
   type ChatMessage,
   type ClientChatEvent,
@@ -17,7 +20,7 @@ import {
 } from '@pdfclaudeassistant/shared';
 import { create } from 'zustand';
 import { t } from '../../i18n';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { imageErrorText, prepareImage } from '../annotations/images';
 import { useReader } from '../reader/store';
 
@@ -28,6 +31,55 @@ export interface PendingImage {
   previewUrl: string;
   image?: ChatImage;
   error?: string;
+}
+
+/** A file (PDF, Word, text) attached to the next question: uploading, ready or failed. */
+export interface PendingFile {
+  key: string;
+  name: string;
+  file?: ChatFile;
+  error?: string;
+}
+
+/** Extensions the attach button offers besides pictures (the server checks the bytes). */
+export const CHAT_FILE_ACCEPT = [
+  '.pdf',
+  '.docx',
+  '.txt',
+  '.md',
+  '.csv',
+  '.tsv',
+  '.json',
+  '.xml',
+  '.yaml',
+  '.yml',
+  '.tex',
+  '.html',
+  '.css',
+  '.js',
+  '.ts',
+  '.py',
+  '.java',
+  '.c',
+  '.cpp',
+  '.h',
+  '.cs',
+  '.go',
+  '.rs',
+  '.sql',
+  '.sh',
+  '.m',
+  '.r',
+].join(',');
+
+/** A failed file upload, in words for the student. */
+function fileErrorText(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === 'unsupported_file') return t.chat.files.errors.unsupported;
+    if (err.code === 'unreadable_file') return t.chat.files.errors.unreadable;
+    if (err.code === 'file_too_large' || err.status === 413) return t.chat.files.errors.tooLarge;
+  }
+  return t.chat.files.errors.failed;
 }
 
 type Listener = (event: ServerChatEvent) => void;
@@ -119,8 +171,10 @@ interface ChatState {
   attachedPointed: PointedMark | null;
   /** Pictures (screenshots, photos) attached to the next question. */
   images: PendingImage[];
-  /** Why some pictures were not attached (e.g. too many). */
-  imageNotice: string | null;
+  /** Files (PDF, Word, text) attached to the next question, for Claude to read. */
+  files: PendingFile[];
+  /** Why some pictures or files were not attached (e.g. too many). */
+  attachNotice: string | null;
   /** Claude's temporary marks on the PDF (F-POINT-03: gone with the next question). */
   pointers: PointerGroup[];
   /** Voice mode (F-CHAT-09): questions ask for a spoken, tutor-style answer. */
@@ -155,6 +209,9 @@ interface ChatState {
   /** Pasted, dropped or chosen pictures: shrunk, uploaded and attached to the next question. */
   addImages: (files: File[]) => void;
   removeImage: (key: string) => void;
+  /** Pasted, dropped or chosen files: pictures go with `addImages`, the rest are uploaded. */
+  addAttachments: (files: File[]) => void;
+  removeFile: (key: string) => void;
   dismissError: () => void;
   clearPointers: (messageId?: string) => void;
   /**
@@ -170,10 +227,10 @@ const scopePath = (s: ThreadScope) =>
 
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Drops the pictures attached to the next question (sent, or the chat changed). */
+/** Drops the pictures and files attached to the next question (sent, or the chat changed). */
 function clearImages() {
   for (const img of useChat.getState().images) URL.revokeObjectURL(img.previewUrl);
-  useChat.setState({ images: [], imageNotice: null });
+  useChat.setState({ images: [], files: [], attachNotice: null });
 }
 
 export const useChat = create<ChatState>((set, get) => ({
@@ -191,7 +248,8 @@ export const useChat = create<ChatState>((set, get) => ({
   attachedMark: null,
   attachedPointed: null,
   images: [],
-  imageNotice: null,
+  files: [],
+  attachNotice: null,
   pointers: [],
   voice: false,
 
@@ -257,8 +315,13 @@ export const useChat = create<ChatState>((set, get) => ({
     const pointed = get().attachedPointed;
     const mode = opts.mode ?? get().mode;
     // Pictures still uploading would be lost: the composer waits for them.
-    if (get().images.some((i) => !i.image && !i.error)) return;
+    if (
+      get().images.some((i) => !i.image && !i.error) ||
+      get().files.some((f) => !f.file && !f.error)
+    )
+      return;
     const images = get().images.flatMap((i) => (i.image ? [i.image] : []));
+    const files = get().files.flatMap((f) => (f.file ? [f.file] : []));
     const clientId = crypto.randomUUID();
     const context = {
       ...(scope.kind === 'document'
@@ -285,6 +348,7 @@ export const useChat = create<ChatState>((set, get) => ({
       mode,
       context,
       ...(images.length ? { images } : {}),
+      ...(files.length ? { files } : {}),
       status: 'complete',
       createdAt: new Date().toISOString(),
     };
@@ -306,6 +370,7 @@ export const useChat = create<ChatState>((set, get) => ({
       mode,
       context,
       imageIds: images.map((i) => i.id),
+      fileIds: files.map((f) => f.id),
     });
   },
 
@@ -325,7 +390,7 @@ export const useChat = create<ChatState>((set, get) => ({
     set({ attachedPointed, ...(attachedPointed ? { attached: null, attachedMark: null } : {}) }),
   addImages: (files) => {
     const room = MAX_CHAT_IMAGES - get().images.length;
-    set({ imageNotice: files.length > room ? t.chat.images.tooMany(MAX_CHAT_IMAGES) : null });
+    set({ attachNotice: files.length > room ? t.chat.images.tooMany(MAX_CHAT_IMAGES) : null });
     for (const file of files.slice(0, Math.max(0, room))) {
       const key = crypto.randomUUID();
       const update = (patch: Partial<PendingImage>) =>
@@ -337,10 +402,40 @@ export const useChat = create<ChatState>((set, get) => ({
         .catch((err: unknown) => update({ error: imageErrorText(err) }));
     }
   },
+  addAttachments: (all) => {
+    const pictures = all.filter((f) => f.type.startsWith('image/'));
+    if (pictures.length) get().addImages(pictures);
+    const docs = all.filter((f) => !f.type.startsWith('image/'));
+    if (!docs.length) return;
+    const room = MAX_CHAT_FILES - get().files.length;
+    if (docs.length > room) set({ attachNotice: t.chat.files.tooMany(MAX_CHAT_FILES) });
+    else if (!pictures.length) set({ attachNotice: null });
+    for (const doc of docs.slice(0, Math.max(0, room))) {
+      const key = crypto.randomUUID();
+      const update = (patch: Partial<PendingFile>) =>
+        set({ files: get().files.map((f) => (f.key === key ? { ...f, ...patch } : f)) });
+      set({ files: [...get().files, { key, name: doc.name }] });
+      if (doc.size > MAX_CHAT_FILE_BYTES) {
+        update({ error: t.chat.files.errors.tooLarge });
+        continue;
+      }
+      void api<ChatFile>('/chat-files', {
+        method: 'POST',
+        body: doc,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-file-name': encodeURIComponent(doc.name),
+        },
+      })
+        .then((file) => update({ file }))
+        .catch((err: unknown) => update({ error: fileErrorText(err) }));
+    }
+  },
+  removeFile: (key) => set({ files: get().files.filter((f) => f.key !== key), attachNotice: null }),
   removeImage: (key) => {
     const img = get().images.find((i) => i.key === key);
     if (img) URL.revokeObjectURL(img.previewUrl);
-    set({ images: get().images.filter((i) => i.key !== key), imageNotice: null });
+    set({ images: get().images.filter((i) => i.key !== key), attachNotice: null });
   },
   dismissError: () => set({ error: null }),
   setVoice: (voice) => set({ voice }),

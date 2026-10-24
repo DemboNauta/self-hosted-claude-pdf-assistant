@@ -36,6 +36,7 @@ To change the schema:
 | `0018_server_claude`         | `users.server_claude`: the admin lets the account use the server's Claude credentials            |
 | `0019_note_media`            | `annotation_images`, `saved_boards`, `whiteboards.linked_board_id`                               |
 | `0020_chat_images`           | `chat_images` (screenshots and photos attached to chat questions)                                |
+| `0021_chat_files`            | `chat_files` (PDF, Word and text files attached to chat questions)                               |
 | `0013_drop_display_name`     | drops `users.display_name`: the username is the only name                                        |
 
 ## Users and ownership (multi-user, `0012`)
@@ -124,6 +125,13 @@ width, height`: pictures attached to chat questions (F-CHAT-10). Uploaded before
   order; deleting the thread deletes them with its messages. Unclaimed ones older than a
   day are dropped on the next upload. Same checks and shrinking as note pictures
   (`services/images.ts`); in SQLite, so the backup carries them.
+- **chat_files** (`0021`) `id, user_id, message_id? (cascade), position, name, kind
+(pdf|docx|text), mime, size, data (BLOB), part_count, parts_json`: files attached to chat
+  questions for Claude to read (F-CHAT-11). Same life cycle as `chat_images`. `parts_json`
+  is the extracted text read once on upload (`services/chatFiles.ts`): one string per PDF
+  page, or chunks of about 6000 characters (split at paragraphs) of a Word document
+  (Mammoth HTML turned into light Markdown, pictures left out) or a text file. Up to
+  30 MB each in SQLite, so the backup carries them.
 - **annotation_images** (`0019`) `id, user_id, document_id (cascade), annotation_id, mime,
 data (BLOB), width, height, source (user|claude), source_url?, credit?, caption?,
 orphaned_at?`: pictures in notes and highlights (max 12 each). Stored in SQLite, so the

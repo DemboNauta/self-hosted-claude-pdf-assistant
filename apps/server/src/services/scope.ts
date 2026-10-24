@@ -6,6 +6,7 @@ import type { Db } from '../db/client.js';
 import { AnnotationService } from './annotations.js';
 import { BriefService } from './brief.js';
 import { CardGenService } from './cardgen.js';
+import { ChatFileService } from './chatFiles.js';
 import { ChatImageService } from './chatImages.js';
 import { DiagramService } from './diagrams.js';
 import { FocusService } from './focus.js';
@@ -32,6 +33,7 @@ export interface UserServices {
   search: SearchService;
   threads: ThreadService;
   chatImages: ChatImageService;
+  chatFiles: ChatFileService;
   annotations: AnnotationService;
   media: NoteMediaService;
   settings: SettingsService;
@@ -59,7 +61,8 @@ export function servicesFactory(
   return (userId) => {
     const library = new LibraryService(db, config, userId);
     const chatImages = new ChatImageService(db, userId);
-    const threads = new ThreadService(db, userId, chatImages);
+    const chatFiles = new ChatFileService(db, userId);
+    const threads = new ThreadService(db, userId, chatImages, chatFiles);
     const settings = new SettingsService(db, userId);
     const memory = new MemoryService(db, userId);
     const media = new NoteMediaService(db, userId);
@@ -72,6 +75,7 @@ export function servicesFactory(
       search: new SearchService(db, userId),
       threads,
       chatImages,
+      chatFiles,
       whiteboards: new WhiteboardService(db, userId, threads, media),
       annotations: new AnnotationService(db, userId, media),
       media,

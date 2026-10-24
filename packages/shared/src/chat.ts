@@ -102,6 +102,28 @@ export interface ChatImage {
   height: number;
 }
 
+/** Most files (PDF, Word, text) one question carries. */
+export const MAX_CHAT_FILES = 4;
+/** Largest file the student can attach to a question. */
+export const MAX_CHAT_FILE_BYTES = 30 * 1024 * 1024;
+
+/** What kind of file was attached: decides how its text is read. */
+export type ChatFileKind = 'pdf' | 'docx' | 'text';
+
+/**
+ * A file the student attached to a question (`POST /api/chat-files`, raw bytes with the
+ * name in `x-file-name`). Claude reads its text; the reader never opens it. Bytes:
+ * `GET /api/chat-files/:id`.
+ */
+export interface ChatFile {
+  id: string;
+  name: string;
+  kind: ChatFileKind;
+  size: number;
+  /** Pages of a PDF, or parts (about a few pages each) of other files. */
+  parts: number;
+}
+
 export const clientChatEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('user_message'),
@@ -113,6 +135,8 @@ export const clientChatEventSchema = z.discriminatedUnion('type', [
     context: chatContextSchema,
     /** Pictures uploaded with `POST /api/chat-images`, in order. */
     imageIds: z.array(id).max(MAX_CHAT_IMAGES).default([]),
+    /** Files uploaded with `POST /api/chat-files`, in order. */
+    fileIds: z.array(id).max(MAX_CHAT_FILES).default([]),
   }),
   z.object({ type: z.literal('stop'), threadId: id }),
 ]);
@@ -141,6 +165,8 @@ export interface ChatMessage {
   context?: ChatContext;
   /** User turns: pictures attached to the question. */
   images?: ChatImage[];
+  /** User turns: files (PDF, Word, text) attached to the question. */
+  files?: ChatFile[];
   toolEvents?: ToolEvent[];
   /** Assistant turns: the marks Claude drew on the PDF, kept so they can be shown again. */
   pointers?: PointerGroup[];

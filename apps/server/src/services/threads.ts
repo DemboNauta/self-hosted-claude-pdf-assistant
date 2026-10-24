@@ -12,6 +12,7 @@ import type {
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { messages, threads } from '../db/schema.js';
+import type { ChatFileService } from './chatFiles.js';
 import type { ChatImageService } from './chatImages.js';
 import { pageItems, quoteRects } from './anchoring.js';
 import { notFound } from './errors.js';
@@ -59,6 +60,7 @@ export class ThreadService {
     private readonly db: Db,
     private readonly userId: string,
     private readonly images: ChatImageService,
+    private readonly files: ChatFileService,
   ) {}
 
   list(scope: ThreadScope): ThreadSummary[] {
@@ -119,8 +121,19 @@ export class ThreadService {
       .limit(limit)
       .all()
       .map(toMessage);
-    const images = this.images.forMessages(list.filter((m) => m.role === 'user').map((m) => m.id));
-    return list.map((m) => (images.has(m.id) ? { ...m, images: images.get(m.id) } : m));
+    return this.withAttachments(list);
+  }
+
+  /** User messages with the pictures and files attached to them. */
+  private withAttachments(list: ChatMessage[]): ChatMessage[] {
+    const ids = list.filter((m) => m.role === 'user').map((m) => m.id);
+    const images = this.images.forMessages(ids);
+    const files = this.files.forMessages(ids);
+    return list.map((m) => ({
+      ...m,
+      ...(images.has(m.id) ? { images: images.get(m.id) } : {}),
+      ...(files.has(m.id) ? { files: files.get(m.id) } : {}),
+    }));
   }
 
   /** Last messages as plain text, used to rebuild context if a Claude session is lost. */
@@ -141,13 +154,13 @@ export class ThreadService {
     return out.trim();
   }
 
-  /** `imageIds` were checked with `ChatImageService.unsent`. */
+  /** Attachments were checked with `ChatImageService.unsent` / `ChatFileService.unsent`. */
   addUserMessage(
     threadId: string,
     text: string,
     mode: StudyMode,
     context: ChatContext,
-    imageIds: string[] = [],
+    attachments: { imageIds?: string[]; files?: { id: string; name: string }[] } = {},
   ): ChatMessage {
     const row = {
       id: newId(),
@@ -157,20 +170,28 @@ export class ThreadService {
       contextJson: JSON.stringify({ mode, context } satisfies StoredContext),
     };
     this.db.insert(messages).values(row).run();
-    this.images.attach(row.id, imageIds);
+    this.images.attach(row.id, attachments.imageIds ?? []);
+    this.files.attach(
+      row.id,
+      (attachments.files ?? []).map((f) => f.id),
+    );
     const thread = this.get(threadId);
     this.db
       .update(threads)
       .set({
         updatedAt: now(),
         // First question names the thread.
-        ...(thread.title ? {} : { title: titleFrom(text || context.selection?.text || '') }),
+        ...(thread.title
+          ? {}
+          : {
+              title: titleFrom(
+                text || context.selection?.text || attachments.files?.[0]?.name || '',
+              ),
+            }),
       })
       .where(eq(threads.id, threadId))
       .run();
-    const message = toMessage(this.getMessage(row.id));
-    const images = this.images.forMessages([row.id]).get(row.id);
-    return images ? { ...message, images } : message;
+    return this.withAttachments([toMessage(this.getMessage(row.id))])[0]!;
   }
 
   addAssistantMessage(threadId: string): ChatMessage {

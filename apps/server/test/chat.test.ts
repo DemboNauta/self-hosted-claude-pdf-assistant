@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import type {
+  ChatFile,
   ChatImage,
   ChatMessage,
   DocumentQuestion,
@@ -12,8 +13,9 @@ import type {
 } from '@pdfclaudeassistant/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readingTools, type ToolContext } from '../src/claude/tools.js';
+import { attachmentTools, readingTools, type ToolContext } from '../src/claude/tools.js';
 import type { IngestService } from '../src/ingest/service.js';
+import { makeDocx } from './fixtures/docx.js';
 import { makePdf } from './fixtures/pdf.js';
 import { authedApp, servicesOf } from './helpers.js';
 
@@ -459,6 +461,113 @@ describe('chat', () => {
     expect((await app.inject({ url: `/api/chat-images/${first.id}`, headers })).statusCode).toBe(
       404,
     );
+  });
+
+  it('sends attached files to Claude as text and lets it read them later', async () => {
+    const thread = (
+      await app.inject({ url: `/api/documents/${docId}/threads/active`, headers })
+    ).json<ThreadSummary>();
+    const upload = async (name: string, payload: Buffer) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/chat-files',
+        headers: {
+          ...headers,
+          'content-type': 'application/octet-stream',
+          'x-file-name': encodeURIComponent(name),
+        },
+        payload,
+      });
+    const pdfRes = await upload(
+      'Tema 3 – mitosis.pdf',
+      await makePdf([['La mitosis tiene cuatro fases.'], ['Profase y metafase.']]),
+    );
+    expect(pdfRes.statusCode).toBe(201);
+    const pdf = pdfRes.json<ChatFile>();
+    expect(pdf).toMatchObject({ name: 'Tema 3 – mitosis.pdf', kind: 'pdf', parts: 2 });
+    const notes = (
+      await upload('notas.md', Buffer.from('# Repaso\n\nLa meiosis da cuatro células.'))
+    ).json<ChatFile>();
+    expect(notes).toMatchObject({ kind: 'text', parts: 1 });
+    const docx = (
+      await upload('trabajo.docx', await makeDocx('El ciclo celular'))
+    ).json<ChatFile>();
+    expect(docx).toMatchObject({ kind: 'docx', parts: 1 });
+
+    const events = await ask(thread.id, 'Compara', { fileIds: [pdf.id, notes.id, docx.id] });
+    expect(events.at(-1)).toMatchObject({ type: 'assistant_done' });
+    const prompt = calls[0]!.prompt;
+    expect(typeof prompt).toBe('string');
+    expect(prompt).toContain('The student attached 3 files');
+    expect(prompt).toContain(
+      `<file id="${pdf.id}" name="Tema 3 – mitosis.pdf" type="PDF, 2 pages">`,
+    );
+    expect(prompt).toContain('--- Page 2 ---\nProfase y metafase.');
+    expect(prompt).toContain('La meiosis da cuatro células.');
+    expect(prompt).toContain('**El ciclo celular**');
+    expect(prompt).toContain('never cite them with [[cite:…]]');
+    expect(calls[0]!.options.allowedTools).toContain('mcp__pca__read_attachment');
+
+    // Kept with the question, served back, and listed to Claude in later questions.
+    const history = (
+      await app.inject({ url: `/api/threads/${thread.id}/messages`, headers })
+    ).json<{ messages: ChatMessage[] }>().messages;
+    expect(history[0]!.files?.map((f) => f.id)).toEqual([pdf.id, notes.id, docx.id]);
+    const bytes = await app.inject({ url: `/api/chat-files/${docx.id}`, headers });
+    expect(bytes.headers['content-disposition']).toContain("filename*=UTF-8''trabajo.docx");
+    expect(bytes.headers['content-disposition']).toMatch(/^attachment/);
+    await ask(thread.id, '¿Y la fase 2?');
+    expect(calls[1]!.prompt).toContain('Files the student attached earlier');
+    expect(calls[1]!.prompt).toContain(`id ${pdf.id}`);
+    expect(calls[1]!.prompt).not.toContain('<file id=');
+
+    // Claude's tools read files of this conversation only.
+    const svc = servicesOf(app);
+    const ctx: ToolContext = {
+      threadId: thread.id,
+      messageId: 'm',
+      docId,
+      scope: { kind: 'document', id: docId },
+      emit: () => {},
+      record: () => {},
+    };
+    const tools = attachmentTools(svc, ctx);
+    const read = tools.find((x) => x.name === 'read_attachment')!;
+    const page2 = (await read.handler({ fileId: pdf.id, from: 2, to: 5 } as never, {})) as {
+      content: { text: string }[];
+    };
+    expect(page2.content[0]!.text).toContain('--- Page 2 ---\nProfase y metafase.');
+    const image = tools.find((x) => x.name === 'get_attachment_page_image')!;
+    const shot = (await image.handler({ fileId: pdf.id, page: 1 } as never, {})) as {
+      content: { type: string }[];
+    };
+    expect(shot.content[0]!.type).toBe('image');
+    const other = attachmentTools(svc, { ...ctx, threadId: 'another' });
+    expect(await other[0]!.handler({ fileId: pdf.id, from: 1, to: 1 } as never, {})).toMatchObject({
+      isError: true,
+    });
+
+    // Deleting the conversation deletes its files.
+    await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers });
+    expect((await app.inject({ url: `/api/chat-files/${pdf.id}`, headers })).statusCode).toBe(404);
+  });
+
+  it('refuses files it cannot read', async () => {
+    const upload = (name: string, payload: Buffer) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/chat-files',
+        headers: {
+          ...headers,
+          'content-type': 'application/octet-stream',
+          'x-file-name': encodeURIComponent(name),
+        },
+        payload,
+      });
+    const binary = await upload('viejo.doc', Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 1, 2]));
+    expect(binary.json()).toEqual({ error: 'unsupported_file' });
+    const broken = await upload('roto.pdf', Buffer.from('%PDF-1.7 nothing else'));
+    expect(broken.json()).toEqual({ error: 'unreadable_file' });
   });
 
   it('refuses files that are not pictures', async () => {

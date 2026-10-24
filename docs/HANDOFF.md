@@ -1,6 +1,6 @@
 # Handoff: context for the next Claude Code session
 
-Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, migration `0019`; **revision `40572e6` deployed on 2026-10-04**, which also brought every earlier undeployed change: migrations `0015`–`0019`, Supertonic voice, multi-user, visual interaction blocks 1–4, tablet use). See [`README.md`](README.md) for the reading order.
+Last updated: 2026-10-24 (files in the chat, F-CHAT-11, migration `0021`; **not deployed yet**, last deploy `e64f3ea` on 2026-10-18). See [`README.md`](README.md) for the reading order.
 
 ## Who and how
 
@@ -28,6 +28,17 @@ Last updated: 2026-10-04 (whiteboards saved on the PDF and pictures in notes, mi
   `DATA_DIR` with generated PDFs (see `DEVELOPMENT.md`).
 
 ## Where the work stopped
+
+Session of 2026-10-24 (owner's request): **files in the chat** (F-CHAT-11, see DECISIONS
+"Files in the chat"). PDF, Word (.docx) and text files go with a question (paperclip
+button, paste, drop; max 4, 30 MB each) for Claude to read, never opened in the reader.
+Text extracted on upload (`services/chatFiles.ts`, Mammoth for Word), inlined up to 60k
+characters, the rest through `read_attachment` / `get_attachment_page_image`. Migration
+`0021_chat_files`, `POST/GET /api/chat-files`, new dependency `mammoth` (the deploy
+installs it). Server tests in `chat.test.ts`, `chat-files.test.ts`, `users.test.ts`; e2e
+`chat-files.spec.ts`. **Not deployed and not tried with real Claude yet**: check that it
+uses the inlined text, reads further parts when needed and names files instead of
+writing `[[cite:…]]` for them.
 
 Session of 2026-10-18 (owner's request): **screenshots in the chat** (F-CHAT-10, see
 DECISIONS "Screenshots in the chat"). Paste, drop or attach pictures (max 6) to any
@@ -229,7 +240,7 @@ The **deployment** milestone:
 
 ## Verification done so far
 
-- `apps/server`: 109 unit/integration tests pass (`vitest`, 2026-10-04), 9 of them for
+- `apps/server`: 117 unit/integration tests pass (`vitest`, 2026-10-24), 9 of them for
   multi-user isolation, invitations, admin rights and per-user Claude
   (`test/users.test.ts`), 4 for voice (`test/tts.test.ts`).
 - `apps/web`: 26 unit tests pass. The Playwright suite (2026-10-04) has 68 runs over
